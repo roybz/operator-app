@@ -1,96 +1,73 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
+import { RouterLink, RouterOutlet } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+
+type OpWindow = Window & { __OP_CONFIG__?: { apiBaseUrl?: string; mockMode?: boolean } };
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterLink, RouterOutlet, TranslateModule],
   template: `
-    <main style="max-width: 720px; margin: 40px auto; font-family: system-ui;">
-      <h1>operator-app</h1>
-
-      <section style="display:flex; gap:8px; margin: 16px 0;">
-        <input
-          #txt
-          placeholder="Add a todo"
-          style="flex:1; padding:10px;"
-          (keydown.enter)="onAdd(txt.value); txt.value='';"
-        />
-        <button style="padding:10px 14px;" (click)="onAdd(txt.value); txt.value=''">Add</button>
-        <button style="padding:10px 14px;" (click)="reload()">Reload</button>
-      </section>
-
-      <p *ngIf="err()" style="color:#b00020;">{{ err() }}</p>
-      <p *ngIf="loading()">Loading…</p>
-
-      <div style="display:grid; gap:10px;">
-        <article
-          *ngFor="let t of todos()"
-          style="border:1px solid #ddd; border-radius:12px; padding:12px; display:flex; justify-content:space-between; gap:12px;"
+    <header style="max-width: 960px; margin: 32px auto 8px; padding: 0 16px;">
+      <a routerLink="/" style="color: inherit; text-decoration: none;">
+        <h1 style="display: inline-block; margin: 0;">{{ 'app.title' | translate }}</h1>
+      </a>
+      @if (isMockMode) {
+        <span
+          style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
         >
-          <div style="min-width:0;">
-            <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-              {{ t.text }}
-            </div>
-            <div style="font-size:12px; opacity:.7;">{{ t.id }}</div>
-          </div>
+          {{ 'mock.label' | translate }}
+        </span>
+      }
+    </header>
 
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button (click)="onDuplicate(t)" title="Duplicate">Duplicate</button>
-            <button (click)="onDelete(t)" title="Delete forever">Delete</button>
+    <main style="max-width: 960px; margin: 0 auto; padding: 0 16px 32px; display: flex; gap: 16px;">
+      <aside style="width: 220px;">
+        <button (click)="toggleNav()" style="margin-bottom: 8px;">
+          {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
+        </button>
+        @if (navOpen) {
+          <div>
+            <ul style="margin: 0; padding-left: 18px;">
+              <li>
+                <a routerLink="/todo">{{ 'nav.todoApp' | translate }}</a>
+              </li>
+            </ul>
           </div>
-        </article>
-      </div>
+        }
+      </aside>
+
+      <section style="flex: 1; min-width: 0;">
+        <router-outlet />
+      </section>
     </main>
-  `
+  `,
 })
-export class AppComponent {
-  todos = signal<Todo[]>([]);
-  loading = signal(false);
-  err = signal<string | null>(null);
+export class AppComponent implements OnInit {
+  isMockMode =
+    typeof window !== 'undefined' &&
+    ((window as OpWindow).__OP_CONFIG__?.mockMode === true ||
+      !(window as OpWindow).__OP_CONFIG__?.apiBaseUrl);
+  navOpen = true;
+  private readonly translate = inject(TranslateService);
 
-  async ngOnInit() {
-    await this.reload();
+  constructor() {
+    this.translate.setDefaultLang('en');
+    this.translate.use('en');
   }
 
-  async reload() {
-    this.err.set(null);
-    this.loading.set(true);
-    try {
-      this.todos.set(await listTodos());
-    } catch (e: any) {
-      this.err.set(e?.message ?? String(e));
-    } finally {
-      this.loading.set(false);
-    }
+  ngOnInit() {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('op_nav_open');
+    if (stored !== null) this.navOpen = stored === 'true';
   }
 
-  async onAdd(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    this.err.set(null);
-    try {
-      const created = await createTodo(trimmed);
-      this.todos.set([created, ...this.todos()]);
-    } catch (e: any) {
-      this.err.set(e?.message ?? String(e));
-    }
-  }
-
-  async onDuplicate(t: Todo) {
-    await this.onAdd(t.text);
-  }
-
-  async onDelete(t: Todo) {
-    this.err.set(null);
-    try {
-      await deleteTodo(t.id);
-      this.todos.set(this.todos().filter(x => x.id !== t.id));
-    } catch (e: any) {
-      this.err.set(e?.message ?? String(e));
+  toggleNav() {
+    this.navOpen = !this.navOpen;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('op_nav_open', String(this.navOpen));
     }
   }
 }
-

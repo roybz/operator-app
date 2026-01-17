@@ -1,23 +1,53 @@
 import { TestBed } from '@angular/core/testing';
-import { App } from './app';
+import { provideRouter } from '@angular/router';
+import {
+  TranslateFakeLoader,
+  TranslateLoader,
+  TranslateModule,
+  TranslateService,
+} from '@ngx-translate/core';
+import { AppComponent } from './app';
+
+type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean } };
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [App],
+      imports: [
+        AppComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateFakeLoader },
+        }),
+      ],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
   it('should create the app', () => {
-    const fixture = TestBed.createComponent(App);
+    const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
   });
 
-  it('should render title', async () => {
-    const fixture = TestBed.createComponent(App);
+  it('renders translated header and mock label', async () => {
+    const w = window as OpWindow;
+    w.__OP_CONFIG__ = { mockMode: true };
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      app: { title: 'Operator App' },
+      mock: { label: 'Mock mode' },
+      nav: { collapse: 'Collapse', expand: 'Expand', todoApp: 'Todo app' },
+    });
+    translate.use('en');
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
     await fixture.whenStable();
+
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, operator-app');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Operator App');
+    expect(compiled.textContent).toContain('Mock mode');
+    expect(compiled.textContent).toContain('Todo app');
   });
 });

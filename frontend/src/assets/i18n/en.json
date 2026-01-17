@@ -1,0 +1,33 @@
+{
+  "app": {
+    "title": "Operator App"
+  },
+  "mock": {
+    "label": "Mock mode"
+  },
+  "nav": {
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "todoApp": "Todo app"
+  },
+  "landing": {
+    "welcome": "Welcome to Operator App."
+  },
+  "todo": {
+    "title": "Todos App",
+    "placeholder": "Add a todo",
+    "add": "Add",
+    "reload": "Reload",
+    "loading": "Loading…",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "duplicateTitle": "Duplicate",
+    "deleteTitle": "Delete forever",
+    "error": {
+      "list": "Could not load todos.",
+      "create": "Could not create todo.",
+      "delete": "Could not delete todo.",
+      "unknown": "Something went wrong."
+    }
+  }
+}

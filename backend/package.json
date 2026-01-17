@@ -1,0 +1,11 @@
+{
+  "name": "operator-app-backend-root",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "pretest": "NPM_CONFIG_CACHE=./.npm-cache npm --prefix src install --no-audit --no-fund",
+    "test": "node --test tests/**/*.test.js",
+    "smoke:local": "bash scripts/smoke-local.sh"
+  }
+}

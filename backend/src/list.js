@@ -1,7 +1,9 @@
 import { ScanCommand } from "@aws-sdk/lib-dynamodb";
-import { ddb, tableName, json } from "./_lib";
+import { ddb, tableName, json } from "./_lib.js";
 
 export async function handler() {
+  if (!tableName) return json(500, { message: "TODOS_TABLE is not configured" });
+
   const out = await ddb.send(new ScanCommand({ TableName: tableName }));
   const items = (out.Items ?? [])
     .map(x => ({
@@ -13,4 +15,3 @@ export async function handler() {
 
   return json(200, items);
 }
-
