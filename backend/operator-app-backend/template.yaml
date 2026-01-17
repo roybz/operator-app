@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: operator-app backend (todo API)
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 10
+    MemorySize: 128
+    Environment:
+      Variables:
+        TODOS_TABLE: !Ref TodosTable
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - content-type
+        AllowMethods:
+          - GET
+          - POST
+          - DELETE
+          - OPTIONS
+
+  TodosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+
+  ListTodosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: list.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TodosTable
+      Events:
+        GetTodos:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /todos
+            Method: GET
+
+  CreateTodoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: create.handler
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref TodosTable
+      Events:
+        PostTodo:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /todos
+            Method: POST
+
+  DeleteTodoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: del.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TodosTable
+      Events:
+        DeleteTodo:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /todos/{id}
+            Method: DELETE
+
+Outputs:
+  ApiBaseUrl:
+    Description: "Base URL of the HTTP API"
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+
