@@ -1,0 +1,41 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # If using OIDC:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::750142453913:role/Admin
+          aws-region: us-east-1
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build
+        working-directory: backend/operator-app-backend
+        run: sam build
+
+      - name: Deploy
+        working-directory: backend/operator-app-backend
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+
