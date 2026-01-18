@@ -88,8 +88,8 @@ import { DialogInstance } from '../../core/dialog.service';
     `
       .dialog {
         position: absolute;
-        background: #fff;
-        border: 1px solid #cfcfcf;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
         border-radius: 8px;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
         display: flex;
@@ -101,7 +101,7 @@ import { DialogInstance } from '../../core/dialog.service';
         align-items: center;
         gap: 8px;
         padding: 6px 8px;
-        background: #f5f5f5;
+        background: var(--color-bg);
         cursor: grab;
         user-select: none;
       }
@@ -132,9 +132,9 @@ import { DialogInstance } from '../../core/dialog.service';
         width: 22px;
         height: 22px;
         cursor: nwse-resize;
-        border: 2px solid #9b9b9b;
-        border-radius: 0 0 8px 0;
-        background: rgba(200, 200, 200, 0.6);
+        border: 3px solid var(--color-border);
+        border-radius: 0 0 10px 0;
+        background: color-mix(in srgb, var(--color-border) 55%, transparent);
       }
       .dialog--disabled {
         pointer-events: none;
@@ -176,7 +176,8 @@ export class DialogComponent {
     if (this.disabled) return;
     if (this.isEditingTitle) return;
     const target = event.target as HTMLElement;
-    if (target.closest('input') || target.closest('.dialog__title')) return;
+    if (target.closest('input')) return;
+    if (event.detail > 1 && target.closest('.dialog__title')) return;
     event.preventDefault();
     this.bringToFront.emit();
     this.dragStart = {

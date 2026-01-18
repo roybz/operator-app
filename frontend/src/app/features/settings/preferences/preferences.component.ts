@@ -1,7 +1,8 @@
-import { Component, OnDestroy, effect, inject, signal } from '@angular/core';
+import { Component, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AuthService, SavedCredential, UserPreferences } from '../../../core/auth.service';
+import { SavedCredential, UserPreferences } from '../../../core/auth.service';
+import { SettingsDraftService } from '../settings-draft.service';
 
 const LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
@@ -13,6 +14,9 @@ const LANGUAGE_OPTIONS = [
   { code: 'nl', label: 'Nederlands' },
   { code: 'no', label: 'Norsk' },
   { code: 'pl', label: 'Polski' },
+  { code: 'hu', label: 'Magyar' },
+  { code: 'ca', label: 'Català' },
+  { code: 'et', label: 'Eesti' },
   { code: 'hr', label: 'Hrvatski' },
   { code: 'ru', label: 'Русский' },
   { code: 'uk', label: 'Українська' },
@@ -96,25 +100,42 @@ const LANGUAGE_OPTIONS = [
           />
         </label>
 
-        @if (auth.isAdmin()) {
-          <label>
-            {{ 'preferences.siteTitle' | translate }}
-            <input
-              type="text"
-              [value]="prefs().siteTitle || defaultSiteTitle"
-              (input)="onSiteTitleChange($event)"
-            />
-          </label>
-          <label>
-            {{ 'preferences.siteLogo' | translate }}
-            <select [value]="prefs().siteLogoEmoji ?? '🌎'" (change)="onSiteLogoChange($event)">
-              <option value="">{{ 'preferences.siteLogoNone' | translate }}</option>
-              @for (emoji of logoOptions; track emoji) {
-                <option [value]="emoji">{{ emoji }}</option>
-              }
-            </select>
-          </label>
-        }
+        <label>
+          {{ 'preferences.themeMode' | translate }}
+          <select [value]="prefs().themeMode" (change)="onThemeModeChange($event)">
+            <option value="system">{{ 'preferences.themeSystem' | translate }}</option>
+            <option value="timeZone">{{ 'preferences.themeTimeZone' | translate }}</option>
+            <option value="light">{{ 'preferences.themeLight' | translate }}</option>
+            <option value="dark">{{ 'preferences.themeDark' | translate }}</option>
+          </select>
+        </label>
+
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input
+            type="checkbox"
+            [checked]="prefs().accessibilityMode"
+            (change)="onAccessibilityToggle($event)"
+          />
+          {{ 'preferences.accessibilityMode' | translate }}
+        </label>
+
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input
+            type="checkbox"
+            [checked]="prefs().hideViewportSizingControls"
+            (change)="onViewportSizingToggle($event)"
+          />
+          {{ 'preferences.hideViewportSizing' | translate }}
+        </label>
+
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input
+            type="checkbox"
+            [checked]="prefs().hideZoomControls"
+            (change)="onZoomControlsToggle($event)"
+          />
+          {{ 'preferences.hideZoomControls' | translate }}
+        </label>
 
         <label>
           {{ 'preferences.backgroundImageUpload' | translate }}
@@ -140,17 +161,6 @@ const LANGUAGE_OPTIONS = [
             <option value="stretch">{{ 'preferences.backgroundImageStretch' | translate }}</option>
           </select>
         </label>
-
-        @if (auth.isAdmin()) {
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input
-              type="checkbox"
-              [checked]="prefs().useServerBackground"
-              (change)="onToggleServerBackground($event)"
-            />
-            {{ 'preferences.backgroundUseServer' | translate }}
-          </label>
-        }
 
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="checkbox" [checked]="prefs().showGrid" (change)="onToggleGrid($event)" />
@@ -231,36 +241,16 @@ const LANGUAGE_OPTIONS = [
     </section>
   `,
 })
-export class PreferencesSettingsComponent implements OnDestroy {
-  readonly auth = inject(AuthService);
+export class PreferencesSettingsComponent {
+  private draft = inject(SettingsDraftService);
   private translate = inject(TranslateService);
   languageOptions = LANGUAGE_OPTIONS;
-  logoOptions = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
   timeZoneOptions = signal<string[]>([]);
-  defaultSiteTitle = "Roy's Planner";
-  private citySaveTimeout?: number;
-  prefs = signal<UserPreferences>({
-    language: '',
-    city: '',
-    timeZone: 'UTC',
-    showTime: true,
-    timeFormat: '12h',
-    credentials: [],
-    maxPersistedApps: 30,
-    backgroundImageUrl: '',
-    backgroundImageMode: 'repeat',
-    useServerBackground: false,
-    disabledApps: ['navigator', 'notes'],
-    siteTitle: "Roy's Planner",
-    siteLogoEmoji: '🌎',
-    showGrid: true,
-    gridSize: 50,
-  });
+  prefs = signal<UserPreferences>(this.draft.preferences());
 
   constructor() {
-    this.prefs.set(this.auth.preferences());
     effect(() => {
-      this.prefs.set(this.auth.preferences());
+      this.prefs.set(this.draft.preferences());
     });
     if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
       this.timeZoneOptions.set(Intl.supportedValuesOf('timeZone') as string[]);
@@ -271,13 +261,6 @@ export class PreferencesSettingsComponent implements OnDestroy {
     return this.prefs().language || this.translate.currentLang || 'en';
   }
 
-  ngOnDestroy() {
-    if (this.citySaveTimeout) {
-      window.clearTimeout(this.citySaveTimeout);
-      this.save(this.prefs());
-    }
-  }
-
   onLanguageChange(event: Event) {
     const language = (event.target as HTMLSelectElement).value;
     this.save({ ...this.prefs(), language });
@@ -285,9 +268,7 @@ export class PreferencesSettingsComponent implements OnDestroy {
 
   onCityInput(event: Event) {
     const city = (event.target as HTMLInputElement).value.slice(0, 128);
-    this.prefs.set({ ...this.prefs(), city });
-    if (this.citySaveTimeout) window.clearTimeout(this.citySaveTimeout);
-    this.citySaveTimeout = window.setTimeout(() => this.save(this.prefs()), 2000);
+    this.save({ ...this.prefs(), city });
   }
 
   onTimeZoneInput(event: Event) {
@@ -311,14 +292,28 @@ export class PreferencesSettingsComponent implements OnDestroy {
     this.save({ ...this.prefs(), maxPersistedApps });
   }
 
-  onSiteTitleChange(event: Event) {
-    const siteTitle = (event.target as HTMLInputElement).value;
-    this.save({ ...this.prefs(), siteTitle });
+  onThemeModeChange(event: Event) {
+    const themeMode = (event.target as HTMLSelectElement).value as
+      | 'system'
+      | 'light'
+      | 'dark'
+      | 'timeZone';
+    this.save({ ...this.prefs(), themeMode });
   }
 
-  onSiteLogoChange(event: Event) {
-    const siteLogoEmoji = (event.target as HTMLSelectElement).value;
-    this.save({ ...this.prefs(), siteLogoEmoji });
+  onAccessibilityToggle(event: Event) {
+    const accessibilityMode = (event.target as HTMLInputElement).checked;
+    this.save({ ...this.prefs(), accessibilityMode });
+  }
+
+  onViewportSizingToggle(event: Event) {
+    const hideViewportSizingControls = (event.target as HTMLInputElement).checked;
+    this.save({ ...this.prefs(), hideViewportSizingControls });
+  }
+
+  onZoomControlsToggle(event: Event) {
+    const hideZoomControls = (event.target as HTMLInputElement).checked;
+    this.save({ ...this.prefs(), hideZoomControls });
   }
 
   onBackgroundFileChange(event: Event) {
@@ -327,7 +322,7 @@ export class PreferencesSettingsComponent implements OnDestroy {
     const reader = new FileReader();
     reader.onload = () => {
       const url = typeof reader.result === 'string' ? reader.result : '';
-      this.save({ ...this.prefs(), backgroundImageUrl: url, useServerBackground: false });
+      this.save({ ...this.prefs(), backgroundImageUrl: url });
     };
     reader.readAsDataURL(file);
   }
@@ -342,15 +337,6 @@ export class PreferencesSettingsComponent implements OnDestroy {
       | 'center'
       | 'stretch';
     this.save({ ...this.prefs(), backgroundImageMode });
-  }
-
-  onToggleServerBackground(event: Event) {
-    const useServerBackground = (event.target as HTMLInputElement).checked;
-    this.save({
-      ...this.prefs(),
-      useServerBackground,
-      backgroundImageUrl: useServerBackground ? '' : this.prefs().backgroundImageUrl,
-    });
   }
 
   onToggleGrid(event: Event) {
@@ -392,6 +378,6 @@ export class PreferencesSettingsComponent implements OnDestroy {
 
   private save(next: UserPreferences) {
     this.prefs.set(next);
-    this.auth.savePreferences(next);
+    this.draft.updatePreferences(next);
   }
 }

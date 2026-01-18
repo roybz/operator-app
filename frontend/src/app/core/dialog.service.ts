@@ -416,6 +416,17 @@ export class DialogService {
     return `${base}:${userId}`;
   }
 
+  resetForUser(userId: string) {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(`${STATE_KEY}:${userId}`);
+    window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}`);
+    const activeUser = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id;
+    if (activeUser === userId) {
+      this.state.set(this.defaultState());
+      this.persist();
+    }
+  }
+
   private defaultState(): DialogState {
     const workspaceId = this.uid('ws');
     return {

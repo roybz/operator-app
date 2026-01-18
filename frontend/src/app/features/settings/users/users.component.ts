@@ -17,7 +17,7 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
       }
 
       @if (auth.currentUser() && auth.currentUser()?.id !== 'u_guest') {
-        <section style="margin-bottom: 24px; padding: 12px; border: 1px solid #ddd;">
+        <section style="margin-bottom: 24px; padding: 12px; border: 1px solid var(--color-border);">
           <h4 style="margin-top:0;">{{ 'users.selfTitle' | translate }}</h4>
           <label for="self-password" style="display:block; margin: 8px 0 4px;">
             {{ 'users.password' | translate }}
@@ -108,9 +108,11 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
 
       @if (successMessage()) {
         <div
-          style="position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:3000;"
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
         >
-          <div style="background:#fff; padding:20px; border-radius:8px; width:320px;">
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+          >
             <p>{{ successMessage() }}</p>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
               <button (click)="successMessage.set(null)">OK</button>
@@ -169,7 +171,7 @@ export class UsersSettingsComponent {
     this.error.set(null);
   }
 
-  save() {
+  async save() {
     this.error.set(null);
     const payload = {
       username: this.username(),
@@ -177,9 +179,14 @@ export class UsersSettingsComponent {
       role: this.role(),
     };
 
+    if (!this.editingId() && !payload.password.trim()) {
+      this.error.set(this.translate.instant('users.error.passwordRequired'));
+      return;
+    }
+
     const result = this.editingId()
-      ? this.auth.updateUser(this.editingId()!, payload)
-      : this.auth.createUser(payload);
+      ? await this.auth.updateUser(this.editingId()!, payload)
+      : await this.auth.createUser(payload);
 
     if (!result.ok) {
       this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
@@ -204,12 +211,12 @@ export class UsersSettingsComponent {
     return this.editingId() === 'u_guest';
   }
 
-  updateSelfPassword() {
+  async updateSelfPassword() {
     const current = this.auth.currentUser();
     if (!current) return;
     const nextPassword = this.selfPassword().trim();
     if (!nextPassword) return;
-    const result = this.auth.updateUser(current.id, {
+    const result = await this.auth.updateUser(current.id, {
       username: current.username,
       password: nextPassword,
       role: current.role,

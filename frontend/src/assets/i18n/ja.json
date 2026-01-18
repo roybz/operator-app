@@ -28,11 +28,15 @@
       "notFound": "ユーザーが見つかりません。"
     },
     "guest": "ゲストとして続行",
+    "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
-    "password": "パスワード（任意）",
+    "password": "Password",
     "signIn": "サインイン",
     "title": "サインイン",
-    "username": "ユーザー名"
+    "username": "ユーザー名",
+    "resetGuest": "Reset everything for the local guest account?",
+    "resetGuestConfirm": "Reset the local guest account and clear its data?",
+    "resetGuestConfirmButton": "Reset guest"
   },
   "canvas": {
     "originalScale": "Original scale",
@@ -62,7 +66,7 @@
     "unstash": "戻す"
   },
   "landing": {
-    "welcome": "Roy's Operatorへようこそ。"
+    "welcome": "Welcome to Roy's Planner."
   },
   "mock": {
     "label": "テストモード"
@@ -122,7 +126,15 @@
     "timeFormat12": "12時間",
     "timeFormat24": "24時間",
     "timeZone": "優先タイムゾーン",
-    "title": "環境設定"
+    "title": "環境設定",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accessibilityMode": "Accessibility mode (high contrast)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls"
   },
   "preview": {
     "label": "ユーザーとしてプレビュー: {{user}}",
@@ -142,7 +154,13 @@
     "usersLink": "ユーザー",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "adminLink": "Admin",
+    "apply": "Apply",
+    "applied": "Applied",
+    "cancel": "Cancel",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes"
   },
   "table": {
     "actions": "操作",
@@ -202,7 +220,8 @@
       "generic": "ユーザーを更新できませんでした。",
       "lastAdmin": "管理者は最低1人必要です。",
       "usernameRequired": "ユーザー名は必須です。",
-      "usernameTaken": "そのユーザー名は既に使用されています。"
+      "usernameTaken": "そのユーザー名は既に使用されています。",
+      "passwordRequired": "Password is required."
     },
     "password": "パスワード",
     "passwordUpdated": "Password updated successfully.",
@@ -219,5 +238,27 @@
   },
   "workspaces": {
     "button": "ワークスペース"
+  },
+  "accessibility": {
+    "title": "Accessibility setup",
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "toggle": "Enable accessibility mode",
+    "confirm": "Continue"
+  },
+  "admin": {
+    "title": "Admin",
+    "siteTitle": "Website name",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "defaultViewport": "Default user viewport size",
+    "applyViewportAll": "Change all users viewport size",
+    "allowGuestLogin": "Allow guest login",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

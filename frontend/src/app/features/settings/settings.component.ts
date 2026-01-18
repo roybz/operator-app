@@ -5,6 +5,9 @@ import { AuthService } from '../../core/auth.service';
 import { UsersSettingsComponent } from './users/users.component';
 import { PreferencesSettingsComponent } from './preferences/preferences.component';
 import { ApplicationsSettingsComponent } from './applications/applications.component';
+import { AdminSettingsComponent } from './admin/admin.component';
+import { SettingsDraftService } from './settings-draft.service';
+import { AboutComponent } from '../about/about.component';
 
 @Component({
   selector: 'app-settings',
@@ -15,12 +18,17 @@ import { ApplicationsSettingsComponent } from './applications/applications.compo
     UsersSettingsComponent,
     PreferencesSettingsComponent,
     ApplicationsSettingsComponent,
+    AdminSettingsComponent,
+    AboutComponent,
   ],
   template: `
     <section>
       <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
       <nav style="margin: 16px 0; display:flex; gap:12px;">
+        @if (auth.isAdmin()) {
+          <button (click)="tab.set('admin')">{{ 'settings.adminLink' | translate }}</button>
+        }
         <button (click)="tab.set('preferences')">
           {{ 'settings.preferencesLink' | translate }}
         </button>
@@ -31,7 +39,7 @@ import { ApplicationsSettingsComponent } from './applications/applications.compo
       </nav>
 
       @if (auth.isAdmin() && previewCandidates().length) {
-        <section style="margin-bottom: 16px; padding: 12px; border: 1px solid #ddd;">
+        <section style="margin-bottom: 16px; padding: 12px; border: 1px solid var(--color-border);">
           <h3 style="margin: 0 0 8px;">{{ 'settings.previewTitle' | translate }}</h3>
           <label for="preview-user" style="display:block; margin-bottom: 6px;">
             {{ 'settings.previewAs' | translate }}
@@ -65,6 +73,9 @@ import { ApplicationsSettingsComponent } from './applications/applications.compo
         </section>
       }
 
+      @if (tab() === 'admin') {
+        <app-admin-settings />
+      }
       @if (tab() === 'preferences') {
         <app-preferences-settings />
       }
@@ -74,12 +85,48 @@ import { ApplicationsSettingsComponent } from './applications/applications.compo
       @if (tab() === 'users') {
         <app-users-settings />
       }
+
+      @if (showApplyBar()) {
+        <div style="margin-top: 24px; display:flex; gap:8px;">
+          @if (draft.dirty()) {
+            <button (click)="apply()">{{ 'settings.apply' | translate }}</button>
+          } @else {
+            <button disabled>{{ 'settings.applied' | translate }}</button>
+          }
+          <button (click)="cancel()" [disabled]="!draft.dirty() && draft.applied()">
+            {{ 'settings.cancel' | translate }}
+          </button>
+        </div>
+      }
+
+      <div style="margin-top: 24px; border-top:1px solid var(--color-border); padding-top:12px;">
+        <button (click)="aboutOpen.set(!aboutOpen())">{{ 'nav.about' | translate }}</button>
+        <div
+          [style.maxHeight]="aboutOpen() ? '240px' : '0'"
+          [style.opacity]="aboutOpen() ? 1 : 0"
+          style="overflow:hidden; transition:max-height 180ms ease, opacity 180ms ease; margin-top:8px;"
+        >
+          <app-about />
+        </div>
+      </div>
     </section>
   `,
 })
 export class SettingsComponent {
   readonly auth = inject(AuthService);
-  tab = signal<'users' | 'preferences' | 'applications'>('preferences');
+  readonly draft = inject(SettingsDraftService);
+  aboutOpen = signal(false);
+  tab = signal<'users' | 'preferences' | 'applications' | 'admin'>(
+    this.auth.isAdmin() ? 'admin' : 'preferences',
+  );
+
+  constructor() {
+    this.draft.start();
+  }
+
+  showApplyBar() {
+    return this.draft.dirty() || this.draft.applied();
+  }
 
   users() {
     return this.auth.users();
@@ -98,5 +145,15 @@ export class SettingsComponent {
   onPersistChange(event: Event) {
     const checked = (event.target as HTMLInputElement).checked;
     this.auth.setPreviewPersist(checked);
+  }
+
+  apply() {
+    if (!this.draft.dirty()) return;
+    this.draft.apply();
+  }
+
+  cancel() {
+    if (!this.draft.dirty() && !this.draft.applied()) return;
+    this.draft.cancel();
   }
 }

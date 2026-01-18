@@ -28,11 +28,15 @@
       "notFound": "المستخدم غير موجود."
     },
     "guest": "المتابعة كضيف",
+    "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
-    "password": "كلمة المرور (اختياري)",
+    "password": "Password",
     "signIn": "تسجيل الدخول",
     "title": "تسجيل الدخول",
-    "username": "اسم المستخدم"
+    "username": "اسم المستخدم",
+    "resetGuest": "Reset everything for the local guest account?",
+    "resetGuestConfirm": "Reset the local guest account and clear its data?",
+    "resetGuestConfirmButton": "Reset guest"
   },
   "canvas": {
     "originalScale": "Original scale",
@@ -62,7 +66,7 @@
     "unstash": "استعادة"
   },
   "landing": {
-    "welcome": "مرحباً بك في Roy's Operator."
+    "welcome": "Welcome to Roy's Planner."
   },
   "mock": {
     "label": "وضع الاختبار"
@@ -122,7 +126,15 @@
     "timeFormat12": "12 ساعة",
     "timeFormat24": "24 ساعة",
     "timeZone": "المنطقة الزمنية المفضلة",
-    "title": "التفضيلات"
+    "title": "التفضيلات",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accessibilityMode": "Accessibility mode (high contrast)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls"
   },
   "preview": {
     "label": "المعاينة كـ: {{user}}",
@@ -142,7 +154,13 @@
     "usersLink": "المستخدمون",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "adminLink": "Admin",
+    "apply": "Apply",
+    "applied": "Applied",
+    "cancel": "Cancel",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes"
   },
   "table": {
     "actions": "الإجراءات",
@@ -202,7 +220,8 @@
       "generic": "تعذر تحديث المستخدم.",
       "lastAdmin": "يجب الاحتفاظ بمشرف واحد على الأقل.",
       "usernameRequired": "اسم المستخدم مطلوب.",
-      "usernameTaken": "اسم المستخدم مستخدم بالفعل."
+      "usernameTaken": "اسم المستخدم مستخدم بالفعل.",
+      "passwordRequired": "Password is required."
     },
     "password": "كلمة المرور",
     "passwordUpdated": "Password updated successfully.",
@@ -219,5 +238,27 @@
   },
   "workspaces": {
     "button": "مساحات العمل"
+  },
+  "accessibility": {
+    "title": "Accessibility setup",
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "toggle": "Enable accessibility mode",
+    "confirm": "Continue"
+  },
+  "admin": {
+    "title": "Admin",
+    "siteTitle": "Website name",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "defaultViewport": "Default user viewport size",
+    "applyViewportAll": "Change all users viewport size",
+    "allowGuestLogin": "Allow guest login",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

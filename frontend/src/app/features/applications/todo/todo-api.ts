@@ -25,6 +25,17 @@ function getApiBase(): string {
   const meta = import.meta as ImportMetaWithEnv;
 
   if (w?.__OP_CONFIG__?.mockMode === true) return '';
+  if (typeof window !== 'undefined') {
+    const orgRaw = window.localStorage.getItem('op_org_settings');
+    if (orgRaw) {
+      try {
+        const org = JSON.parse(orgRaw) as { testModeEnabled?: boolean };
+        if (org?.testModeEnabled === true) return '';
+      } catch {
+        // ignore parse errors and fall back to config checks
+      }
+    }
+  }
   return w?.__OP_CONFIG__?.apiBaseUrl ?? meta.env?.NG_APP_API_BASE_URL ?? '';
 }
 

@@ -14,17 +14,13 @@ export interface AppGroup {
   imports: [CommonModule, TranslateModule],
   template: `
     <div style="display:flex; flex-direction:column; gap:12px;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
-        <button (click)="toggleDialogs.emit()">
-          {{ hideDialogs ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate) }}
-        </button>
-      </div>
-
       <div style="max-height: 50vh; overflow:auto; padding-right:4px;">
         @for (app of apps; track app.id) {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span>{{ app.labelKey | translate }}</span>
-            <button class="app-list__icon" (click)="openApp.emit(app.id)">+</button>
+            <button class="app-list__icon app-list__icon--add" (click)="openApp.emit(app.id)">
+              +
+            </button>
           </div>
           <ul style="margin: 6px 0 0 16px; padding:0;">
             @for (instance of instancesByApp[app.id]; track instance.id) {
@@ -68,6 +64,11 @@ export interface AppGroup {
         cursor: pointer;
         font-size: 14px;
       }
+
+      .app-list__icon--add:hover {
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+      }
     `,
   ],
 })
@@ -81,12 +82,10 @@ export class AppListComponent {
     notes: [],
   };
   @Input() deleteTargetActive = false;
-  @Input() hideDialogs = false;
 
   @Output() openApp = new EventEmitter<AppId>();
   @Output() restore = new EventEmitter<string>();
   @Output() toggleLock = new EventEmitter<string>();
-  @Output() toggleDialogs = new EventEmitter<void>();
 
   private translate = inject(TranslateService);
 

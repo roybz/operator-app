@@ -22,6 +22,7 @@ describe('App', () => {
       JSON.stringify({ userId: 'u_admin', previewUserId: null, previewPersist: false }),
     );
     window.localStorage.setItem('op_prefs', JSON.stringify({}));
+    window.localStorage.setItem('op_accessibility_prompted_u_admin', 'true');
 
     await TestBed.configureTestingModule({
       imports: [

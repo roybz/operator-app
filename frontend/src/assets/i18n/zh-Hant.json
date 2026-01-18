@@ -28,11 +28,15 @@
       "notFound": "找不到使用者。"
     },
     "guest": "以訪客身分繼續",
+    "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
-    "password": "密碼（可選）",
+    "password": "Password",
     "signIn": "登入",
     "title": "登入",
-    "username": "使用者名稱"
+    "username": "使用者名稱",
+    "resetGuest": "Reset everything for the local guest account?",
+    "resetGuestConfirm": "Reset the local guest account and clear its data?",
+    "resetGuestConfirmButton": "Reset guest"
   },
   "canvas": {
     "originalScale": "Original scale",
@@ -62,7 +66,7 @@
     "unstash": "恢復"
   },
   "landing": {
-    "welcome": "歡迎使用 Roy's Operator."
+    "welcome": "Welcome to Roy's Planner."
   },
   "mock": {
     "label": "測試模式"
@@ -122,7 +126,15 @@
     "timeFormat12": "12 小時",
     "timeFormat24": "24 小時",
     "timeZone": "偏好時區",
-    "title": "偏好設定"
+    "title": "偏好設定",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accessibilityMode": "Accessibility mode (high contrast)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls"
   },
   "preview": {
     "label": "預覽為：{{user}}",
@@ -142,7 +154,13 @@
     "usersLink": "使用者",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "adminLink": "Admin",
+    "apply": "Apply",
+    "applied": "Applied",
+    "cancel": "Cancel",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes"
   },
   "table": {
     "actions": "操作",
@@ -202,7 +220,8 @@
       "generic": "無法更新使用者。",
       "lastAdmin": "至少需保留一位管理員。",
       "usernameRequired": "需要使用者名稱。",
-      "usernameTaken": "使用者名稱已被使用。"
+      "usernameTaken": "使用者名稱已被使用。",
+      "passwordRequired": "Password is required."
     },
     "password": "密碼",
     "passwordUpdated": "Password updated successfully.",
@@ -219,5 +238,27 @@
   },
   "workspaces": {
     "button": "工作區"
+  },
+  "accessibility": {
+    "title": "Accessibility setup",
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "toggle": "Enable accessibility mode",
+    "confirm": "Continue"
+  },
+  "admin": {
+    "title": "Admin",
+    "siteTitle": "Website name",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "defaultViewport": "Default user viewport size",
+    "applyViewportAll": "Change all users viewport size",
+    "allowGuestLogin": "Allow guest login",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

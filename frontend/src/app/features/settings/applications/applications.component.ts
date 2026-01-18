@@ -1,12 +1,13 @@
 import { Component, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { AuthService, UserPreferences } from '../../../core/auth.service';
+import { UserPreferences } from '../../../core/auth.service';
 import { AppId, DialogService } from '../../../core/dialog.service';
 import { clearCalculatorState } from '../../applications/calculator/calculator.component';
 import { clearTimerState } from '../../applications/timer/timer.component';
 import { clearNavigatorState } from '../../applications/navigator/navigator.component';
 import { clearNotesState } from '../../applications/notes/notes.component';
+import { SettingsDraftService } from '../settings-draft.service';
 
 const APPLICATIONS: { id: AppId; labelKey: string }[] = [
   { id: 'todo', labelKey: 'apps.todo' },
@@ -50,9 +51,11 @@ const APPLICATIONS: { id: AppId; labelKey: string }[] = [
 
       @if (confirmAppId()) {
         <div
-          style="position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:3000;"
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
         >
-          <div style="background:#fff; padding:20px; border-radius:8px; width:320px;">
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+          >
             <p>{{ 'settings.wipeConfirm' | translate }}</p>
             <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
               <button (click)="confirmAppId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
@@ -67,16 +70,16 @@ const APPLICATIONS: { id: AppId; labelKey: string }[] = [
   `,
 })
 export class ApplicationsSettingsComponent {
-  private auth = inject(AuthService);
+  private draft = inject(SettingsDraftService);
   private dialogService = inject(DialogService);
 
   apps = APPLICATIONS;
-  prefs = signal(this.auth.preferences());
+  prefs = signal(this.draft.preferences());
   confirmAppId = signal<AppId | null>(null);
 
   constructor() {
     effect(() => {
-      this.prefs.set(this.auth.preferences());
+      this.prefs.set(this.draft.preferences());
     });
   }
 
@@ -114,6 +117,6 @@ export class ApplicationsSettingsComponent {
 
   private save(next: UserPreferences) {
     this.prefs.set(next);
-    this.auth.savePreferences(next);
+    this.draft.updatePreferences(next);
   }
 }

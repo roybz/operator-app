@@ -28,11 +28,15 @@
       "notFound": "User not found."
     },
     "guest": "Continue as guest",
+    "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
-    "password": "Password (optional)",
+    "password": "Password",
     "signIn": "Sign in",
     "title": "Sign in",
-    "username": "Username"
+    "username": "Username",
+    "resetGuest": "Reset everything for the local guest account?",
+    "resetGuestConfirm": "Reset the local guest account and clear its data?",
+    "resetGuestConfirmButton": "Reset guest"
   },
   "canvas": {
     "originalScale": "Original scale",
@@ -62,7 +66,7 @@
     "unstash": "Restore"
   },
   "landing": {
-    "welcome": "Welcome to Roy's Operator."
+    "welcome": "Welcome to Roy's Planner."
   },
   "mock": {
     "label": "Test mode"
@@ -122,7 +126,15 @@
     "timeFormat12": "12-hour",
     "timeFormat24": "24-hour",
     "timeZone": "Preferred time zone",
-    "title": "Preferences"
+    "title": "Preferences",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accessibilityMode": "Accessibility mode (high contrast)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls"
   },
   "preview": {
     "label": "Previewing as: {{user}}",
@@ -142,7 +154,13 @@
     "usersLink": "Users",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "adminLink": "Admin",
+    "apply": "Apply",
+    "applied": "Applied",
+    "cancel": "Cancel",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes"
   },
   "table": {
     "actions": "Actions",
@@ -202,7 +220,8 @@
       "generic": "Unable to update user.",
       "lastAdmin": "You must keep at least one admin.",
       "usernameRequired": "Username is required.",
-      "usernameTaken": "That username is already taken."
+      "usernameTaken": "That username is already taken.",
+      "passwordRequired": "Password is required."
     },
     "password": "Password",
     "passwordUpdated": "Password updated successfully.",
@@ -219,5 +238,27 @@
   },
   "workspaces": {
     "button": "Workspaces"
+  },
+  "accessibility": {
+    "title": "Accessibility setup",
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "toggle": "Enable accessibility mode",
+    "confirm": "Continue"
+  },
+  "admin": {
+    "title": "Admin",
+    "siteTitle": "Website name",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "defaultViewport": "Default user viewport size",
+    "applyViewportAll": "Change all users viewport size",
+    "allowGuestLogin": "Allow guest login",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

@@ -22,9 +22,8 @@ import { TimerComponent } from './features/applications/timer/timer.component';
 import { NavigatorComponent } from './features/applications/navigator/navigator.component';
 import { NotesComponent } from './features/applications/notes/notes.component';
 import { SettingsComponent } from './features/settings/settings.component';
-import { AboutComponent } from './features/about/about.component';
+import { SettingsDraftService } from './features/settings/settings-draft.service';
 
-type OpWindow = Window & { __OP_CONFIG__?: { apiBaseUrl?: string; mockMode?: boolean } };
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
 const createFallbackRect = (width: number, height: number): DOMRect => {
@@ -66,19 +65,41 @@ const APP_GROUPS: AppGroup[] = [
     NavigatorComponent,
     NotesComponent,
     SettingsComponent,
-    AboutComponent,
+  ],
+  styles: [
+    `
+      .floating-control {
+        position: fixed;
+        z-index: 90;
+        opacity: 0.6;
+        transition: opacity 120ms ease;
+      }
+
+      .floating-control:hover {
+        opacity: 1;
+      }
+    `,
   ],
   template: `
-    @if (!auth.isLoggedIn()) {
+    @if (loadingVisible()) {
+      <div
+        style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:4000; transition:opacity 120ms ease;"
+        [style.opacity]="loadingFading() ? 0 : 1"
+      >
+        <div style="font-size:18px; letter-spacing:0.04em;">{{ 'loading' | translate }}</div>
+      </div>
+    }
+
+    @if (auth.ready() && !auth.isLoggedIn()) {
       <router-outlet />
-    } @else {
+    } @else if (auth.isLoggedIn()) {
       <div style="position:relative;">
         @if (topBarOpen()) {
           <div
             [style.maxHeight.px]="workspaceMenuOpen() ? 72 : 0"
             [style.opacity]="workspaceMenuOpen() ? 1 : 0"
-            [style.borderBottom]="workspaceMenuOpen() ? '1px solid #ddd' : 'none'"
-            style="overflow:hidden; background:#f5f5f5; transition:max-height 200ms ease, opacity 200ms ease;"
+            [style.borderBottom]="workspaceMenuOpen() ? '1px solid var(--color-border)' : 'none'"
+            style="overflow:hidden; background:var(--color-bg); transition:max-height 200ms ease, opacity 200ms ease;"
           >
             <div
               style="display:flex; justify-content:center; gap:12px; align-items:center; padding:12px 16px;"
@@ -93,7 +114,7 @@ const APP_GROUPS: AppGroup[] = [
                           ? '0 0 0 2px #00c2d1'
                           : 'none'
                       "
-                      style="padding:10px 18px; border:1px solid #ccc; border-radius:8px; background:#fff;"
+                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
                     >
                       <span (dblclick)="startWorkspaceRename(ws)">{{ ws.name }}</span>
                     </button>
@@ -103,13 +124,13 @@ const APP_GROUPS: AppGroup[] = [
                       (input)="editingWorkspaceName.set($any($event.target).value)"
                       (blur)="finishWorkspaceRename(ws)"
                       (keydown.enter)="finishWorkspaceRename(ws)"
-                      style="padding:10px 18px; border:1px solid #ccc; border-radius:8px; background:#fff; width:140px;"
+                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); width:140px;"
                     />
                   }
                   <button
                     (click)="closeWorkspace(ws)"
                     [disabled]="dialogService.getWorkspaces().length <= 1"
-                    style="position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:999px; border:1px solid #ccc; background:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer;"
+                    style="position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:999px; border:1px solid var(--color-border); background:var(--color-surface); display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer;"
                     title="Close workspace"
                   >
                     ✕
@@ -127,7 +148,7 @@ const APP_GROUPS: AppGroup[] = [
           </div>
 
           <header
-            style="background:#fff; border-bottom:1px solid #ddd; padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
+            style="background:var(--color-surface); border-bottom:1px solid var(--color-border); padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
           >
             <div>
               @if (siteLogoEmoji()) {
@@ -141,7 +162,7 @@ const APP_GROUPS: AppGroup[] = [
                   {{ 'auth.loggedInAs' | translate: { user: auth.currentUser()?.username ?? '' } }}
                 </span>
               }
-              @if (isMockMode) {
+              @if (isMockMode()) {
                 <span
                   style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
                 >
@@ -184,7 +205,7 @@ const APP_GROUPS: AppGroup[] = [
         <aside
           [style.width]="navOpen ? '240px' : '0'"
           [style.padding]="navOpen ? '16px' : '0'"
-          [style.borderRight]="navOpen ? '1px solid #ddd' : 'none'"
+          [style.borderRight]="navOpen ? '1px solid var(--color-border)' : 'none'"
           [style.overflow]="navOpen ? 'visible' : 'hidden'"
           style="display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box;"
         >
@@ -193,58 +214,67 @@ const APP_GROUPS: AppGroup[] = [
               <button (click)="toggleNav()" style="margin-bottom: 8px;">
                 {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
               </button>
+              <button (click)="toggleDialogsHidden()" style="margin-bottom: 8px;">
+                {{
+                  dialogsHidden()
+                    ? ('dialogs.showAll' | translate)
+                    : ('dialogs.hideAll' | translate)
+                }}
+              </button>
+              <div style="margin-bottom: 12px;">
+                <button (click)="toggleResetMenu()">{{ 'dialogs.reset' | translate }}</button>
+                @if (resetMenuOpen()) {
+                  <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                    <button (click)="resetDialogs('left')">
+                      {{ 'dialogs.resetLeft' | translate }}
+                    </button>
+                    <button (click)="resetDialogs('middle')">
+                      {{ 'dialogs.resetMiddle' | translate }}
+                    </button>
+                  </div>
+                }
+              </div>
               <app-app-list
                 [apps]="visibleAppGroups()"
                 [instancesByApp]="instancesByApp()"
                 [deleteTargetActive]="!!deleteTargetId()"
-                [hideDialogs]="dialogsHidden()"
-                (toggleDialogs)="toggleDialogsHidden()"
                 (openApp)="openApp($event)"
                 (restore)="restoreInstance($event)"
                 (toggleLock)="toggleDeleteLock($event)"
               />
             </div>
 
-            <div>
-              <button (click)="toggleResetMenu()">{{ 'dialogs.reset' | translate }}</button>
-              @if (resetMenuOpen()) {
-                <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
-                  <button (click)="resetDialogs('left')">
-                    {{ 'dialogs.resetLeft' | translate }}
-                  </button>
-                  <button (click)="resetDialogs('middle')">
-                    {{ 'dialogs.resetMiddle' | translate }}
-                  </button>
+            <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+              @if (showViewportSizingControls()) {
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <input
+                    type="number"
+                    [value]="canvasWidth()"
+                    (change)="canvasWidth.set($any($event.target).valueAsNumber); applyCanvasSize()"
+                    min="1024"
+                    max="7680"
+                    style="width:90px; padding:4px;"
+                  />
+                  <span>×</span>
+                  <input
+                    type="number"
+                    [value]="canvasHeight()"
+                    (change)="
+                      canvasHeight.set($any($event.target).valueAsNumber); applyCanvasSize()
+                    "
+                    min="768"
+                    max="4320"
+                    style="width:90px; padding:4px;"
+                  />
                 </div>
               }
-            </div>
-
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-              <div style="display:flex; align-items:center; gap:8px;">
-                <input
-                  type="number"
-                  [value]="canvasWidth()"
-                  (change)="canvasWidth.set($any($event.target).valueAsNumber); applyCanvasSize()"
-                  min="1024"
-                  max="7680"
-                  style="width:90px; padding:4px;"
-                />
-                <span>×</span>
-                <input
-                  type="number"
-                  [value]="canvasHeight()"
-                  (change)="canvasHeight.set($any($event.target).valueAsNumber); applyCanvasSize()"
-                  min="768"
-                  max="4320"
-                  style="width:90px; padding:4px;"
-                />
-              </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <button (click)="resetZoom()">{{ 'canvas.originalScale' | translate }}</button>
-                <button (click)="zoomOut()">{{ 'canvas.zoomOut' | translate }}</button>
-                <button (click)="zoomIn()">{{ 'canvas.zoomIn' | translate }}</button>
-              </div>
-              <button (click)="openAbout()">{{ 'nav.about' | translate }}</button>
+              @if (showZoomControls()) {
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button (click)="resetZoom()">{{ 'canvas.originalScale' | translate }}</button>
+                  <button (click)="zoomOut()">{{ 'canvas.zoomOut' | translate }}</button>
+                  <button (click)="zoomIn()">{{ 'canvas.zoomIn' | translate }}</button>
+                </div>
+              }
               <button (click)="openSettings()">{{ 'nav.settings' | translate }}</button>
               <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
             </div>
@@ -259,7 +289,9 @@ const APP_GROUPS: AppGroup[] = [
           @if (!topBarOpen()) {
             <button
               (click)="toggleTopBar()"
-              style="position:absolute; top:12px; right:12px; z-index:80;"
+              class="floating-control"
+              style="right:12px;"
+              [style.top.px]="floatingTopBarToggleTop()"
             >
               {{ 'topbar.expand' | translate }}
             </button>
@@ -267,13 +299,17 @@ const APP_GROUPS: AppGroup[] = [
           @if (!navOpen) {
             <button
               (click)="toggleNav()"
-              style="position:absolute; top:12px; left:12px; z-index:80;"
+              class="floating-control"
+              style="left:12px;"
+              [style.top.px]="floatingSidebarToggleTop()"
             >
               {{ 'nav.expand' | translate }}
             </button>
             <button
               (click)="toggleDialogsHidden()"
-              style="position:absolute; top:12px; left:92px; z-index:80;"
+              class="floating-control"
+              style="left:92px;"
+              [style.top.px]="floatingSidebarToggleTop()"
             >
               {{
                 dialogsHidden() ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate)
@@ -286,7 +322,7 @@ const APP_GROUPS: AppGroup[] = [
             [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
             [style.width.px]="canvasWidth()"
             [style.height.px]="canvasHeight()"
-            style="position:relative; min-width:1024px; min-height:768px; max-width:7680px; max-height:4320px; margin:0 auto; background-color:#f0f0f0; transform-origin: top left; cursor: all-scroll;"
+            style="position:relative; min-width:1024px; min-height:768px; max-width:7680px; max-height:4320px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left; cursor: all-scroll;"
             [style.transform]="'scale(' + canvasScale() + ')'"
             (pointerdown)="startCanvasPan($event)"
           >
@@ -294,7 +330,7 @@ const APP_GROUPS: AppGroup[] = [
               @if (instance.tileRect) {
                 <div
                   data-tile="true"
-                  style="position:absolute; background:#dcdcdc; border:1px solid #b3b3b3; border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15);"
+                  style="position:absolute; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15);"
                   [style.left.px]="instance.tileRect.x"
                   [style.top.px]="instance.tileRect.y"
                   [style.width.px]="instance.tileRect.width"
@@ -313,12 +349,12 @@ const APP_GROUPS: AppGroup[] = [
                         style="width:100%; padding:4px;"
                       />
                     } @else {
-                      <button
-                        style="background:transparent; border:none; text-align:left; padding:0; font-size:13px; width:100%;"
-                        (click)="startRename(instance)"
+                      <div
+                        style="text-align:left; font-size:13px; width:100%; cursor:text;"
+                        (dblclick)="startRename(instance)"
                       >
                         {{ instanceLabel(instance) }}
-                      </button>
+                      </div>
                     }
                   </div>
                   <button
@@ -370,13 +406,8 @@ const APP_GROUPS: AppGroup[] = [
           </div>
 
           @if (settingsOpen()) {
-            <app-overlay (closed)="settingsOpen.set(false)">
+            <app-overlay (closed)="requestCloseSettings()">
               <app-settings />
-            </app-overlay>
-          }
-          @if (aboutOpen()) {
-            <app-overlay (closed)="aboutOpen.set(false)">
-              <app-about />
             </app-overlay>
           }
         </section>
@@ -384,13 +415,72 @@ const APP_GROUPS: AppGroup[] = [
 
       @if (deleteTargetId()) {
         <div
-          style="position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:1000;"
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1000;"
         >
-          <div style="background:#fff; padding:20px; border-radius:8px; width:320px;">
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+          >
             <p>{{ 'dialogs.confirmDelete' | translate }}</p>
             <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
               <button (click)="deleteTargetId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
               <button (click)="deleteConfirmed()">{{ 'dialogs.confirm' | translate }}</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (settingsCloseConfirmOpen()) {
+        <div
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3100;"
+        >
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:340px;"
+          >
+            <p>{{ 'settings.closeConfirm' | translate }}</p>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+              <button (click)="cancelCloseSettings()">{{ 'dialogs.cancel' | translate }}</button>
+              <button (click)="confirmCloseSettings()">{{ 'settings.discard' | translate }}</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (guestBlocked()) {
+        <div
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3200;"
+        >
+          <div
+            style="background:var(--color-surface); padding:24px; border-radius:12px; width:360px; text-align:center;"
+          >
+            <p>{{ 'auth.guestDisabled' | translate }}</p>
+            <div style="display:flex; gap:8px; justify-content:center; margin-top:16px;">
+              <button (click)="logout()">{{ 'auth.signIn' | translate }}</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (accessibilityPromptOpen()) {
+        <div
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1200;"
+        >
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
+          >
+            <h3 style="margin-top:0;">{{ 'accessibility.title' | translate }}</h3>
+            <p>{{ 'accessibility.body' | translate }}</p>
+            <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
+              <input
+                type="checkbox"
+                [checked]="accessibilityPromptEnabled()"
+                (change)="toggleAccessibilityPrompt()"
+              />
+              {{ 'accessibility.toggle' | translate }}
+            </label>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+              <button (click)="applyAccessibilityPrompt()">
+                {{ 'accessibility.confirm' | translate }}
+              </button>
             </div>
           </div>
         </div>
@@ -401,22 +491,28 @@ const APP_GROUPS: AppGroup[] = [
 export class AppComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   readonly dialogService = inject(DialogService);
-  isMockMode =
-    typeof window !== 'undefined' &&
-    ((window as OpWindow).__OP_CONFIG__?.mockMode === true ||
-      !(window as OpWindow).__OP_CONFIG__?.apiBaseUrl);
+  readonly settingsDraft = inject(SettingsDraftService);
+  isMockMode = computed(() => {
+    const backendConnected = this.auth.isBackendConnected();
+    return !backendConnected || this.auth.orgSettings().testModeEnabled;
+  });
   navOpen = true;
   editingWorkspaceId = signal<string | null>(null);
   editingWorkspaceName = signal('');
   private readonly translate = inject(TranslateService);
   private timeInterval?: number;
+  private loadingTimeout?: number;
   private now = signal(new Date());
   workspaceMenuOpen = signal(false);
   topBarOpen = signal(true);
   settingsOpen = signal(false);
-  aboutOpen = signal(false);
+  settingsCloseConfirmOpen = signal(false);
   resetMenuOpen = signal(false);
   deleteTargetId = signal<string | null>(null);
+  accessibilityPromptOpen = signal(false);
+  accessibilityPromptEnabled = signal(true);
+  loadingVisible = signal(true);
+  loadingFading = signal(false);
   canvasBounds = signal<DOMRect>(createFallbackRect(1920, 1080));
   viewportBounds = signal<DOMRect>(createFallbackRect(0, 0));
   editingTileId = signal<string | null>(null);
@@ -442,14 +538,21 @@ export class AppComponent implements OnInit, OnDestroy {
   );
   stashedDialogs = computed(() => this.activeDialogs().filter((instance) => instance.stashed));
   isOverlayActive = computed(
-    () => this.settingsOpen() || this.aboutOpen() || Boolean(this.deleteTargetId()),
+    () =>
+      this.settingsOpen() ||
+      Boolean(this.deleteTargetId()) ||
+      this.settingsCloseConfirmOpen() ||
+      this.accessibilityPromptOpen() ||
+      this.guestBlocked() ||
+      this.loadingVisible(),
   );
 
   timeLabel = computed(() => {
     const prefs = this.auth.preferences();
     const timeZone = prefs.timeZone;
     const hour12 = prefs.timeFormat === '12h';
-    return new Intl.DateTimeFormat(prefs.language || 'en', {
+    const language = this.translate.currentLang || 'en';
+    return new Intl.DateTimeFormat(language, {
       timeZone,
       hour: '2-digit',
       minute: '2-digit',
@@ -458,10 +561,25 @@ export class AppComponent implements OnInit, OnDestroy {
   });
 
   showTime = computed(() => this.auth.preferences().showTime);
+  showViewportSizingControls = computed(() => {
+    const prefs = this.auth.preferences();
+    const org = this.auth.orgSettings();
+    return !org.disableViewportSizing && !prefs.hideViewportSizingControls;
+  });
+
+  showZoomControls = computed(() => {
+    const prefs = this.auth.preferences();
+    const org = this.auth.orgSettings();
+    return !org.disableZoomControls && !prefs.hideZoomControls;
+  });
+
+  guestBlocked = computed(
+    () => !this.auth.orgSettings().allowGuestLogin && this.auth.actualUser()?.id === 'u_guest',
+  );
 
   previewUserLabel = computed(() => this.auth.currentUser()?.username ?? '');
-  siteTitle = computed(() => this.auth.preferences().siteTitle || "Roy's Planner");
-  siteLogoEmoji = computed(() => this.auth.preferences().siteLogoEmoji ?? '🌎');
+  siteTitle = computed(() => this.auth.orgSettings().siteTitle || "Roy's Planner");
+  siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
   visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
   instancesByApp = computed(() => ({
@@ -473,8 +591,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }));
   canvasStyle = computed(() => {
     const prefs = this.auth.preferences();
-    const useServerBackground = prefs.useServerBackground ?? false;
-    const backgroundImageUrl = useServerBackground ? '' : prefs.backgroundImageUrl?.trim();
+    const backgroundImageUrl = prefs.backgroundImageUrl?.trim();
     const mode = (prefs.backgroundImageMode ?? 'repeat') as CanvasMode;
     const showGrid = prefs.showGrid ?? true;
     const gridSize = Math.min(800, Math.max(8, prefs.gridSize ?? 50));
@@ -485,8 +602,8 @@ export class AppComponent implements OnInit, OnDestroy {
     const positions: string[] = [];
 
     if (showGrid) {
-      layers.push('linear-gradient(#bdbdbd 1px, transparent 1px)');
-      layers.push('linear-gradient(90deg, #bdbdbd 1px, transparent 1px)');
+      layers.push('linear-gradient(var(--color-border) 1px, transparent 1px)');
+      layers.push('linear-gradient(90deg, var(--color-border) 1px, transparent 1px)');
       sizes.push(`${gridSize}px ${gridSize}px`, `${gridSize}px ${gridSize}px`);
       repeats.push('repeat', 'repeat');
       positions.push('0 0', '0 0');
@@ -524,6 +641,42 @@ export class AppComponent implements OnInit, OnDestroy {
       document.title = this.siteTitle();
       this.updateFavicon(this.siteLogoEmoji());
     });
+    effect(() => {
+      const prefs = this.auth.preferences();
+      this.canvasWidth.set(prefs.canvasWidth);
+      this.canvasHeight.set(prefs.canvasHeight);
+    });
+    effect(() => {
+      this.applyThemeClasses();
+    });
+    effect(() => {
+      const actualUser = this.auth.actualUser();
+      if (!actualUser) {
+        this.accessibilityPromptOpen.set(false);
+        return;
+      }
+      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id)) return;
+      this.accessibilityPromptEnabled.set(true);
+      this.accessibilityPromptOpen.set(true);
+    });
+    effect(() => {
+      if (!this.auth.ready()) return;
+      if (!this.auth.isLoggedIn()) {
+        this.loadingVisible.set(false);
+        this.loadingFading.set(false);
+        return;
+      }
+      this.loadingVisible.set(true);
+      this.loadingFading.set(false);
+      if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
+      this.loadingTimeout = window.setTimeout(() => {
+        this.loadingFading.set(true);
+        this.loadingTimeout = window.setTimeout(() => {
+          this.loadingVisible.set(false);
+          this.loadingFading.set(false);
+        }, 120);
+      }, 0);
+    });
   }
 
   ngOnInit() {
@@ -532,18 +685,18 @@ export class AppComponent implements OnInit, OnDestroy {
     if (stored !== null) this.navOpen = stored === 'true';
     const storedScale = window.localStorage.getItem('op_canvas_scale');
     if (storedScale) this.canvasScale.set(Number(storedScale) || 1);
-    const storedWidth = window.localStorage.getItem('op_canvas_width');
-    const storedHeight = window.localStorage.getItem('op_canvas_height');
-    if (storedWidth) this.canvasWidth.set(Number(storedWidth) || 1920);
-    if (storedHeight) this.canvasHeight.set(Number(storedHeight) || 1080);
 
-    this.timeInterval = window.setInterval(() => this.now.set(new Date()), 60_000);
+    this.timeInterval = window.setInterval(() => {
+      this.now.set(new Date());
+      this.applyThemeClasses();
+    }, 60_000);
     setTimeout(this.updateCanvasBounds, 0);
     window.addEventListener('resize', this.updateCanvasBounds);
   }
 
   ngOnDestroy() {
     if (this.timeInterval) window.clearInterval(this.timeInterval);
+    if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.updateCanvasBounds);
     }
@@ -602,6 +755,17 @@ export class AppComponent implements OnInit, OnDestroy {
     setTimeout(this.updateCanvasBounds, 0);
   }
 
+  floatingSidebarToggleTop() {
+    if (!this.topBarOpen()) return 12;
+    const headerHeight = 48;
+    const workspaceHeight = this.workspaceMenuOpen() ? 72 : 0;
+    return 12 + headerHeight + workspaceHeight;
+  }
+
+  floatingTopBarToggleTop() {
+    return 12;
+  }
+
   toggleTopBar() {
     if (this.topBarOpen()) {
       this.workspaceMenuOpen.set(false);
@@ -657,13 +821,27 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openSettings() {
-    this.aboutOpen.set(false);
     this.settingsOpen.set(true);
+    this.settingsCloseConfirmOpen.set(false);
+    this.settingsDraft.start();
   }
 
-  openAbout() {
+  requestCloseSettings() {
+    if (this.settingsDraft.dirty()) {
+      this.settingsCloseConfirmOpen.set(true);
+      return;
+    }
     this.settingsOpen.set(false);
-    this.aboutOpen.set(true);
+  }
+
+  confirmCloseSettings() {
+    this.settingsDraft.cancel();
+    this.settingsCloseConfirmOpen.set(false);
+    this.settingsOpen.set(false);
+  }
+
+  cancelCloseSettings() {
+    this.settingsCloseConfirmOpen.set(false);
   }
 
   openApp(appId: AppId) {
@@ -775,6 +953,7 @@ export class AppComponent implements OnInit, OnDestroy {
     event: PointerEvent,
   ) {
     if (!instance.tileRect) return;
+    if (event.detail > 1) return;
     const target = event.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'BUTTON')) return;
     if (this.editingTileId() === instance.id) return;
@@ -808,10 +987,8 @@ export class AppComponent implements OnInit, OnDestroy {
     const height = Math.min(4320, Math.max(768, this.canvasHeight()));
     this.canvasWidth.set(width);
     this.canvasHeight.set(height);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_canvas_width', String(width));
-      window.localStorage.setItem('op_canvas_height', String(height));
-    }
+    const prefs = this.auth.preferences();
+    this.auth.savePreferences({ ...prefs, canvasWidth: width, canvasHeight: height });
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -833,6 +1010,98 @@ export class AppComponent implements OnInit, OnDestroy {
       window.localStorage.setItem('op_canvas_scale', String(this.canvasScale()));
     }
     setTimeout(this.updateCanvasBounds, 0);
+  }
+
+  applyAccessibilityPrompt() {
+    const actual = this.auth.actualUser();
+    if (!actual) return;
+    const prefs = this.auth.preferences();
+    this.auth.savePreferences({ ...prefs, accessibilityMode: this.accessibilityPromptEnabled() });
+    this.auth.markAccessibilityPromptShown(actual.id);
+    this.accessibilityPromptOpen.set(false);
+  }
+
+  toggleAccessibilityPrompt() {
+    this.accessibilityPromptEnabled.set(!this.accessibilityPromptEnabled());
+  }
+
+  private applyThemeClasses() {
+    if (typeof document === 'undefined') return;
+    const prefs = this.auth.preferences();
+    const body = document.body;
+    const accessibilityOn = this.accessibilityPromptOpen()
+      ? this.accessibilityPromptEnabled()
+      : prefs.accessibilityMode;
+    const resolvedTheme = this.resolveTheme(prefs.themeMode);
+    body.classList.toggle('theme-light', resolvedTheme === 'light');
+    body.classList.toggle('theme-dark', resolvedTheme === 'dark');
+    body.classList.toggle('accessibility-on', accessibilityOn);
+  }
+
+  private resolveTheme(mode: 'system' | 'light' | 'dark' | 'timeZone') {
+    if (mode === 'light') return 'light';
+    if (mode === 'dark') return 'dark';
+    if (mode === 'timeZone') {
+      return this.resolveTimeZoneTheme() ?? this.resolveSystemTheme();
+    }
+    return this.resolveSystemTheme();
+  }
+
+  private resolveSystemTheme() {
+    if (typeof window === 'undefined') return 'light';
+    if (typeof window.matchMedia !== 'function') return 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+
+  private resolveTimeZoneTheme() {
+    const prefs = this.auth.preferences();
+    const key = this.buildSunKey(prefs);
+    const cached = this.sunCache?.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.isDaytime ? 'light' : 'dark';
+    }
+    this.fetchSunriseSunset(prefs).catch(() => {
+      this.sunCache?.delete(key);
+    });
+    return null;
+  }
+
+  private sunCache = new Map<string, { isDaytime: boolean; expiresAt: number }>();
+
+  private buildSunKey(prefs: { city: string; timeZone: string }) {
+    const city = prefs.city?.trim().toLowerCase() || '';
+    return `${prefs.timeZone}|${city}`;
+  }
+
+  private async fetchSunriseSunset(prefs: { city: string; timeZone: string }) {
+    const query =
+      prefs.city?.trim() || prefs.timeZone.split('/').slice(-1)[0]?.replace('_', ' ') || 'UTC';
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+      query,
+    )}&count=1&language=en&format=json`;
+    const geoResp = await fetch(geoUrl);
+    if (!geoResp.ok) return;
+    const geo = (await geoResp.json()) as {
+      results?: { latitude: number; longitude: number }[];
+    };
+    const location = geo.results?.[0];
+    if (!location) return;
+    const sunUrl = `https://api.sunrise-sunset.org/json?lat=${location.latitude}&lng=${location.longitude}&formatted=0`;
+    const sunResp = await fetch(sunUrl);
+    if (!sunResp.ok) return;
+    const data = (await sunResp.json()) as {
+      status: string;
+      results?: { sunrise: string; sunset: string };
+    };
+    if (data.status !== 'OK' || !data.results) return;
+    const sunrise = Date.parse(data.results.sunrise);
+    const sunset = Date.parse(data.results.sunset);
+    if (!Number.isFinite(sunrise) || !Number.isFinite(sunset)) return;
+    const now = Date.now();
+    const isDaytime = now >= sunrise && now < sunset;
+    const expiresAt = Math.max(sunset, sunrise) + 60 * 60 * 1000;
+    this.sunCache.set(this.buildSunKey(prefs), { isDaytime, expiresAt });
+    this.applyThemeClasses();
   }
 
   logout() {

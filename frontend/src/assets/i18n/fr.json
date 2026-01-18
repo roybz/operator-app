@@ -28,11 +28,15 @@
       "notFound": "Utilisateur introuvable."
     },
     "guest": "Continuer en tant qu'invite",
+    "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
-    "password": "Mot de passe (optionnel)",
+    "password": "Password",
     "signIn": "Connexion",
     "title": "Se connecter",
-    "username": "Nom d'utilisateur"
+    "username": "Nom d'utilisateur",
+    "resetGuest": "Reset everything for the local guest account?",
+    "resetGuestConfirm": "Reset the local guest account and clear its data?",
+    "resetGuestConfirmButton": "Reset guest"
   },
   "canvas": {
     "originalScale": "Original scale",
@@ -62,7 +66,7 @@
     "unstash": "Restaurer"
   },
   "landing": {
-    "welcome": "Bienvenue sur Roy's Operator."
+    "welcome": "Welcome to Roy's Planner."
   },
   "mock": {
     "label": "Mode test"
@@ -122,7 +126,15 @@
     "timeFormat12": "12 heures",
     "timeFormat24": "24 heures",
     "timeZone": "Fuseau horaire prefere",
-    "title": "Preferences"
+    "title": "Preferences",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "accessibilityMode": "Accessibility mode (high contrast)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls"
   },
   "preview": {
     "label": "Apercu en tant que : {{user}}",
@@ -142,7 +154,13 @@
     "usersLink": "Utilisateurs",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "adminLink": "Admin",
+    "apply": "Apply",
+    "applied": "Applied",
+    "cancel": "Cancel",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes"
   },
   "table": {
     "actions": "Actions",
@@ -202,7 +220,8 @@
       "generic": "Impossible de mettre a jour l'utilisateur.",
       "lastAdmin": "Vous devez conserver au moins un admin.",
       "usernameRequired": "Le nom d'utilisateur est requis.",
-      "usernameTaken": "Ce nom d'utilisateur est deja pris."
+      "usernameTaken": "Ce nom d'utilisateur est deja pris.",
+      "passwordRequired": "Password is required."
     },
     "password": "Mot de passe",
     "passwordUpdated": "Password updated successfully.",
@@ -219,5 +238,27 @@
   },
   "workspaces": {
     "button": "Espaces"
+  },
+  "accessibility": {
+    "title": "Accessibility setup",
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "toggle": "Enable accessibility mode",
+    "confirm": "Continue"
+  },
+  "admin": {
+    "title": "Admin",
+    "siteTitle": "Website name",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "defaultViewport": "Default user viewport size",
+    "applyViewportAll": "Change all users viewport size",
+    "allowGuestLogin": "Allow guest login",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }
