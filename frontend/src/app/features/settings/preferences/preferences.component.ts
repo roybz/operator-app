@@ -1,6 +1,6 @@
 import { Component, OnDestroy, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, SavedCredential, UserPreferences } from '../../../core/auth.service';
 
 const LANGUAGE_OPTIONS = [
@@ -10,6 +10,10 @@ const LANGUAGE_OPTIONS = [
   { code: 'de', label: 'Deutsch' },
   { code: 'it', label: 'Italiano' },
   { code: 'pt', label: 'Português' },
+  { code: 'nl', label: 'Nederlands' },
+  { code: 'no', label: 'Norsk' },
+  { code: 'pl', label: 'Polski' },
+  { code: 'hr', label: 'Hrvatski' },
   { code: 'ru', label: 'Русский' },
   { code: 'uk', label: 'Українська' },
   { code: 'ar', label: 'العربية' },
@@ -39,7 +43,7 @@ const LANGUAGE_OPTIONS = [
       <div style="display:grid; gap:12px; max-width: 520px;">
         <label>
           {{ 'preferences.language' | translate }}
-          <select [value]="prefs().language" (change)="onLanguageChange($event)">
+          <select [value]="effectiveLanguage()" (change)="onLanguageChange($event)">
             @for (option of languageOptions; track option.code) {
               <option [value]="option.code">{{ option.label }}</option>
             }
@@ -92,15 +96,41 @@ const LANGUAGE_OPTIONS = [
           />
         </label>
 
+        @if (auth.isAdmin()) {
+          <label>
+            {{ 'preferences.siteTitle' | translate }}
+            <input
+              type="text"
+              [value]="prefs().siteTitle || defaultSiteTitle"
+              (input)="onSiteTitleChange($event)"
+            />
+          </label>
+          <label>
+            {{ 'preferences.siteLogo' | translate }}
+            <select [value]="prefs().siteLogoEmoji ?? '🌎'" (change)="onSiteLogoChange($event)">
+              <option value="">{{ 'preferences.siteLogoNone' | translate }}</option>
+              @for (emoji of logoOptions; track emoji) {
+                <option [value]="emoji">{{ emoji }}</option>
+              }
+            </select>
+          </label>
+        }
+
         <label>
-          {{ 'preferences.backgroundImageUrl' | translate }}
-          <input
-            type="text"
-            [value]="prefs().backgroundImageUrl"
-            (input)="onBackgroundUrlChange($event)"
-            placeholder="images/background.png"
-          />
+          {{ 'preferences.backgroundImageUpload' | translate }}
+          <input type="file" accept="image/*" (change)="onBackgroundFileChange($event)" />
         </label>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button (click)="clearBackgroundImage()">
+            {{ 'preferences.backgroundImageClear' | translate }}
+          </button>
+          @if (prefs().backgroundImageUrl) {
+            <span style="font-size:12px; opacity:0.7;">
+              {{ 'preferences.backgroundImageSelected' | translate }}
+            </span>
+          }
+        </div>
 
         <label>
           {{ 'preferences.backgroundImageMode' | translate }}
@@ -110,6 +140,17 @@ const LANGUAGE_OPTIONS = [
             <option value="stretch">{{ 'preferences.backgroundImageStretch' | translate }}</option>
           </select>
         </label>
+
+        @if (auth.isAdmin()) {
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input
+              type="checkbox"
+              [checked]="prefs().useServerBackground"
+              (change)="onToggleServerBackground($event)"
+            />
+            {{ 'preferences.backgroundUseServer' | translate }}
+          </label>
+        }
 
         <label style="display:flex; gap:8px; align-items:center;">
           <input type="checkbox" [checked]="prefs().showGrid" (change)="onToggleGrid($event)" />
@@ -191,9 +232,12 @@ const LANGUAGE_OPTIONS = [
   `,
 })
 export class PreferencesSettingsComponent implements OnDestroy {
-  private auth = inject(AuthService);
+  readonly auth = inject(AuthService);
+  private translate = inject(TranslateService);
   languageOptions = LANGUAGE_OPTIONS;
+  logoOptions = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
   timeZoneOptions = signal<string[]>([]);
+  defaultSiteTitle = "Roy's Planner";
   private citySaveTimeout?: number;
   prefs = signal<UserPreferences>({
     language: '',
@@ -205,6 +249,10 @@ export class PreferencesSettingsComponent implements OnDestroy {
     maxPersistedApps: 30,
     backgroundImageUrl: '',
     backgroundImageMode: 'repeat',
+    useServerBackground: false,
+    disabledApps: ['navigator', 'notes'],
+    siteTitle: "Roy's Planner",
+    siteLogoEmoji: '🌎',
     showGrid: true,
     gridSize: 50,
   });
@@ -217,6 +265,10 @@ export class PreferencesSettingsComponent implements OnDestroy {
     if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
       this.timeZoneOptions.set(Intl.supportedValuesOf('timeZone') as string[]);
     }
+  }
+
+  effectiveLanguage() {
+    return this.prefs().language || this.translate.currentLang || 'en';
   }
 
   ngOnDestroy() {
@@ -259,9 +311,29 @@ export class PreferencesSettingsComponent implements OnDestroy {
     this.save({ ...this.prefs(), maxPersistedApps });
   }
 
-  onBackgroundUrlChange(event: Event) {
-    const backgroundImageUrl = (event.target as HTMLInputElement).value;
-    this.save({ ...this.prefs(), backgroundImageUrl });
+  onSiteTitleChange(event: Event) {
+    const siteTitle = (event.target as HTMLInputElement).value;
+    this.save({ ...this.prefs(), siteTitle });
+  }
+
+  onSiteLogoChange(event: Event) {
+    const siteLogoEmoji = (event.target as HTMLSelectElement).value;
+    this.save({ ...this.prefs(), siteLogoEmoji });
+  }
+
+  onBackgroundFileChange(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = typeof reader.result === 'string' ? reader.result : '';
+      this.save({ ...this.prefs(), backgroundImageUrl: url, useServerBackground: false });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearBackgroundImage() {
+    this.save({ ...this.prefs(), backgroundImageUrl: '' });
   }
 
   onBackgroundModeChange(event: Event) {
@@ -270,6 +342,15 @@ export class PreferencesSettingsComponent implements OnDestroy {
       | 'center'
       | 'stretch';
     this.save({ ...this.prefs(), backgroundImageMode });
+  }
+
+  onToggleServerBackground(event: Event) {
+    const useServerBackground = (event.target as HTMLInputElement).checked;
+    this.save({
+      ...this.prefs(),
+      useServerBackground,
+      backgroundImageUrl: useServerBackground ? '' : this.prefs().backgroundImageUrl,
+    });
   }
 
   onToggleGrid(event: Event) {

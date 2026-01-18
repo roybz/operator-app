@@ -23,11 +23,26 @@ import { DialogInstance } from '../../core/dialog.service';
           class="dialog__icon"
           (pointerdown)="$event.stopPropagation()"
           (click)="trash.emit()"
+          [disabled]="trashDisabled"
+          [style.opacity]="trashDisabled ? 0.4 : 1"
           title="{{ 'dialogs.trash' | translate }}"
         >
           🗑️
         </button>
-        <div class="dialog__title">{{ instance.titleKey | translate }}</div>
+        <div class="dialog__title">
+          @if (!isEditingTitle) {
+            <div (dblclick)="startTitleEdit()">{{ title }}</div>
+          } @else {
+            <input
+              [value]="titleDraft"
+              (input)="onTitleInput($event)"
+              (blur)="finishTitleEdit()"
+              (keydown.enter)="finishTitleEdit()"
+              (keydown.escape)="cancelTitleEdit()"
+              style="width:100%;"
+            />
+          }
+        </div>
         <div class="dialog__actions">
           <button
             class="dialog__icon"
@@ -131,6 +146,8 @@ export class DialogComponent {
   @Input({ required: true }) instance!: DialogInstance;
   @Input({ required: true }) bounds!: DOMRect;
   @Input() disabled = false;
+  @Input() trashDisabled = false;
+  @Input() title = '';
 
   @Output() moved = new EventEmitter<{ x: number; y: number }>();
   @Output() resized = new EventEmitter<{ width: number; height: number }>();
@@ -140,9 +157,12 @@ export class DialogComponent {
   @Output() closed = new EventEmitter<void>();
   @Output() trash = new EventEmitter<void>();
   @Output() bringToFront = new EventEmitter<void>();
+  @Output() titleEdited = new EventEmitter<string>();
 
   private dragStart?: { x: number; y: number; left: number; top: number };
   private resizeStart?: { x: number; y: number; width: number; height: number };
+  isEditingTitle = false;
+  titleDraft = '';
 
   onPointerDown(event: PointerEvent) {
     if (this.disabled) {
@@ -154,6 +174,9 @@ export class DialogComponent {
 
   startDrag(event: PointerEvent) {
     if (this.disabled) return;
+    if (this.isEditingTitle) return;
+    const target = event.target as HTMLElement;
+    if (target.closest('input') || target.closest('.dialog__title')) return;
     event.preventDefault();
     this.bringToFront.emit();
     this.dragStart = {
@@ -199,5 +222,26 @@ export class DialogComponent {
   onPointerUp() {
     this.dragStart = undefined;
     this.resizeStart = undefined;
+  }
+
+  startTitleEdit() {
+    this.isEditingTitle = true;
+    this.titleDraft = this.title;
+  }
+
+  onTitleInput(event: Event) {
+    this.titleDraft = (event.target as HTMLInputElement).value;
+  }
+
+  finishTitleEdit() {
+    const next = this.titleDraft.trim();
+    this.isEditingTitle = false;
+    if (!next) return;
+    this.titleEdited.emit(next);
+  }
+
+  cancelTitleEdit() {
+    this.isEditingTitle = false;
+    this.titleDraft = this.title;
   }
 }

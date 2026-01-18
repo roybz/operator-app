@@ -1,26 +1,33 @@
-import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
 import { UsersSettingsComponent } from './users/users.component';
 import { PreferencesSettingsComponent } from './preferences/preferences.component';
+import { ApplicationsSettingsComponent } from './applications/applications.component';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, UsersSettingsComponent, PreferencesSettingsComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    UsersSettingsComponent,
+    PreferencesSettingsComponent,
+    ApplicationsSettingsComponent,
+  ],
   template: `
     <section>
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">{{ 'settings.title' | translate }}</h2>
-        <button (click)="closed.emit()">✕</button>
-      </div>
+      <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
       <nav style="margin: 16px 0; display:flex; gap:12px;">
-        <button (click)="tab.set('users')">{{ 'settings.usersLink' | translate }}</button>
         <button (click)="tab.set('preferences')">
           {{ 'settings.preferencesLink' | translate }}
         </button>
+        <button (click)="tab.set('applications')">
+          {{ 'settings.applicationsLink' | translate }}
+        </button>
+        <button (click)="tab.set('users')">{{ 'settings.usersLink' | translate }}</button>
       </nav>
 
       @if (auth.isAdmin() && previewCandidates().length) {
@@ -58,19 +65,21 @@ import { PreferencesSettingsComponent } from './preferences/preferences.componen
         </section>
       }
 
-      @if (tab() === 'users') {
-        <app-users-settings />
-      }
       @if (tab() === 'preferences') {
         <app-preferences-settings />
+      }
+      @if (tab() === 'applications') {
+        <app-applications-settings />
+      }
+      @if (tab() === 'users') {
+        <app-users-settings />
       }
     </section>
   `,
 })
 export class SettingsComponent {
   readonly auth = inject(AuthService);
-  @Output() closed = new EventEmitter<void>();
-  tab = signal<'users' | 'preferences'>('users');
+  tab = signal<'users' | 'preferences' | 'applications'>('preferences');
 
   users() {
     return this.auth.users();

@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "Copyright {{year}} Roy Nouneh",
+    "github": "Github",
     "line1": "プロのようにウェブを閲覧。",
-    "line2": "イエスは戻ってきます、友よ。",
+    "linkedin": "LinkedIn",
     "title": "このアプリについて"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "Todoアプリ",
-    "todoGroup": "Todoアプリ"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "ユーザーが見つかりません。"
     },
     "guest": "ゲストとして続行",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "パスワード（任意）",
     "signIn": "サインイン",
     "title": "サインイン",
@@ -39,6 +49,7 @@
       "maxPersisted": "保存できるアプリの最大数に達しました。"
     },
     "hideAll": "すべてのダイアログを非表示",
+    "lockDelete": "Lock delete",
     "maximize": "最大化",
     "minimize": "最小化",
     "reset": "ダイアログ位置をリセット",
@@ -47,6 +58,7 @@
     "showAll": "すべてのダイアログを表示",
     "stash": "保管",
     "trash": "削除",
+    "unlockDelete": "Unlock delete",
     "unstash": "戻す"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "ログアウト",
     "settings": "設定"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "中央配置",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "背景画像の表示",
     "backgroundImageRepeat": "繰り返し",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "画面に合わせて拡大",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "背景画像（ローカルパスまたはURL）",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "ローカル都市",
     "credentialAdd": "認証情報を追加",
     "credentialDelete": "認証情報を削除",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "保存するアプリの最大数",
     "showGrid": "グリッドを表示",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "時間形式",
     "timeFormat12": "12時間",
     "timeFormat24": "24時間",
@@ -91,13 +129,20 @@
     "persist": "プレビューを保存"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "環境設定",
     "previewAs": "プレビュー対象",
     "previewNone": "プレビューなし",
     "previewPersist": "プレビュー中の変更を保存",
     "previewTitle": "ユーザーとしてプレビュー",
     "title": "設定",
-    "usersLink": "ユーザー"
+    "usersLink": "ユーザー",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "操作",
@@ -106,8 +151,26 @@
     "pageSize": "行数",
     "prev": "前へ"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "追加",
+    "clearCompleted": "Clear completed",
     "delete": "削除",
     "deleteTitle": "完全に削除",
     "duplicate": "複製",
@@ -121,7 +184,7 @@
     "loading": "読み込み中…",
     "placeholder": "Todoを追加",
     "reload": "再読み込み",
-    "title": "Todos App"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "トップバーを折りたたむ",
@@ -142,13 +205,16 @@
       "usernameTaken": "そのユーザー名は既に使用されています。"
     },
     "password": "パスワード",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "リセット",
     "role": "役割",
     "roleAdmin": "管理者",
     "roleUser": "ユーザー",
     "save": "保存",
     "search": "ユーザーを検索",
+    "selfTitle": "My account",
     "title": "ユーザー",
+    "updatePassword": "Update password",
     "username": "ユーザー名"
   },
   "workspaces": {

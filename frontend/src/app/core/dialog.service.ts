@@ -1,7 +1,7 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 
-export type AppId = 'todo';
+export type AppId = 'todo' | 'calculator' | 'timer' | 'navigator' | 'notes';
 
 export interface DialogRect {
   x: number;
@@ -22,6 +22,7 @@ export interface DialogInstance {
   z: number;
   isMaximized: boolean;
   restoreRect?: DialogRect;
+  deleteLocked?: boolean;
 }
 
 export interface Workspace {
@@ -42,6 +43,10 @@ const PREVIEW_STATE_KEY = 'op_preview_dialog_state_v1';
 
 const APP_CONFIG: Record<AppId, { titleKey: string; defaultSize: DialogRect }> = {
   todo: { titleKey: 'apps.todo', defaultSize: { x: 0, y: 0, width: 480, height: 640 } },
+  calculator: { titleKey: 'apps.calculator', defaultSize: { x: 0, y: 0, width: 320, height: 480 } },
+  timer: { titleKey: 'apps.timer', defaultSize: { x: 0, y: 0, width: 420, height: 520 } },
+  navigator: { titleKey: 'apps.navigator', defaultSize: { x: 0, y: 0, width: 720, height: 520 } },
+  notes: { titleKey: 'apps.notes', defaultSize: { x: 0, y: 0, width: 700, height: 600 } },
 };
 const TILE_SIZE = { width: 180, height: 80 };
 
@@ -102,6 +107,42 @@ export class DialogService {
     this.persist();
   }
 
+  renameWorkspace(id: string, name: string) {
+    const nextName = name.trim();
+    if (!nextName) return;
+    const next = this.state().workspaces.map((ws) =>
+      ws.id === id ? { ...ws, name: nextName } : ws,
+    );
+    this.state.set({ ...this.state(), workspaces: next });
+    this.persist();
+  }
+
+  closeWorkspace(id: string) {
+    const workspaces = this.state().workspaces;
+    if (workspaces.length <= 1) return false;
+    const remaining = workspaces.filter((ws) => ws.id !== id);
+    const targetId =
+      this.state().activeWorkspaceId === id ? remaining[0]?.id : this.state().activeWorkspaceId;
+    if (!targetId) return false;
+
+    const dialogsByWorkspace: Record<string, DialogInstance[]> = {
+      ...this.state().dialogsByWorkspace,
+    };
+    const closingDialogs = dialogsByWorkspace[id] ?? [];
+    const movedDialogs = closingDialogs.map((dialog) => ({ ...dialog, minimized: true }));
+    dialogsByWorkspace[targetId] = [...(dialogsByWorkspace[targetId] ?? []), ...movedDialogs];
+    delete dialogsByWorkspace[id];
+
+    this.state.set({
+      ...this.state(),
+      workspaces: remaining,
+      activeWorkspaceId: targetId,
+      dialogsByWorkspace,
+    });
+    this.persist();
+    return true;
+  }
+
   createInstance(appId: AppId, bounds: DOMRect) {
     const maxPersisted = this.auth.preferences().maxPersistedApps;
     const total = Object.values(this.state().dialogsByWorkspace).reduce(
@@ -122,6 +163,7 @@ export class DialogService {
       minimized: false,
       stashed: false,
       tileRect: undefined,
+      deleteLocked: false,
       z: this.state().zCounter + 1,
       isMaximized: false,
     };
@@ -178,6 +220,34 @@ export class DialogService {
       ...instance,
       titleOverride: titleOverride ?? undefined,
     }));
+  }
+
+  toggleDeleteLock(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      deleteLocked: !instance.deleteLocked,
+    }));
+  }
+
+  wipeAppData(appId: AppId) {
+    const dialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    const removedIds: string[] = [];
+    Object.entries(this.state().dialogsByWorkspace).forEach(([workspaceId, dialogs]) => {
+      dialogsByWorkspace[workspaceId] = dialogs.filter((instance) => {
+        if (instance.appId !== appId) return true;
+        removedIds.push(instance.id);
+        return false;
+      });
+    });
+    this.state.set({ ...this.state(), dialogsByWorkspace });
+    this.persist();
+
+    if (typeof window !== 'undefined' && appId === 'todo') {
+      removedIds.forEach((id) => {
+        window.localStorage.removeItem(`op_mock_todos:${id}`);
+      });
+    }
+    return removedIds;
   }
 
   deleteInstance(instanceId: string) {
@@ -370,6 +440,7 @@ export class DialogService {
         titleOverride: instance.titleOverride ?? undefined,
         stashed: instance.stashed ?? false,
         tileRect: instance.tileRect,
+        deleteLocked: instance.deleteLocked ?? false,
       }));
     });
     return {

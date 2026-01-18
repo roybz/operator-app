@@ -29,13 +29,14 @@ describe('TodoPageComponent', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
       todo: {
-        title: 'Todos App',
+        title: 'Todo',
         placeholder: 'Add a todo',
         add: 'Add',
         reload: 'Reload',
         loading: 'Loading…',
         duplicate: 'Duplicate',
         delete: 'Delete',
+        clearCompleted: 'Clear completed',
         duplicateTitle: 'Duplicate',
         deleteTitle: 'Delete forever',
         error: { unknown: 'Something went wrong.' },
@@ -58,7 +59,7 @@ describe('TodoPageComponent', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const input = compiled.querySelector('input');
-    expect(compiled.querySelector('h2')?.textContent).toContain('Todos App');
+    expect(compiled.querySelector('h2')?.textContent).toContain('Todo');
     expect(input?.getAttribute('placeholder')).toBe('Add a todo');
     expect(compiled.textContent).toContain('Add');
     expect(compiled.textContent).toContain('Reload');
@@ -83,5 +84,26 @@ describe('TodoPageComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     expect(compiled.textContent).not.toContain('Buy milk');
+  });
+
+  it('edits a todo', async () => {
+    const fixture = TestBed.createComponent(TodoPageComponent);
+    fixture.componentInstance.instanceId = 'dlg_test';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+
+    await component.onAdd('Old text');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const created = component.todos()[0];
+    component.startEdit(created);
+    component.editingText.set('New text');
+    await component.finishEdit(created);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.todos()[0].text).toBe('New text');
   });
 });

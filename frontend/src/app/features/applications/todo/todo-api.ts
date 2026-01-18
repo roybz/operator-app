@@ -2,6 +2,7 @@ export interface Todo {
   id: string;
   text: string;
   createdAt: string;
+  completed?: boolean;
 }
 
 const MOCK_STORAGE_KEY = 'op_mock_todos';
@@ -91,4 +92,28 @@ export async function deleteTodo(id: string, instanceId: string): Promise<void> 
     method: 'DELETE',
   });
   if (!res.ok) throw new Error('todo.error.delete');
+}
+
+export async function updateTodo(
+  id: string,
+  updates: Partial<Pick<Todo, 'text' | 'completed'>>,
+  instanceId: string,
+): Promise<Todo> {
+  const API_BASE = getApiBase();
+  if (!API_BASE) {
+    const items = readMockTodos(instanceId).map((todo) =>
+      todo.id === id ? { ...todo, ...updates } : todo,
+    );
+    writeMockTodos(instanceId, items);
+    const next = items.find((todo) => todo.id === id);
+    if (!next) throw new Error('todo.error.update');
+    return next;
+  }
+  const res = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error('todo.error.update');
+  return res.json();
 }

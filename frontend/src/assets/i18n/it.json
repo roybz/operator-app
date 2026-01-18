@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "Copyright {{year}} Roy Nouneh",
+    "github": "Github",
     "line1": "Naviga sul Web da professionista.",
-    "line2": "Gesù sta tornando, amici.",
+    "linkedin": "LinkedIn",
     "title": "Informazioni"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "App delle attivita",
-    "todoGroup": "App delle attivita"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "Utente non trovato."
     },
     "guest": "Continua come ospite",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "Password (opzionale)",
     "signIn": "Accedi",
     "title": "Accedi",
@@ -39,6 +49,7 @@
       "maxPersisted": "Raggiunto il numero massimo di app persistenti."
     },
     "hideAll": "Nascondi tutti i dialoghi",
+    "lockDelete": "Lock delete",
     "maximize": "Massimizza",
     "minimize": "Minimizza",
     "reset": "Reimposta posizioni dialoghi",
@@ -47,6 +58,7 @@
     "showAll": "Mostra tutti i dialoghi",
     "stash": "Archivia",
     "trash": "Elimina",
+    "unlockDelete": "Unlock delete",
     "unstash": "Ripristina"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "Esci",
     "settings": "Impostazioni"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "Centra",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "Visualizzazione immagine di sfondo",
     "backgroundImageRepeat": "Ripeti",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "Allunga per adattare",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "Immagine di sfondo (percorso locale o URL)",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "Citta locale",
     "credentialAdd": "Aggiungi credenziale",
     "credentialDelete": "Rimuovi credenziale",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "Numero massimo di app persistenti",
     "showGrid": "Mostra griglia",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "Formato ora",
     "timeFormat12": "12 ore",
     "timeFormat24": "24 ore",
@@ -91,13 +129,20 @@
     "persist": "Le modifiche in anteprima persistono"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "Preferenze",
     "previewAs": "Anteprima come",
     "previewNone": "Nessuna anteprima",
     "previewPersist": "Mantieni le modifiche durante l'anteprima",
     "previewTitle": "Anteprima come utente",
     "title": "Impostazioni",
-    "usersLink": "Utenti"
+    "usersLink": "Utenti",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "Azioni",
@@ -106,8 +151,26 @@
     "pageSize": "Righe",
     "prev": "Prec"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "Aggiungi",
+    "clearCompleted": "Clear completed",
     "delete": "Elimina",
     "deleteTitle": "Elimina per sempre",
     "duplicate": "Duplica",
@@ -121,7 +184,7 @@
     "loading": "Caricamento…",
     "placeholder": "Aggiungi un'attivita",
     "reload": "Ricarica",
-    "title": "App delle attivita"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "Riduci la barra superiore",
@@ -142,13 +205,16 @@
       "usernameTaken": "Nome utente gia in uso."
     },
     "password": "Password",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "Reimposta",
     "role": "Ruolo",
     "roleAdmin": "Admin",
     "roleUser": "Utente",
     "save": "Salva",
     "search": "Cerca utenti",
+    "selfTitle": "My account",
     "title": "Utenti",
+    "updatePassword": "Update password",
     "username": "Nome utente"
   },
   "workspaces": {

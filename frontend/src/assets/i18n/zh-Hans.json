@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "Copyright {{year}} Roy Nouneh",
+    "github": "Github",
     "line1": "像专业人士一样浏览网络。",
-    "line2": "耶稣将再来，朋友们。",
+    "linkedin": "LinkedIn",
     "title": "关于"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "待办应用",
-    "todoGroup": "待办应用"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "未找到用户。"
     },
     "guest": "以访客身份继续",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "密码（可选）",
     "signIn": "登录",
     "title": "登录",
@@ -39,6 +49,7 @@
       "maxPersisted": "已达到持久化应用的最大数量。"
     },
     "hideAll": "隐藏所有对话框",
+    "lockDelete": "Lock delete",
     "maximize": "最大化",
     "minimize": "最小化",
     "reset": "重置对话框位置",
@@ -47,6 +58,7 @@
     "showAll": "显示所有对话框",
     "stash": "收起",
     "trash": "删除",
+    "unlockDelete": "Unlock delete",
     "unstash": "恢复"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "退出",
     "settings": "设置"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "居中",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "背景图显示方式",
     "backgroundImageRepeat": "重复",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "拉伸填充",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "背景图（本地路径或URL）",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "本地城市",
     "credentialAdd": "添加凭据",
     "credentialDelete": "移除凭据",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "持久化应用的最大数量",
     "showGrid": "显示网格",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "时间格式",
     "timeFormat12": "12小时",
     "timeFormat24": "24小时",
@@ -91,13 +129,20 @@
     "persist": "预览更改已持久化"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "偏好设置",
     "previewAs": "预览为",
     "previewNone": "不预览",
     "previewPersist": "预览时保留更改",
     "previewTitle": "以用户预览",
     "title": "设置",
-    "usersLink": "用户"
+    "usersLink": "用户",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "操作",
@@ -106,8 +151,26 @@
     "pageSize": "行数",
     "prev": "上一页"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "添加",
+    "clearCompleted": "Clear completed",
     "delete": "删除",
     "deleteTitle": "永久删除",
     "duplicate": "复制",
@@ -121,7 +184,7 @@
     "loading": "加载中…",
     "placeholder": "添加待办事项",
     "reload": "刷新",
-    "title": "待办应用"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "折叠顶部栏",
@@ -142,13 +205,16 @@
       "usernameTaken": "用户名已被占用。"
     },
     "password": "密码",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "重置",
     "role": "角色",
     "roleAdmin": "管理员",
     "roleUser": "用户",
     "save": "保存",
     "search": "搜索用户",
+    "selfTitle": "My account",
     "title": "用户",
+    "updatePassword": "Update password",
     "username": "用户名"
   },
   "workspaces": {

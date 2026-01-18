@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "Copyright {{year}} Roy Nouneh",
+    "github": "Github",
     "line1": "Browse the Web like a Pro.",
-    "line2": "Jesus is coming back, friends.",
+    "linkedin": "LinkedIn",
     "title": "About"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "Todos App",
-    "todoGroup": "Todo Apps"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "User not found."
     },
     "guest": "Continue as guest",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "Password (optional)",
     "signIn": "Sign in",
     "title": "Sign in",
@@ -39,6 +49,7 @@
       "maxPersisted": "Maximum number of persisted apps reached."
     },
     "hideAll": "Hide all dialogs",
+    "lockDelete": "Lock delete",
     "maximize": "Maximize",
     "minimize": "Minimize",
     "reset": "Reset dialog positions",
@@ -47,6 +58,7 @@
     "showAll": "Show all dialogs",
     "stash": "Stash",
     "trash": "Delete",
+    "unlockDelete": "Unlock delete",
     "unstash": "Restore"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "Log out",
     "settings": "Settings"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "Center",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "Background image display",
     "backgroundImageRepeat": "Repeat",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "Stretch to fit",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "Background image (local path or URL)",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "Local city",
     "credentialAdd": "Add credential",
     "credentialDelete": "Remove credential",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "Maximum number of persisting apps",
     "showGrid": "Show grid overlay",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "Time format",
     "timeFormat12": "12-hour",
     "timeFormat24": "24-hour",
@@ -91,13 +129,20 @@
     "persist": "Preview persists"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "Preferences",
     "previewAs": "Preview as",
     "previewNone": "No preview",
     "previewPersist": "Persist changes while previewing",
     "previewTitle": "Preview as user",
     "title": "Settings",
-    "usersLink": "Users"
+    "usersLink": "Users",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "Actions",
@@ -106,8 +151,26 @@
     "pageSize": "Rows",
     "prev": "Prev"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "Add",
+    "clearCompleted": "Clear completed",
     "delete": "Delete",
     "deleteTitle": "Delete forever",
     "duplicate": "Duplicate",
@@ -121,7 +184,7 @@
     "loading": "Loading…",
     "placeholder": "Add a todo",
     "reload": "Reload",
-    "title": "Todos App"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "Collapse top bar",
@@ -142,13 +205,16 @@
       "usernameTaken": "That username is already taken."
     },
     "password": "Password",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "Reset",
     "role": "Role",
     "roleAdmin": "Admin",
     "roleUser": "User",
     "save": "Save",
     "search": "Search users",
+    "selfTitle": "My account",
     "title": "Users",
+    "updatePassword": "Update password",
     "username": "Username"
   },
   "workspaces": {

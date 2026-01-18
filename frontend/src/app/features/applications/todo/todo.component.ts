@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
+import { listTodos, createTodo, deleteTodo, updateTodo, Todo } from './todo-api';
 
 @Component({
   selector: 'app-todo-page',
@@ -24,6 +24,9 @@ import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
         <button style="padding:10px 14px;" (click)="reload()">
           {{ 'todo.reload' | translate }}
         </button>
+        <button style="padding:10px 14px;" (click)="clearCompleted()">
+          {{ 'todo.clearCompleted' | translate }}
+        </button>
       </section>
 
       @if (err()) {
@@ -38,13 +41,33 @@ import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
           <article
             style="border:1px solid #ddd; border-radius:12px; padding:12px; display:flex; justify-content:space-between; gap:12px;"
           >
-            <div style="min-width:0;">
-              <div
-                style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-              >
-                {{ t.text }}
-              </div>
-              <div style="font-size:12px; opacity:.7;">{{ t.id }}</div>
+            <div style="min-width:0; flex:1;">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input
+                  type="checkbox"
+                  [checked]="t.completed"
+                  (change)="toggleComplete(t, $event)"
+                />
+                @if (editingId() === t.id) {
+                  <input
+                    [value]="editingText()"
+                    (input)="editingText.set($any($event.target).value)"
+                    (blur)="finishEdit(t)"
+                    (keydown.enter)="finishEdit(t)"
+                    style="flex:1; padding:6px;"
+                  />
+                } @else {
+                  <button
+                    type="button"
+                    style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; background:transparent; border:none; padding:0; text-align:left;"
+                    [style.textDecoration]="t.completed ? 'line-through' : 'none'"
+                    [style.opacity]="t.completed ? 0.6 : 1"
+                    (click)="startEdit(t)"
+                  >
+                    {{ t.text }}
+                  </button>
+                }
+              </label>
             </div>
 
             <div style="display:flex; gap:8px; align-items:center;">
@@ -66,6 +89,8 @@ export class TodoPageComponent implements OnInit {
   todos = signal<Todo[]>([]);
   loading = signal(false);
   err = signal<string | null>(null);
+  editingId = signal<string | null>(null);
+  editingText = signal('');
   private readonly translate = inject(TranslateService);
 
   async ngOnInit() {
@@ -108,6 +133,41 @@ export class TodoPageComponent implements OnInit {
       this.todos.set(this.todos().filter((x) => x.id !== t.id));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
+    }
+  }
+
+  startEdit(t: Todo) {
+    this.editingId.set(t.id);
+    this.editingText.set(t.text);
+  }
+
+  async finishEdit(t: Todo) {
+    if (this.editingId() !== t.id) return;
+    const nextText = this.editingText().trim();
+    this.editingId.set(null);
+    if (!nextText || nextText === t.text) return;
+    try {
+      const updated = await updateTodo(t.id, { text: nextText }, this.instanceId);
+      this.todos.set(this.todos().map((todo) => (todo.id === t.id ? updated : todo)));
+    } catch {
+      this.err.set(this.translate.instant('todo.error.unknown'));
+    }
+  }
+
+  async toggleComplete(t: Todo, event: Event) {
+    const completed = (event.target as HTMLInputElement).checked;
+    try {
+      const updated = await updateTodo(t.id, { completed }, this.instanceId);
+      this.todos.set(this.todos().map((todo) => (todo.id === t.id ? updated : todo)));
+    } catch {
+      this.err.set(this.translate.instant('todo.error.unknown'));
+    }
+  }
+
+  async clearCompleted() {
+    const completed = this.todos().filter((todo) => todo.completed);
+    for (const todo of completed) {
+      await this.onDelete(todo);
     }
   }
 }

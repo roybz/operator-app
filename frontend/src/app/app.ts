@@ -4,6 +4,7 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -11,9 +12,15 @@ import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from './core/auth.service';
-import { DialogService } from './core/dialog.service';
+import { AppId, DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
+import { AppListComponent, AppGroup } from './shared/app-list/app-list.component';
+import { OverlayComponent } from './shared/overlay/overlay.component';
 import { TodoPageComponent } from './features/applications/todo/todo.component';
+import { CalculatorComponent } from './features/applications/calculator/calculator.component';
+import { TimerComponent } from './features/applications/timer/timer.component';
+import { NavigatorComponent } from './features/applications/navigator/navigator.component';
+import { NotesComponent } from './features/applications/notes/notes.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { AboutComponent } from './features/about/about.component';
 
@@ -35,6 +42,14 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
   } as DOMRect;
 };
 
+const APP_GROUPS: AppGroup[] = [
+  { id: 'todo', labelKey: 'apps.todo' },
+  { id: 'calculator', labelKey: 'apps.calculator' },
+  { id: 'timer', labelKey: 'apps.timer' },
+  { id: 'navigator', labelKey: 'apps.navigator' },
+  { id: 'notes', labelKey: 'apps.notes' },
+];
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -43,7 +58,13 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
     RouterOutlet,
     TranslateModule,
     DialogComponent,
+    AppListComponent,
+    OverlayComponent,
     TodoPageComponent,
+    CalculatorComponent,
+    TimerComponent,
+    NavigatorComponent,
+    NotesComponent,
     SettingsComponent,
     AboutComponent,
   ],
@@ -63,15 +84,37 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
               style="display:flex; justify-content:center; gap:12px; align-items:center; padding:12px 16px;"
             >
               @for (ws of dialogService.getWorkspaces(); track ws.id) {
-                <button
-                  (click)="dialogService.switchWorkspace(ws.id)"
-                  [style.boxShadow]="
-                    dialogService.getActiveWorkspaceId() === ws.id ? '0 0 0 2px #00c2d1' : 'none'
-                  "
-                  style="padding:10px 18px; border:1px solid #ccc; border-radius:8px; background:#fff;"
-                >
-                  {{ ws.name }}
-                </button>
+                <div style="position:relative;">
+                  @if (editingWorkspaceId() !== ws.id) {
+                    <button
+                      (click)="dialogService.switchWorkspace(ws.id)"
+                      [style.boxShadow]="
+                        dialogService.getActiveWorkspaceId() === ws.id
+                          ? '0 0 0 2px #00c2d1'
+                          : 'none'
+                      "
+                      style="padding:10px 18px; border:1px solid #ccc; border-radius:8px; background:#fff;"
+                    >
+                      <span (dblclick)="startWorkspaceRename(ws)">{{ ws.name }}</span>
+                    </button>
+                  } @else {
+                    <input
+                      [value]="editingWorkspaceName()"
+                      (input)="editingWorkspaceName.set($any($event.target).value)"
+                      (blur)="finishWorkspaceRename(ws)"
+                      (keydown.enter)="finishWorkspaceRename(ws)"
+                      style="padding:10px 18px; border:1px solid #ccc; border-radius:8px; background:#fff; width:140px;"
+                    />
+                  }
+                  <button
+                    (click)="closeWorkspace(ws)"
+                    [disabled]="dialogService.getWorkspaces().length <= 1"
+                    style="position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:999px; border:1px solid #ccc; background:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer;"
+                    title="Close workspace"
+                  >
+                    ✕
+                  </button>
+                </div>
               }
               <button
                 (click)="dialogService.addWorkspace()"
@@ -87,7 +130,17 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
             style="background:#fff; border-bottom:1px solid #ddd; padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
           >
             <div>
-              <strong>{{ 'app.title' | translate }}</strong>
+              @if (siteLogoEmoji()) {
+                <span style="margin-right:6px;">{{ siteLogoEmoji() }}</span>
+              }
+              <strong>{{ siteTitle() }}</strong>
+              @if (auth.currentUser()) {
+                <span
+                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
+                >
+                  {{ 'auth.loggedInAs' | translate: { user: auth.currentUser()?.username ?? '' } }}
+                </span>
+              }
               @if (isMockMode) {
                 <span
                   style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
@@ -140,33 +193,16 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
               <button (click)="toggleNav()" style="margin-bottom: 8px;">
                 {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
               </button>
-              <div>
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom: 8px;">
-                  <button (click)="toggleDialogsHidden()">
-                    {{
-                      dialogsHidden()
-                        ? ('dialogs.showAll' | translate)
-                        : ('dialogs.hideAll' | translate)
-                    }}
-                  </button>
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span>{{ 'apps.todoGroup' | translate }}</span>
-                  <button (click)="openApp('todo')">+</button>
-                </div>
-                <ul style="margin: 6px 0 0 16px; padding:0;">
-                  @for (instance of dialogService.getAppInstances('todo'); track instance.id) {
-                    <li>
-                      <button
-                        (click)="restoreInstance(instance.id)"
-                        [style.fontStyle]="instance.minimized ? 'normal' : 'italic'"
-                      >
-                        {{ instanceLabel(instance) }}
-                      </button>
-                    </li>
-                  }
-                </ul>
-              </div>
+              <app-app-list
+                [apps]="visibleAppGroups()"
+                [instancesByApp]="instancesByApp()"
+                [deleteTargetActive]="!!deleteTargetId()"
+                [hideDialogs]="dialogsHidden()"
+                (toggleDialogs)="toggleDialogsHidden()"
+                (openApp)="openApp($event)"
+                (restore)="restoreInstance($event)"
+                (toggleLock)="toggleDeleteLock($event)"
+              />
             </div>
 
             <div>
@@ -301,6 +337,8 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
                   [instance]="instance"
                   [bounds]="canvasBounds()"
                   [disabled]="isOverlayActive()"
+                  [title]="instanceLabel(instance)"
+                  [trashDisabled]="!!instance.deleteLocked"
                   (moved)="onDialogMove(instance.id, $event)"
                   (resized)="onDialogResize(instance.id, $event)"
                   (stash)="stashInstance(instance.id)"
@@ -308,10 +346,23 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
                   (maximize)="toggleMaximize(instance.id)"
                   (closed)="minimizeInstance(instance.id)"
                   (trash)="confirmDelete(instance.id)"
+                  (titleEdited)="renameInstance(instance.id, $event)"
                   (bringToFront)="dialogService.bringToFront(instance.id)"
                 >
                   @if (instance.appId === 'todo') {
                     <app-todo-page [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'calculator') {
+                    <app-calculator [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'timer') {
+                    <app-timer [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'navigator') {
+                    <app-navigator [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'notes') {
+                    <app-notes [instanceId]="instance.id" />
                   }
                 </app-dialog>
               }
@@ -319,26 +370,14 @@ const createFallbackRect = (width: number, height: number): DOMRect => {
           </div>
 
           @if (settingsOpen()) {
-            <div
-              style="position:absolute; inset:0; background:rgba(255,255,255,0.98); padding:24px; z-index:2000; overflow:auto;"
-            >
-              <app-settings (closed)="settingsOpen.set(false)" />
-            </div>
+            <app-overlay (closed)="settingsOpen.set(false)">
+              <app-settings />
+            </app-overlay>
           }
           @if (aboutOpen()) {
-            <div
-              style="position:absolute; inset:0; background:rgba(255,255,255,0.98); z-index:2000; overflow:auto;"
-            >
-              <div style="position:relative; min-height:100%; padding:24px;">
-                <button
-                  style="position:absolute; top:16px; right:16px;"
-                  (click)="aboutOpen.set(false)"
-                >
-                  ✕
-                </button>
-                <app-about (closed)="aboutOpen.set(false)" />
-              </div>
-            </div>
+            <app-overlay (closed)="aboutOpen.set(false)">
+              <app-about />
+            </app-overlay>
           }
         </section>
       </main>
@@ -367,6 +406,8 @@ export class AppComponent implements OnInit, OnDestroy {
     ((window as OpWindow).__OP_CONFIG__?.mockMode === true ||
       !(window as OpWindow).__OP_CONFIG__?.apiBaseUrl);
   navOpen = true;
+  editingWorkspaceId = signal<string | null>(null);
+  editingWorkspaceName = signal('');
   private readonly translate = inject(TranslateService);
   private timeInterval?: number;
   private now = signal(new Date());
@@ -419,9 +460,21 @@ export class AppComponent implements OnInit, OnDestroy {
   showTime = computed(() => this.auth.preferences().showTime);
 
   previewUserLabel = computed(() => this.auth.currentUser()?.username ?? '');
+  siteTitle = computed(() => this.auth.preferences().siteTitle || "Roy's Planner");
+  siteLogoEmoji = computed(() => this.auth.preferences().siteLogoEmoji ?? '🌎');
+  disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
+  visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
+  instancesByApp = computed(() => ({
+    todo: this.dialogService.getAppInstances('todo'),
+    calculator: this.dialogService.getAppInstances('calculator'),
+    timer: this.dialogService.getAppInstances('timer'),
+    navigator: this.dialogService.getAppInstances('navigator'),
+    notes: this.dialogService.getAppInstances('notes'),
+  }));
   canvasStyle = computed(() => {
     const prefs = this.auth.preferences();
-    const backgroundImageUrl = prefs.backgroundImageUrl?.trim();
+    const useServerBackground = prefs.useServerBackground ?? false;
+    const backgroundImageUrl = useServerBackground ? '' : prefs.backgroundImageUrl?.trim();
     const mode = (prefs.backgroundImageMode ?? 'repeat') as CanvasMode;
     const showGrid = prefs.showGrid ?? true;
     const gridSize = Math.min(800, Math.max(8, prefs.gridSize ?? 50));
@@ -466,6 +519,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.translate.setDefaultLang('en');
+    effect(() => {
+      if (typeof document === 'undefined') return;
+      document.title = this.siteTitle();
+      this.updateFavicon(this.siteLogoEmoji());
+    });
   }
 
   ngOnInit() {
@@ -564,6 +622,40 @@ export class AppComponent implements OnInit, OnDestroy {
     this.workspaceMenuOpen.set(!this.workspaceMenuOpen());
   }
 
+  startWorkspaceRename(ws: { id: string; name: string }) {
+    this.editingWorkspaceId.set(ws.id);
+    this.editingWorkspaceName.set(ws.name);
+  }
+
+  finishWorkspaceRename(ws: { id: string }) {
+    if (this.editingWorkspaceId() !== ws.id) return;
+    const nextName = this.editingWorkspaceName().trim();
+    this.editingWorkspaceId.set(null);
+    if (!nextName) return;
+    this.dialogService.renameWorkspace(ws.id, nextName);
+  }
+
+  closeWorkspace(ws: { id: string }) {
+    if (this.dialogService.getWorkspaces().length <= 1) return;
+    this.dialogService.closeWorkspace(ws.id);
+  }
+
+  private updateFavicon(emoji: string) {
+    if (typeof document === 'undefined') return;
+    const icon = emoji?.trim();
+    const svg = icon
+      ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="0.9em" font-size="90">${icon}</text></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"></svg>`;
+    const href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  }
+
   openSettings() {
     this.aboutOpen.set(false);
     this.settingsOpen.set(true);
@@ -574,17 +666,37 @@ export class AppComponent implements OnInit, OnDestroy {
     this.aboutOpen.set(true);
   }
 
-  openApp(appId: 'todo') {
-    const bounds = this.canvasBounds();
-    const result = this.dialogService.createInstance(appId, bounds);
+  openApp(appId: AppId) {
+    const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
+    const viewportBounds = this.viewportBounds();
+    const result = this.dialogService.createInstance(appId, viewportBounds);
     if (!result.ok) {
       alert(this.translate.instant(result.message ?? 'dialogs.error.generic'));
+      return;
+    }
+    if (result.instance && viewport) {
+      const nextX = result.instance.rect.x + viewport.scrollLeft;
+      const nextY = result.instance.rect.y + viewport.scrollTop;
+      this.dialogService.moveInstance(
+        result.instance.id,
+        { x: nextX, y: nextY },
+        this.canvasBounds(),
+      );
     }
   }
 
   restoreInstance(instanceId: string) {
     this.dialogService.restoreInstance(instanceId);
     this.dialogService.bringToFront(instanceId);
+  }
+
+  renameInstance(instanceId: string, title: string) {
+    this.dialogService.setTitleOverride(instanceId, title);
+  }
+
+  toggleDeleteLock(instanceId: string) {
+    if (this.deleteTargetId()) return;
+    this.dialogService.toggleDeleteLock(instanceId);
   }
 
   stashInstance(instanceId: string) {
@@ -635,22 +747,22 @@ export class AppComponent implements OnInit, OnDestroy {
     this.resetMenuOpen.set(false);
   }
 
-  instanceIndex(instanceId: string) {
-    const instances = this.dialogService.getAppInstances('todo');
+  instanceIndex(appId: AppId, instanceId: string) {
+    const instances = this.dialogService.getAppInstances(appId);
     return instances.findIndex((instance) => instance.id === instanceId) + 1;
   }
 
-  instanceLabel(instance: { titleKey: string; titleOverride?: string; id: string }) {
+  instanceLabel(instance: { titleKey: string; titleOverride?: string; id: string; appId: AppId }) {
     if (instance.titleOverride) return instance.titleOverride;
-    return `${this.translate.instant(instance.titleKey)} (${this.instanceIndex(instance.id)})`;
+    return `${this.translate.instant(instance.titleKey)} (${this.instanceIndex(instance.appId, instance.id)})`;
   }
 
-  startRename(instance: { id: string; titleOverride?: string; titleKey: string }) {
+  startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
     this.editingTileId.set(instance.id);
     this.editingTitle.set(this.instanceLabel(instance));
   }
 
-  finishRename(instance: { id: string; titleOverride?: string; titleKey: string }) {
+  finishRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
     const next = this.editingTitle().trim();
     if (next) {
       this.dialogService.setTitleOverride(instance.id, next);

@@ -26,6 +26,10 @@ export interface UserPreferences {
   maxPersistedApps: number;
   backgroundImageUrl: string;
   backgroundImageMode: 'repeat' | 'center' | 'stretch';
+  useServerBackground: boolean;
+  disabledApps: string[];
+  siteTitle: string;
+  siteLogoEmoji: string;
   showGrid: boolean;
   gridSize: number;
 }
@@ -52,6 +56,10 @@ const SUPPORTED_LANGUAGES = [
   'de',
   'it',
   'pt',
+  'nl',
+  'no',
+  'pl',
+  'hr',
   'ru',
   'uk',
   'ar',
@@ -168,11 +176,16 @@ export class AuthService {
       return { ok: false, message: 'users.error.usernameTaken' };
     }
 
-    const next = this.usersSignal().map((user) =>
-      user.id === userId
-        ? { ...user, username, password: updates.password ?? '', role: updates.role }
-        : user,
-    );
+    const next = this.usersSignal().map((user) => {
+      if (user.id !== userId) return user;
+      const password =
+        user.id === GUEST_USER_ID
+          ? ''
+          : updates.password && updates.password.trim().length > 0
+            ? updates.password
+            : (user.password ?? '');
+      return { ...user, username, password, role: updates.role };
+    });
     this.usersSignal.set(next);
     this.persistUsers();
     return { ok: true };
@@ -388,6 +401,10 @@ export class AuthService {
       maxPersistedApps: 30,
       backgroundImageUrl: '',
       backgroundImageMode: 'repeat',
+      useServerBackground: false,
+      disabledApps: ['navigator', 'notes'],
+      siteTitle: "Roy's Planner",
+      siteLogoEmoji: '🌎',
       showGrid: true,
       gridSize: 50,
     };

@@ -12,11 +12,31 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
     <section>
       <h3>{{ 'users.title' | translate }}</h3>
 
-      @if (!auth.isAdmin()) {
+      @if (!isAdminUser()) {
         <p>{{ 'users.adminOnly' | translate }}</p>
       }
 
-      @if (auth.isAdmin()) {
+      @if (auth.currentUser() && auth.currentUser()?.id !== 'u_guest') {
+        <section style="margin-bottom: 24px; padding: 12px; border: 1px solid #ddd;">
+          <h4 style="margin-top:0;">{{ 'users.selfTitle' | translate }}</h4>
+          <label for="self-password" style="display:block; margin: 8px 0 4px;">
+            {{ 'users.password' | translate }}
+          </label>
+          <input
+            id="self-password"
+            #selfPasswordInput
+            type="password"
+            [value]="selfPassword()"
+            (input)="selfPassword.set(selfPasswordInput.value)"
+            style="width:100%; padding:8px;"
+          />
+          <div style="display:flex; gap:8px; margin-top: 12px;">
+            <button (click)="updateSelfPassword()">{{ 'users.updatePassword' | translate }}</button>
+          </div>
+        </section>
+      }
+
+      @if (isAdminUser()) {
         <div style="display:flex; gap:16px; flex-wrap:wrap;">
           <div style="flex: 1; min-width: 320px;">
             <app-shared-table
@@ -57,6 +77,7 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
               [value]="password()"
               (input)="password.set(passwordInput.value)"
               style="width:100%; padding:8px;"
+              [disabled]="editingUserIsGuest()"
             />
 
             <label for="user-role" style="display:block; margin: 8px 0 4px;">
@@ -84,6 +105,19 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
           </div>
         </div>
       }
+
+      @if (successMessage()) {
+        <div
+          style="position:fixed; inset:0; background:rgba(0,0,0,0.35); display:flex; align-items:center; justify-content:center; z-index:3000;"
+        >
+          <div style="background:#fff; padding:20px; border-radius:8px; width:320px;">
+            <p>{{ successMessage() }}</p>
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+              <button (click)="successMessage.set(null)">OK</button>
+            </div>
+          </div>
+        </div>
+      }
     </section>
   `,
 })
@@ -98,8 +132,14 @@ export class UsersSettingsComponent {
   password = signal('');
   role = signal<UserRole>('user');
   error = signal<string | null>(null);
+  selfPassword = signal('');
+  successMessage = signal<string | null>(null);
   readonly auth = inject(AuthService);
   private translate = inject(TranslateService);
+
+  isAdminUser() {
+    return this.auth.actualUser()?.role === 'admin';
+  }
 
   formTitle() {
     return this.editingId()
@@ -116,7 +156,7 @@ export class UsersSettingsComponent {
   startEdit(user: UserRecord) {
     this.editingId.set(user.id);
     this.username.set(user.username);
-    this.password.set(user.password ?? '');
+    this.password.set('');
     this.role.set(user.role);
     this.error.set(null);
   }
@@ -146,11 +186,41 @@ export class UsersSettingsComponent {
       return;
     }
 
+    if (this.editingId() && this.password().trim()) {
+      this.successMessage.set(this.translate.instant('users.passwordUpdated'));
+      if (this.editingId() === this.auth.currentUser()?.id) {
+        this.auth.logout();
+      }
+    }
+
     this.reset();
   }
 
   onRoleChange(value: string) {
     this.role.set(value === 'admin' ? 'admin' : 'user');
+  }
+
+  editingUserIsGuest() {
+    return this.editingId() === 'u_guest';
+  }
+
+  updateSelfPassword() {
+    const current = this.auth.currentUser();
+    if (!current) return;
+    const nextPassword = this.selfPassword().trim();
+    if (!nextPassword) return;
+    const result = this.auth.updateUser(current.id, {
+      username: current.username,
+      password: nextPassword,
+      role: current.role,
+    });
+    if (!result.ok) {
+      this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
+      return;
+    }
+    this.successMessage.set(this.translate.instant('users.passwordUpdated'));
+    this.selfPassword.set('');
+    this.auth.logout();
   }
 
   remove(user: UserRecord) {

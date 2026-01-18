@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "حقوق النشر {{year}} روي نونه",
+    "github": "Github",
     "line1": "تصفح الويب باحتراف.",
-    "line2": "يسوع عائد، يا أصدقاء.",
+    "linkedin": "LinkedIn",
     "title": "حول"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "تطبيق المهام",
-    "todoGroup": "تطبيقات المهام"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "المستخدم غير موجود."
     },
     "guest": "المتابعة كضيف",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "كلمة المرور (اختياري)",
     "signIn": "تسجيل الدخول",
     "title": "تسجيل الدخول",
@@ -39,6 +49,7 @@
       "maxPersisted": "تم الوصول إلى الحد الأقصى للتطبيقات المحفوظة."
     },
     "hideAll": "إخفاء كل الحوارات",
+    "lockDelete": "Lock delete",
     "maximize": "تكبير",
     "minimize": "تصغير",
     "reset": "إعادة تعيين مواضع الحوارات",
@@ -47,6 +58,7 @@
     "showAll": "إظهار كل الحوارات",
     "stash": "أرشفة",
     "trash": "حذف",
+    "unlockDelete": "Unlock delete",
     "unstash": "استعادة"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "تسجيل الخروج",
     "settings": "الإعدادات"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "توسيط",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "عرض صورة الخلفية",
     "backgroundImageRepeat": "تكرار",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "تمديد للملء",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "صورة الخلفية (مسار محلي أو عنوان URL)",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "المدينة المحلية",
     "credentialAdd": "إضافة بيانات اعتماد",
     "credentialDelete": "إزالة بيانات الاعتماد",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "الحد الأقصى للتطبيقات المحفوظة",
     "showGrid": "عرض الشبكة",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "تنسيق الوقت",
     "timeFormat12": "12 ساعة",
     "timeFormat24": "24 ساعة",
@@ -91,13 +129,20 @@
     "persist": "المعاينة تحفظ التغييرات"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "التفضيلات",
     "previewAs": "المعاينة كـ",
     "previewNone": "بدون معاينة",
     "previewPersist": "حفظ التغييرات أثناء المعاينة",
     "previewTitle": "المعاينة كمستخدم",
     "title": "الإعدادات",
-    "usersLink": "المستخدمون"
+    "usersLink": "المستخدمون",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "الإجراءات",
@@ -106,8 +151,26 @@
     "pageSize": "الصفوف",
     "prev": "السابق"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "إضافة",
+    "clearCompleted": "Clear completed",
     "delete": "حذف",
     "deleteTitle": "حذف نهائياً",
     "duplicate": "تكرار",
@@ -121,7 +184,7 @@
     "loading": "جارٍ التحميل…",
     "placeholder": "أضف مهمة",
     "reload": "إعادة تحميل",
-    "title": "تطبيق المهام"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "طي الشريط العلوي",
@@ -142,13 +205,16 @@
       "usernameTaken": "اسم المستخدم مستخدم بالفعل."
     },
     "password": "كلمة المرور",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "إعادة ضبط",
     "role": "الدور",
     "roleAdmin": "مشرف",
     "roleUser": "مستخدم",
     "save": "حفظ",
     "search": "البحث عن مستخدمين",
+    "selfTitle": "My account",
     "title": "المستخدمون",
+    "updatePassword": "Update password",
     "username": "اسم المستخدم"
   },
   "workspaces": {

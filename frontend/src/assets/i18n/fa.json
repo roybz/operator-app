@@ -1,16 +1,25 @@
 {
   "about": {
     "copyright": "كپي‌رايت {{year}} روي نونه",
+    "github": "Github",
     "line1": "وب را حرفه‌اي مرور كنيد.",
-    "line2": "عیسی بازمی‌گردد، دوستان.",
+    "linkedin": "LinkedIn",
     "title": "درباره"
   },
   "app": {
-    "title": "Roy's Operator"
+    "title": "Roy's Planner"
   },
   "apps": {
-    "todo": "برنامه كارها",
-    "todoGroup": "برنامه‌هاي كارها"
+    "calculator": "Calculator",
+    "calculatorGroup": "Calculator",
+    "navigator": "Navigator",
+    "navigatorGroup": "Navigator",
+    "notes": "Notes",
+    "notesGroup": "Notes",
+    "timer": "Timer",
+    "timerGroup": "Timer",
+    "todo": "Todo",
+    "todoGroup": "Todo"
   },
   "auth": {
     "error": {
@@ -19,6 +28,7 @@
       "notFound": "كاربر پيدا نشد."
     },
     "guest": "ادامه به عنوان ميهمان",
+    "loggedInAs": "Logged in as {{user}}",
     "password": "گذرواژه (اختياري)",
     "signIn": "ورود",
     "title": "ورود",
@@ -39,6 +49,7 @@
       "maxPersisted": "حداكثر تعداد برنامه‌هاي ماندگار رسيده است."
     },
     "hideAll": "مخفي كردن همه پنجره‌ها",
+    "lockDelete": "Lock delete",
     "maximize": "بزرگ‌نمايي",
     "minimize": "كوچك‌سازي",
     "reset": "بازنشاني موقعيت پنجره‌ها",
@@ -47,6 +58,7 @@
     "showAll": "نمايش همه پنجره‌ها",
     "stash": "بايگاني",
     "trash": "حذف",
+    "unlockDelete": "Unlock delete",
     "unstash": "بازگرداني"
   },
   "landing": {
@@ -62,12 +74,35 @@
     "logout": "خروج",
     "settings": "تنظيمات"
   },
+  "notes": {
+    "addFolder": "Add folder",
+    "addNote": "Add note",
+    "collapseEditor": "Collapse editor",
+    "copySuffix": "copy",
+    "defaultFolder": "New folder",
+    "defaultNote": "New note",
+    "delete": "Delete",
+    "deleteSelected": "Delete selected",
+    "duplicate": "Duplicate",
+    "duplicateSelected": "Duplicate selected",
+    "expandEditor": "Expand editor",
+    "lock": "Lock",
+    "root": "Notes",
+    "selectHint": "Select a note to begin.",
+    "switchToMarkdown": "Markdown",
+    "switchToRich": "Rich text",
+    "unlock": "Unlock"
+  },
   "preferences": {
     "backgroundImageCenter": "وسط‌چين",
+    "backgroundImageClear": "Clear background",
     "backgroundImageMode": "نمايش تصوير پس‌زمينه",
     "backgroundImageRepeat": "تكرار",
+    "backgroundImageSelected": "Image selected",
     "backgroundImageStretch": "كشيدن براي پر كردن",
+    "backgroundImageUpload": "Background image",
     "backgroundImageUrl": "تصوير پس‌زمينه (مسير محلي يا URL)",
+    "backgroundUseServer": "Use server-stored backgrounds when available",
     "city": "شهر محلي",
     "credentialAdd": "افزودن اعتبارنامه",
     "credentialDelete": "حذف اعتبارنامه",
@@ -80,6 +115,9 @@
     "maxPersistedApps": "حداكثر تعداد برنامه‌هاي ماندگار",
     "showGrid": "نمايش شبكه",
     "showTime": "Show local time in the top bar",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
     "timeFormat": "فرمت زمان",
     "timeFormat12": "12 ساعته",
     "timeFormat24": "24 ساعته",
@@ -91,13 +129,20 @@
     "persist": "تغييرات پيش‌نمايش ذخيره مي‌شود"
   },
   "settings": {
+    "applicationsLink": "Applications",
+    "applicationsTitle": "Applications",
+    "navigatorBeta": "Navigator (Beta)",
+    "notesBeta": "Notes (Beta)",
     "preferencesLink": "ترجيحات",
     "previewAs": "پيش‌نمايش به عنوان",
     "previewNone": "بدون پيش‌نمايش",
     "previewPersist": "ذخيره تغييرات هنگام پيش‌نمايش",
     "previewTitle": "پيش‌نمايش به عنوان كاربر",
     "title": "تنظيمات",
-    "usersLink": "كاربران"
+    "usersLink": "كاربران",
+    "wipeApp": "Wipe data",
+    "wipeConfirm": "Wipe all data for this application?",
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "اقدامات",
@@ -106,8 +151,26 @@
     "pageSize": "رديف‌ها",
     "prev": "قبلي"
   },
+  "timer": {
+    "break": "Break",
+    "countdown": "Countdown",
+    "longBreak": "Long break",
+    "minutes": "min",
+    "pause": "Pause",
+    "phase": "Phase",
+    "phaseBreak": "Break",
+    "phaseLongBreak": "Long break",
+    "phaseWork": "Work",
+    "pomodoro": "Pomodoro",
+    "reset": "Reset",
+    "seconds": "sec",
+    "start": "Start",
+    "stopwatch": "Stopwatch",
+    "work": "Work"
+  },
   "todo": {
     "add": "افزودن",
+    "clearCompleted": "Clear completed",
     "delete": "حذف",
     "deleteTitle": "حذف دائمي",
     "duplicate": "تكثير",
@@ -121,7 +184,7 @@
     "loading": "در حال بارگذاري…",
     "placeholder": "افزودن يك كار",
     "reload": "بارگذاري مجدد",
-    "title": "برنامه كارها"
+    "title": "Todo"
   },
   "topbar": {
     "collapse": "جمع كردن نوار بالا",
@@ -142,13 +205,16 @@
       "usernameTaken": "اين نام كاربري قبلاً استفاده شده است."
     },
     "password": "گذرواژه",
+    "passwordUpdated": "Password updated successfully.",
     "reset": "بازنشاني",
     "role": "نقش",
     "roleAdmin": "ادمين",
     "roleUser": "كاربر",
     "save": "ذخيره",
     "search": "جستجوي كاربران",
+    "selfTitle": "My account",
     "title": "كاربران",
+    "updatePassword": "Update password",
     "username": "نام كاربري"
   },
   "workspaces": {
