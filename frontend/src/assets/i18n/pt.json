@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "Navegue na web como um profissional.",
+    "line2": "Jesus esta voltando, amigos.",
+    "title": "Sobre"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "App de tarefas",
+    "todoGroup": "Apps de tarefas"
+  },
+  "auth": {
+    "error": {
+      "generic": "Nao foi possivel entrar.",
+      "invalid": "Senha invalida.",
+      "notFound": "Usuario nao encontrado."
+    },
+    "guest": "Continuar como convidado",
+    "password": "Senha (opcional)",
+    "signIn": "Entrar",
+    "title": "Entrar",
+    "username": "Nome de usuario"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "confirm": "Excluir",
+    "confirmDelete": "Excluir esta instancia permanentemente?",
+    "error": {
+      "generic": "Nao foi possivel abrir o app.",
+      "maxPersisted": "Numero maximo de apps persistentes atingido."
+    },
+    "hideAll": "Ocultar todos os dialogs",
+    "maximize": "Maximizar",
+    "minimize": "Minimizar",
+    "reset": "Redefinir posicoes dos dialogs",
+    "resetLeft": "Redefinir para a esquerda",
+    "resetMiddle": "Redefinir para o meio",
+    "showAll": "Mostrar todos os dialogs",
+    "stash": "Arquivar",
+    "trash": "Excluir",
+    "unstash": "Restaurar"
+  },
+  "landing": {
+    "welcome": "Bem-vindo ao Roy's Operator."
+  },
+  "mock": {
+    "label": "Modo de teste"
+  },
+  "nav": {
+    "about": "Sobre",
+    "collapse": "Recolher",
+    "expand": "Expandir",
+    "logout": "Sair",
+    "settings": "Configuracoes"
+  },
+  "preferences": {
+    "backgroundImageCenter": "Centralizar",
+    "backgroundImageMode": "Exibicao da imagem de fundo",
+    "backgroundImageRepeat": "Repetir",
+    "backgroundImageStretch": "Esticar para caber",
+    "backgroundImageUrl": "Imagem de fundo (caminho local ou URL)",
+    "city": "Cidade local",
+    "credentialAdd": "Adicionar credencial",
+    "credentialDelete": "Remover credencial",
+    "credentialLabel": "Rotulo",
+    "credentialPassword": "Senha",
+    "credentialUsername": "Nome de usuario",
+    "credentialsTitle": "Credenciais salvas",
+    "gridSize": "Tamanho da grade (px)",
+    "language": "Idioma do app",
+    "maxPersistedApps": "Numero maximo de apps persistentes",
+    "showGrid": "Mostrar grade",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "Formato de hora",
+    "timeFormat12": "12 horas",
+    "timeFormat24": "24 horas",
+    "timeZone": "Fuso horario preferido",
+    "title": "Preferencias"
+  },
+  "preview": {
+    "label": "Visualizando como: {{user}}",
+    "persist": "Alteracoes persistem"
+  },
+  "settings": {
+    "preferencesLink": "Preferencias",
+    "previewAs": "Visualizar como",
+    "previewNone": "Sem visualizacao",
+    "previewPersist": "Persistir alteracoes ao visualizar",
+    "previewTitle": "Visualizar como usuario",
+    "title": "Configuracoes",
+    "usersLink": "Usuarios"
+  },
+  "table": {
+    "actions": "Acoes",
+    "next": "Proxima",
+    "page": "Pagina {{current}} de {{total}}",
+    "pageSize": "Linhas",
+    "prev": "Anterior"
+  },
+  "todo": {
+    "add": "Adicionar",
+    "delete": "Excluir",
+    "deleteTitle": "Excluir para sempre",
+    "duplicate": "Duplicar",
+    "duplicateTitle": "Duplicar",
+    "error": {
+      "create": "Nao foi possivel criar a tarefa.",
+      "delete": "Nao foi possivel excluir a tarefa.",
+      "list": "Nao foi possivel carregar as tarefas.",
+      "unknown": "Algo deu errado."
+    },
+    "loading": "Carregando…",
+    "placeholder": "Adicionar uma tarefa",
+    "reload": "Recarregar",
+    "title": "App de tarefas"
+  },
+  "topbar": {
+    "collapse": "Recolher barra superior",
+    "expand": "Expandir barra superior"
+  },
+  "users": {
+    "adminOnly": "Apenas admins podem gerenciar usuarios.",
+    "create": "Criar",
+    "createTitle": "Criar usuario",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "editTitle": "Editar usuario",
+    "empty": "Nenhum usuario encontrado.",
+    "error": {
+      "generic": "Nao foi possivel atualizar o usuario.",
+      "lastAdmin": "Mantenha pelo menos um admin.",
+      "usernameRequired": "Nome de usuario obrigatorio.",
+      "usernameTaken": "Esse nome de usuario ja existe."
+    },
+    "password": "Senha",
+    "reset": "Redefinir",
+    "role": "Funcao",
+    "roleAdmin": "Admin",
+    "roleUser": "Usuario",
+    "save": "Salvar",
+    "search": "Pesquisar usuarios",
+    "title": "Usuarios",
+    "username": "Nome de usuario"
+  },
+  "workspaces": {
+    "button": "Workspaces"
+  }
+}

@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -13,10 +13,11 @@ import { AuthService } from '../../core/auth.service';
       <h1>{{ 'auth.title' | translate }}</h1>
 
       <form (submit)="onSubmit($event)">
-        <label style="display:block; margin: 12px 0 6px;">
+        <label for="login-username" style="display:block; margin: 12px 0 6px;">
           {{ 'auth.username' | translate }}
         </label>
         <input
+          id="login-username"
           #usernameInput
           type="text"
           [value]="username()"
@@ -24,10 +25,11 @@ import { AuthService } from '../../core/auth.service';
           style="width:100%; padding:10px;"
         />
 
-        <label style="display:block; margin: 12px 0 6px;">
+        <label for="login-password" style="display:block; margin: 12px 0 6px;">
           {{ 'auth.password' | translate }}
         </label>
         <input
+          id="login-password"
           #passwordInput
           type="password"
           [value]="password()"
@@ -42,20 +44,26 @@ import { AuthService } from '../../core/auth.service';
         <button type="submit" style="margin-top: 16px; padding: 10px 14px;">
           {{ 'auth.signIn' | translate }}
         </button>
+        <button
+          type="button"
+          style="margin-top: 12px; padding: 8px 12px;"
+          (click)="continueAsGuest()"
+        >
+          {{ 'auth.guest' | translate }}
+        </button>
       </form>
     </main>
   `,
 })
 export class LoginComponent {
+  private auth = inject(AuthService);
+  private router = inject(Router);
+  private translate = inject(TranslateService);
   username = signal('');
   password = signal('');
   error = signal<string | null>(null);
 
-  constructor(
-    private auth: AuthService,
-    private router: Router,
-    private translate: TranslateService,
-  ) {
+  constructor() {
     if (this.auth.isLoggedIn()) {
       this.router.navigateByUrl('/');
     }
@@ -70,6 +78,11 @@ export class LoginComponent {
       this.error.set(this.translate.instant(message));
       return;
     }
+    this.router.navigateByUrl('/');
+  }
+
+  continueAsGuest() {
+    this.auth.loginAsGuest();
     this.router.navigateByUrl('/');
   }
 }

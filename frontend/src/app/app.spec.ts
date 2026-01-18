@@ -46,9 +46,22 @@ describe('App', () => {
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
-      app: { title: 'Operator App' },
-      mock: { label: 'Mock mode' },
-      nav: { collapse: 'Collapse', expand: 'Expand', todoApp: 'Todo app' },
+      app: { title: "Roy's Operator" },
+      mock: { label: 'Test mode' },
+      nav: { collapse: 'Collapse', expand: 'Expand', settings: 'Settings', logout: 'Log out' },
+      apps: { todo: 'Todos App', todoGroup: 'Todo Apps' },
+      workspaces: { button: 'Workspaces' },
+      topbar: { collapse: 'Collapse top bar', expand: 'Expand top bar' },
+      dialogs: {
+        reset: 'Reset dialog positions',
+        resetLeft: 'Reset to the left',
+        resetMiddle: 'Reset to the middle',
+        confirmDelete: 'Delete this instance permanently?',
+        confirm: 'Delete',
+        cancel: 'Cancel',
+        hideAll: 'Hide all dialogs',
+        showAll: 'Show all dialogs',
+      },
     });
     translate.use('en');
 
@@ -57,9 +70,11 @@ describe('App', () => {
     await fixture.whenStable();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const heading = compiled.querySelector('h1')?.textContent ?? '';
-    expect(heading).toContain('Operator App');
-    expect(compiled.textContent).toContain('Mock mode');
-    expect(compiled.textContent).toContain('Todo app');
+    const heading = compiled.querySelector('strong')?.textContent ?? '';
+    expect(heading).toContain("Roy's Operator");
+    expect(compiled.textContent).toContain('Test mode');
+    expect(compiled.textContent).toContain('Todo Apps');
+    expect(compiled.textContent).toContain('Workspaces');
+    expect(compiled.textContent).toContain('Settings');
   });
 });

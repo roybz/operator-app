@@ -52,6 +52,7 @@ describe('TodoPageComponent', () => {
 
   it('renders translated labels', async () => {
     const fixture = TestBed.createComponent(TodoPageComponent);
+    fixture.componentInstance.instanceId = 'dlg_test';
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -65,6 +66,7 @@ describe('TodoPageComponent', () => {
 
   it('adds and deletes a todo in mock mode', async () => {
     const fixture = TestBed.createComponent(TodoPageComponent);
+    fixture.componentInstance.instanceId = 'dlg_test';
     fixture.detectChanges();
     await fixture.whenStable();
     const component = fixture.componentInstance;

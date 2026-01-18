@@ -1,106 +1,157 @@
 {
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "Naviguez sur le Web comme un pro.",
+    "line2": "Jesus revient bientot, amis.",
+    "title": "A propos"
+  },
   "app": {
-    "title": "Operator App"
+    "title": "Roy's Operator"
   },
-  "mock": {
-    "label": "Mode maquette"
-  },
-  "preview": {
-    "label": "Aperçu : {{user}}",
-    "persist": "Aperçu persistant"
-  },
-  "nav": {
-    "collapse": "Réduire",
-    "expand": "Développer",
-    "todoApp": "App de tâches",
-    "settings": "Paramètres",
-    "logout": "Se déconnecter"
-  },
-  "landing": {
-    "welcome": "Bienvenue sur Operator App."
+  "apps": {
+    "todo": "App de taches",
+    "todoGroup": "Apps de taches"
   },
   "auth": {
-    "title": "Se connecter",
-    "username": "Nom d'utilisateur",
+    "error": {
+      "generic": "Connexion impossible.",
+      "invalid": "Mot de passe invalide.",
+      "notFound": "Utilisateur introuvable."
+    },
+    "guest": "Continuer en tant qu'invite",
     "password": "Mot de passe (optionnel)",
     "signIn": "Connexion",
-    "error": {
-      "notFound": "Utilisateur introuvable.",
-      "invalid": "Mot de passe invalide.",
-      "generic": "Connexion impossible."
-    }
+    "title": "Se connecter",
+    "username": "Nom d'utilisateur"
   },
-  "settings": {
-    "title": "Paramètres",
-    "usersLink": "Utilisateurs",
-    "preferencesLink": "Préférences",
-    "previewTitle": "Aperçu en tant qu'utilisateur",
-    "previewAs": "Aperçu en tant que",
-    "previewNone": "Aucun aperçu",
-    "previewPersist": "Conserver les changements pendant l'aperçu"
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
   },
-  "users": {
-    "title": "Utilisateurs",
-    "adminOnly": "Seuls les admins peuvent gérer les utilisateurs.",
-    "search": "Rechercher des utilisateurs",
-    "empty": "Aucun utilisateur trouvé.",
-    "username": "Nom d'utilisateur",
-    "password": "Mot de passe",
-    "role": "Rôle",
-    "roleAdmin": "Admin",
-    "roleUser": "Utilisateur",
-    "edit": "Modifier",
-    "delete": "Supprimer",
-    "reset": "Réinitialiser",
-    "save": "Enregistrer",
-    "create": "Créer",
-    "editTitle": "Modifier l'utilisateur",
-    "createTitle": "Créer un utilisateur",
+  "dialogs": {
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "confirm": "Supprimer",
+    "confirmDelete": "Supprimer cette instance definitivement ?",
     "error": {
-      "usernameRequired": "Le nom d'utilisateur est requis.",
-      "usernameTaken": "Ce nom d'utilisateur est déjà pris.",
-      "lastAdmin": "Vous devez conserver au moins un admin.",
-      "generic": "Impossible de mettre à jour l'utilisateur."
-    }
+      "generic": "Impossible d'ouvrir l'app.",
+      "maxPersisted": "Nombre maximum d'apps persistantes atteint."
+    },
+    "hideAll": "Masquer tous les dialogues",
+    "maximize": "Agrandir",
+    "minimize": "Reduire",
+    "reset": "Reinitialiser les positions",
+    "resetLeft": "Reinitialiser a gauche",
+    "resetMiddle": "Reinitialiser au centre",
+    "showAll": "Afficher tous les dialogues",
+    "stash": "Archiver",
+    "trash": "Supprimer",
+    "unstash": "Restaurer"
+  },
+  "landing": {
+    "welcome": "Bienvenue sur Roy's Operator."
+  },
+  "mock": {
+    "label": "Mode test"
+  },
+  "nav": {
+    "about": "A propos",
+    "collapse": "Reduire",
+    "expand": "Developper",
+    "logout": "Se deconnecter",
+    "settings": "Parametres"
   },
   "preferences": {
-    "title": "Préférences",
-    "language": "Langue de l'application",
+    "backgroundImageCenter": "Centrer",
+    "backgroundImageMode": "Affichage de l'image de fond",
+    "backgroundImageRepeat": "Repeter",
+    "backgroundImageStretch": "Etirer pour remplir",
+    "backgroundImageUrl": "Image de fond (chemin local ou URL)",
     "city": "Ville locale",
-    "timeZone": "Fuseau horaire préféré",
-    "showTime": "Afficher l'heure locale",
+    "credentialAdd": "Ajouter un identifiant",
+    "credentialDelete": "Supprimer l'identifiant",
+    "credentialLabel": "Libelle",
+    "credentialPassword": "Mot de passe",
+    "credentialUsername": "Nom d'utilisateur",
+    "credentialsTitle": "Identifiants enregistres",
+    "gridSize": "Taille de la grille (px)",
+    "language": "Langue de l'application",
+    "maxPersistedApps": "Nombre maximum d'apps persistantes",
+    "showGrid": "Afficher la grille",
+    "showTime": "Show local time in the top bar",
     "timeFormat": "Format de l'heure",
     "timeFormat12": "12 heures",
     "timeFormat24": "24 heures",
-    "credentialsTitle": "Identifiants enregistrés",
-    "credentialLabel": "Libellé",
-    "credentialUsername": "Nom d'utilisateur",
-    "credentialPassword": "Mot de passe",
-    "credentialDelete": "Supprimer l'identifiant",
-    "credentialAdd": "Ajouter un identifiant"
+    "timeZone": "Fuseau horaire prefere",
+    "title": "Preferences"
+  },
+  "preview": {
+    "label": "Apercu en tant que : {{user}}",
+    "persist": "Apercu persistant"
+  },
+  "settings": {
+    "preferencesLink": "Preferences",
+    "previewAs": "Apercu en tant que",
+    "previewNone": "Aucun apercu",
+    "previewPersist": "Conserver les changements pendant l'aperçu",
+    "previewTitle": "Apercu en tant qu'utilisateur",
+    "title": "Parametres",
+    "usersLink": "Utilisateurs"
   },
   "table": {
-    "pageSize": "Lignes",
     "actions": "Actions",
-    "prev": "Précédent",
     "next": "Suivant",
-    "page": "Page {{current}} sur {{total}}"
+    "page": "Page {{current}} sur {{total}}",
+    "pageSize": "Lignes",
+    "prev": "Precedent"
   },
   "todo": {
-    "title": "App de tâches",
-    "placeholder": "Ajouter une tâche",
     "add": "Ajouter",
-    "reload": "Recharger",
-    "loading": "Chargement…",
-    "duplicate": "Dupliquer",
     "delete": "Supprimer",
+    "deleteTitle": "Supprimer definitivement",
+    "duplicate": "Dupliquer",
     "duplicateTitle": "Dupliquer",
-    "deleteTitle": "Supprimer définitivement",
     "error": {
-      "list": "Impossible de charger les tâches.",
-      "create": "Impossible de créer la tâche.",
-      "delete": "Impossible de supprimer la tâche.",
+      "create": "Impossible de creer la tache.",
+      "delete": "Impossible de supprimer la tache.",
+      "list": "Impossible de charger les taches.",
       "unknown": "Une erreur est survenue."
-    }
+    },
+    "loading": "Chargement…",
+    "placeholder": "Ajouter une tache",
+    "reload": "Recharger",
+    "title": "App de taches"
+  },
+  "topbar": {
+    "collapse": "Replier la barre superieure",
+    "expand": "Deployer la barre superieure"
+  },
+  "users": {
+    "adminOnly": "Seuls les admins peuvent gerer les utilisateurs.",
+    "create": "Creer",
+    "createTitle": "Creer un utilisateur",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "editTitle": "Modifier l'utilisateur",
+    "empty": "Aucun utilisateur trouve.",
+    "error": {
+      "generic": "Impossible de mettre a jour l'utilisateur.",
+      "lastAdmin": "Vous devez conserver au moins un admin.",
+      "usernameRequired": "Le nom d'utilisateur est requis.",
+      "usernameTaken": "Ce nom d'utilisateur est deja pris."
+    },
+    "password": "Mot de passe",
+    "reset": "Reinitialiser",
+    "role": "Role",
+    "roleAdmin": "Admin",
+    "roleUser": "Utilisateur",
+    "save": "Enregistrer",
+    "search": "Rechercher des utilisateurs",
+    "title": "Utilisateurs",
+    "username": "Nom d'utilisateur"
+  },
+  "workspaces": {
+    "button": "Espaces"
   }
 }

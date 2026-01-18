@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "像專業人士一樣瀏覽網路。",
+    "line2": "耶穌將再來，朋友們。",
+    "title": "關於"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "待辦應用",
+    "todoGroup": "待辦應用"
+  },
+  "auth": {
+    "error": {
+      "generic": "無法登入。",
+      "invalid": "密碼無效。",
+      "notFound": "找不到使用者。"
+    },
+    "guest": "以訪客身分繼續",
+    "password": "密碼（可選）",
+    "signIn": "登入",
+    "title": "登入",
+    "username": "使用者名稱"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "取消",
+    "close": "關閉",
+    "confirm": "刪除",
+    "confirmDelete": "永久刪除此實例？",
+    "error": {
+      "generic": "無法開啟應用。",
+      "maxPersisted": "已達到持久化應用的最大數量。"
+    },
+    "hideAll": "隱藏所有對話框",
+    "maximize": "最大化",
+    "minimize": "最小化",
+    "reset": "重設對話框位置",
+    "resetLeft": "重設到左側",
+    "resetMiddle": "重設到中間",
+    "showAll": "顯示所有對話框",
+    "stash": "收起",
+    "trash": "刪除",
+    "unstash": "恢復"
+  },
+  "landing": {
+    "welcome": "歡迎使用 Roy's Operator."
+  },
+  "mock": {
+    "label": "測試模式"
+  },
+  "nav": {
+    "about": "關於",
+    "collapse": "收合",
+    "expand": "展開",
+    "logout": "登出",
+    "settings": "設定"
+  },
+  "preferences": {
+    "backgroundImageCenter": "置中",
+    "backgroundImageMode": "背景圖顯示方式",
+    "backgroundImageRepeat": "重複",
+    "backgroundImageStretch": "拉伸填滿",
+    "backgroundImageUrl": "背景圖（本地路徑或 URL）",
+    "city": "本地城市",
+    "credentialAdd": "新增憑證",
+    "credentialDelete": "移除憑證",
+    "credentialLabel": "標籤",
+    "credentialPassword": "密碼",
+    "credentialUsername": "使用者名稱",
+    "credentialsTitle": "已儲存的憑證",
+    "gridSize": "網格大小 (px)",
+    "language": "應用語言",
+    "maxPersistedApps": "持久化應用的最大數量",
+    "showGrid": "顯示網格",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "時間格式",
+    "timeFormat12": "12 小時",
+    "timeFormat24": "24 小時",
+    "timeZone": "偏好時區",
+    "title": "偏好設定"
+  },
+  "preview": {
+    "label": "預覽為：{{user}}",
+    "persist": "預覽變更已持久化"
+  },
+  "settings": {
+    "preferencesLink": "偏好設定",
+    "previewAs": "預覽為",
+    "previewNone": "不預覽",
+    "previewPersist": "預覽時保留變更",
+    "previewTitle": "以使用者預覽",
+    "title": "設定",
+    "usersLink": "使用者"
+  },
+  "table": {
+    "actions": "操作",
+    "next": "下一頁",
+    "page": "第 {{current}} / {{total}} 頁",
+    "pageSize": "列數",
+    "prev": "上一頁"
+  },
+  "todo": {
+    "add": "新增",
+    "delete": "刪除",
+    "deleteTitle": "永久刪除",
+    "duplicate": "複製",
+    "duplicateTitle": "複製",
+    "error": {
+      "create": "無法建立待辦事項。",
+      "delete": "無法刪除待辦事項。",
+      "list": "無法載入待辦事項。",
+      "unknown": "發生錯誤。"
+    },
+    "loading": "載入中…",
+    "placeholder": "新增待辦事項",
+    "reload": "重新載入",
+    "title": "待辦應用"
+  },
+  "topbar": {
+    "collapse": "收合頂部列",
+    "expand": "展開頂部列"
+  },
+  "users": {
+    "adminOnly": "只有管理員可以管理使用者。",
+    "create": "建立",
+    "createTitle": "建立使用者",
+    "delete": "刪除",
+    "edit": "編輯",
+    "editTitle": "編輯使用者",
+    "empty": "找不到使用者。",
+    "error": {
+      "generic": "無法更新使用者。",
+      "lastAdmin": "至少需保留一位管理員。",
+      "usernameRequired": "需要使用者名稱。",
+      "usernameTaken": "使用者名稱已被使用。"
+    },
+    "password": "密碼",
+    "reset": "重設",
+    "role": "角色",
+    "roleAdmin": "管理員",
+    "roleUser": "使用者",
+    "save": "儲存",
+    "search": "搜尋使用者",
+    "title": "使用者",
+    "username": "使用者名稱"
+  },
+  "workspaces": {
+    "button": "工作區"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "حقوق النشر {{year}} روي نونه",
+    "line1": "تصفح الويب باحتراف.",
+    "line2": "يسوع عائد، يا أصدقاء.",
+    "title": "حول"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "تطبيق المهام",
+    "todoGroup": "تطبيقات المهام"
+  },
+  "auth": {
+    "error": {
+      "generic": "تعذر تسجيل الدخول.",
+      "invalid": "كلمة المرور غير صحيحة.",
+      "notFound": "المستخدم غير موجود."
+    },
+    "guest": "المتابعة كضيف",
+    "password": "كلمة المرور (اختياري)",
+    "signIn": "تسجيل الدخول",
+    "title": "تسجيل الدخول",
+    "username": "اسم المستخدم"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "إلغاء",
+    "close": "إغلاق",
+    "confirm": "حذف",
+    "confirmDelete": "حذف هذه النسخة نهائياً؟",
+    "error": {
+      "generic": "تعذر فتح التطبيق.",
+      "maxPersisted": "تم الوصول إلى الحد الأقصى للتطبيقات المحفوظة."
+    },
+    "hideAll": "إخفاء كل الحوارات",
+    "maximize": "تكبير",
+    "minimize": "تصغير",
+    "reset": "إعادة تعيين مواضع الحوارات",
+    "resetLeft": "إعادة تعيين إلى اليسار",
+    "resetMiddle": "إعادة تعيين إلى الوسط",
+    "showAll": "إظهار كل الحوارات",
+    "stash": "أرشفة",
+    "trash": "حذف",
+    "unstash": "استعادة"
+  },
+  "landing": {
+    "welcome": "مرحباً بك في Roy's Operator."
+  },
+  "mock": {
+    "label": "وضع الاختبار"
+  },
+  "nav": {
+    "about": "حول",
+    "collapse": "طي",
+    "expand": "توسيع",
+    "logout": "تسجيل الخروج",
+    "settings": "الإعدادات"
+  },
+  "preferences": {
+    "backgroundImageCenter": "توسيط",
+    "backgroundImageMode": "عرض صورة الخلفية",
+    "backgroundImageRepeat": "تكرار",
+    "backgroundImageStretch": "تمديد للملء",
+    "backgroundImageUrl": "صورة الخلفية (مسار محلي أو عنوان URL)",
+    "city": "المدينة المحلية",
+    "credentialAdd": "إضافة بيانات اعتماد",
+    "credentialDelete": "إزالة بيانات الاعتماد",
+    "credentialLabel": "التسمية",
+    "credentialPassword": "كلمة المرور",
+    "credentialUsername": "اسم المستخدم",
+    "credentialsTitle": "بيانات الاعتماد المحفوظة",
+    "gridSize": "حجم الشبكة (px)",
+    "language": "لغة التطبيق",
+    "maxPersistedApps": "الحد الأقصى للتطبيقات المحفوظة",
+    "showGrid": "عرض الشبكة",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "تنسيق الوقت",
+    "timeFormat12": "12 ساعة",
+    "timeFormat24": "24 ساعة",
+    "timeZone": "المنطقة الزمنية المفضلة",
+    "title": "التفضيلات"
+  },
+  "preview": {
+    "label": "المعاينة كـ: {{user}}",
+    "persist": "المعاينة تحفظ التغييرات"
+  },
+  "settings": {
+    "preferencesLink": "التفضيلات",
+    "previewAs": "المعاينة كـ",
+    "previewNone": "بدون معاينة",
+    "previewPersist": "حفظ التغييرات أثناء المعاينة",
+    "previewTitle": "المعاينة كمستخدم",
+    "title": "الإعدادات",
+    "usersLink": "المستخدمون"
+  },
+  "table": {
+    "actions": "الإجراءات",
+    "next": "التالي",
+    "page": "الصفحة {{current}} من {{total}}",
+    "pageSize": "الصفوف",
+    "prev": "السابق"
+  },
+  "todo": {
+    "add": "إضافة",
+    "delete": "حذف",
+    "deleteTitle": "حذف نهائياً",
+    "duplicate": "تكرار",
+    "duplicateTitle": "تكرار",
+    "error": {
+      "create": "تعذر إنشاء المهمة.",
+      "delete": "تعذر حذف المهمة.",
+      "list": "تعذر تحميل المهام.",
+      "unknown": "حدث خطأ ما."
+    },
+    "loading": "جارٍ التحميل…",
+    "placeholder": "أضف مهمة",
+    "reload": "إعادة تحميل",
+    "title": "تطبيق المهام"
+  },
+  "topbar": {
+    "collapse": "طي الشريط العلوي",
+    "expand": "توسيع الشريط العلوي"
+  },
+  "users": {
+    "adminOnly": "يمكن للمشرفين فقط إدارة المستخدمين.",
+    "create": "إنشاء",
+    "createTitle": "إنشاء مستخدم",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "editTitle": "تعديل مستخدم",
+    "empty": "لم يتم العثور على مستخدمين.",
+    "error": {
+      "generic": "تعذر تحديث المستخدم.",
+      "lastAdmin": "يجب الاحتفاظ بمشرف واحد على الأقل.",
+      "usernameRequired": "اسم المستخدم مطلوب.",
+      "usernameTaken": "اسم المستخدم مستخدم بالفعل."
+    },
+    "password": "كلمة المرور",
+    "reset": "إعادة ضبط",
+    "role": "الدور",
+    "roleAdmin": "مشرف",
+    "roleUser": "مستخدم",
+    "save": "حفظ",
+    "search": "البحث عن مستخدمين",
+    "title": "المستخدمون",
+    "username": "اسم المستخدم"
+  },
+  "workspaces": {
+    "button": "مساحات العمل"
+  }
+}

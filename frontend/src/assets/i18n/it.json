@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "Naviga sul Web da professionista.",
+    "line2": "Gesù sta tornando, amici.",
+    "title": "Informazioni"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "App delle attivita",
+    "todoGroup": "App delle attivita"
+  },
+  "auth": {
+    "error": {
+      "generic": "Impossibile accedere.",
+      "invalid": "Password non valida.",
+      "notFound": "Utente non trovato."
+    },
+    "guest": "Continua come ospite",
+    "password": "Password (opzionale)",
+    "signIn": "Accedi",
+    "title": "Accedi",
+    "username": "Nome utente"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "confirm": "Elimina",
+    "confirmDelete": "Eliminare definitivamente questa istanza?",
+    "error": {
+      "generic": "Impossibile aprire l'app.",
+      "maxPersisted": "Raggiunto il numero massimo di app persistenti."
+    },
+    "hideAll": "Nascondi tutti i dialoghi",
+    "maximize": "Massimizza",
+    "minimize": "Minimizza",
+    "reset": "Reimposta posizioni dialoghi",
+    "resetLeft": "Reimposta a sinistra",
+    "resetMiddle": "Reimposta al centro",
+    "showAll": "Mostra tutti i dialoghi",
+    "stash": "Archivia",
+    "trash": "Elimina",
+    "unstash": "Ripristina"
+  },
+  "landing": {
+    "welcome": "Benvenuto in Roy's Operator."
+  },
+  "mock": {
+    "label": "Modalita test"
+  },
+  "nav": {
+    "about": "Informazioni",
+    "collapse": "Riduci",
+    "expand": "Espandi",
+    "logout": "Esci",
+    "settings": "Impostazioni"
+  },
+  "preferences": {
+    "backgroundImageCenter": "Centra",
+    "backgroundImageMode": "Visualizzazione immagine di sfondo",
+    "backgroundImageRepeat": "Ripeti",
+    "backgroundImageStretch": "Allunga per adattare",
+    "backgroundImageUrl": "Immagine di sfondo (percorso locale o URL)",
+    "city": "Citta locale",
+    "credentialAdd": "Aggiungi credenziale",
+    "credentialDelete": "Rimuovi credenziale",
+    "credentialLabel": "Etichetta",
+    "credentialPassword": "Password",
+    "credentialUsername": "Nome utente",
+    "credentialsTitle": "Credenziali salvate",
+    "gridSize": "Dimensione griglia (px)",
+    "language": "Lingua dell'app",
+    "maxPersistedApps": "Numero massimo di app persistenti",
+    "showGrid": "Mostra griglia",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "Formato ora",
+    "timeFormat12": "12 ore",
+    "timeFormat24": "24 ore",
+    "timeZone": "Fuso orario preferito",
+    "title": "Preferenze"
+  },
+  "preview": {
+    "label": "Anteprima come: {{user}}",
+    "persist": "Le modifiche in anteprima persistono"
+  },
+  "settings": {
+    "preferencesLink": "Preferenze",
+    "previewAs": "Anteprima come",
+    "previewNone": "Nessuna anteprima",
+    "previewPersist": "Mantieni le modifiche durante l'anteprima",
+    "previewTitle": "Anteprima come utente",
+    "title": "Impostazioni",
+    "usersLink": "Utenti"
+  },
+  "table": {
+    "actions": "Azioni",
+    "next": "Succ",
+    "page": "Pagina {{current}} di {{total}}",
+    "pageSize": "Righe",
+    "prev": "Prec"
+  },
+  "todo": {
+    "add": "Aggiungi",
+    "delete": "Elimina",
+    "deleteTitle": "Elimina per sempre",
+    "duplicate": "Duplica",
+    "duplicateTitle": "Duplica",
+    "error": {
+      "create": "Impossibile creare l'attivita.",
+      "delete": "Impossibile eliminare l'attivita.",
+      "list": "Impossibile caricare le attivita.",
+      "unknown": "Qualcosa e andato storto."
+    },
+    "loading": "Caricamento…",
+    "placeholder": "Aggiungi un'attivita",
+    "reload": "Ricarica",
+    "title": "App delle attivita"
+  },
+  "topbar": {
+    "collapse": "Riduci la barra superiore",
+    "expand": "Espandi la barra superiore"
+  },
+  "users": {
+    "adminOnly": "Solo gli admin possono gestire gli utenti.",
+    "create": "Crea",
+    "createTitle": "Crea utente",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "editTitle": "Modifica utente",
+    "empty": "Nessun utente trovato.",
+    "error": {
+      "generic": "Impossibile aggiornare l'utente.",
+      "lastAdmin": "Devi mantenere almeno un admin.",
+      "usernameRequired": "Nome utente richiesto.",
+      "usernameTaken": "Nome utente gia in uso."
+    },
+    "password": "Password",
+    "reset": "Reimposta",
+    "role": "Ruolo",
+    "roleAdmin": "Admin",
+    "roleUser": "Utente",
+    "save": "Salva",
+    "search": "Cerca utenti",
+    "title": "Utenti",
+    "username": "Nome utente"
+  },
+  "workspaces": {
+    "button": "Workspace"
+  }
+}

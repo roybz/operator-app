@@ -1,36 +1,47 @@
-import { Component } from '@angular/core';
+import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink, RouterOutlet } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
+import { UsersSettingsComponent } from './users/users.component';
+import { PreferencesSettingsComponent } from './preferences/preferences.component';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterOutlet, TranslateModule],
+  imports: [CommonModule, TranslateModule, UsersSettingsComponent, PreferencesSettingsComponent],
   template: `
     <section>
-      <h2>{{ 'settings.title' | translate }}</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">{{ 'settings.title' | translate }}</h2>
+        <button (click)="closed.emit()">✕</button>
+      </div>
 
-      <nav style="margin-bottom: 16px; display:flex; gap:12px;">
-        <a routerLink="/settings/users">{{ 'settings.usersLink' | translate }}</a>
-        <a routerLink="/settings/preferences">{{ 'settings.preferencesLink' | translate }}</a>
+      <nav style="margin: 16px 0; display:flex; gap:12px;">
+        <button (click)="tab.set('users')">{{ 'settings.usersLink' | translate }}</button>
+        <button (click)="tab.set('preferences')">
+          {{ 'settings.preferencesLink' | translate }}
+        </button>
       </nav>
 
-      @if (auth.isAdmin()) {
+      @if (auth.isAdmin() && previewCandidates().length) {
         <section style="margin-bottom: 16px; padding: 12px; border: 1px solid #ddd;">
           <h3 style="margin: 0 0 8px;">{{ 'settings.previewTitle' | translate }}</h3>
-          <label style="display:block; margin-bottom: 6px;">
+          <label for="preview-user" style="display:block; margin-bottom: 6px;">
             {{ 'settings.previewAs' | translate }}
           </label>
           <select
+            id="preview-user"
             [value]="auth.session().previewUserId ?? ''"
             (change)="onPreviewChange($event)"
             style="padding:8px;"
           >
-            <option value="">{{ 'settings.previewNone' | translate }}</option>
-            @for (user of users(); track user.id) {
-              <option [value]="user.id">{{ user.username }}</option>
+            <option value="" [selected]="!auth.session().previewUserId">
+              {{ 'settings.previewNone' | translate }}
+            </option>
+            @for (user of previewCandidates(); track user.id) {
+              <option [value]="user.id" [selected]="auth.session().previewUserId === user.id">
+                {{ user.username }}
+              </option>
             }
           </select>
 
@@ -47,15 +58,27 @@ import { AuthService } from '../../core/auth.service';
         </section>
       }
 
-      <router-outlet />
+      @if (tab() === 'users') {
+        <app-users-settings />
+      }
+      @if (tab() === 'preferences') {
+        <app-preferences-settings />
+      }
     </section>
   `,
 })
 export class SettingsComponent {
-  constructor(public auth: AuthService) {}
+  readonly auth = inject(AuthService);
+  @Output() closed = new EventEmitter<void>();
+  tab = signal<'users' | 'preferences'>('users');
 
   users() {
     return this.auth.users();
+  }
+
+  previewCandidates() {
+    const actual = this.auth.actualUser()?.id;
+    return this.auth.users().filter((user) => user.id !== actual);
   }
 
   onPreviewChange(event: Event) {

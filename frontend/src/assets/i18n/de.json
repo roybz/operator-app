@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "Surfen Sie im Web wie ein Profi.",
+    "line2": "Jesus kommt zuruck, Freunde.",
+    "title": "Info"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "Aufgaben-App",
+    "todoGroup": "Aufgaben-Apps"
+  },
+  "auth": {
+    "error": {
+      "generic": "Anmeldung nicht moglich.",
+      "invalid": "Ungultiges Passwort.",
+      "notFound": "Benutzer nicht gefunden."
+    },
+    "guest": "Als Gast fortfahren",
+    "password": "Passwort (optional)",
+    "signIn": "Anmelden",
+    "title": "Anmelden",
+    "username": "Benutzername"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "Abbrechen",
+    "close": "Schliessen",
+    "confirm": "Loschen",
+    "confirmDelete": "Diese Instanz dauerhaft loschen?",
+    "error": {
+      "generic": "App konnte nicht geoffnet werden.",
+      "maxPersisted": "Maximale Anzahl persistenter Apps erreicht."
+    },
+    "hideAll": "Alle Dialoge ausblenden",
+    "maximize": "Maximieren",
+    "minimize": "Minimieren",
+    "reset": "Dialogpositionen zurucksetzen",
+    "resetLeft": "Nach links zurucksetzen",
+    "resetMiddle": "Zur Mitte zurucksetzen",
+    "showAll": "Alle Dialoge anzeigen",
+    "stash": "Ablage",
+    "trash": "Loschen",
+    "unstash": "Wiederherstellen"
+  },
+  "landing": {
+    "welcome": "Willkommen bei Roy's Operator."
+  },
+  "mock": {
+    "label": "Testmodus"
+  },
+  "nav": {
+    "about": "Info",
+    "collapse": "Einklappen",
+    "expand": "Ausklappen",
+    "logout": "Abmelden",
+    "settings": "Einstellungen"
+  },
+  "preferences": {
+    "backgroundImageCenter": "Zentrieren",
+    "backgroundImageMode": "Anzeige des Hintergrundbilds",
+    "backgroundImageRepeat": "Wiederholen",
+    "backgroundImageStretch": "Auf Fullen strecken",
+    "backgroundImageUrl": "Hintergrundbild (lokaler Pfad oder URL)",
+    "city": "Lokale Stadt",
+    "credentialAdd": "Zugangsdaten hinzufugen",
+    "credentialDelete": "Zugangsdaten entfernen",
+    "credentialLabel": "Bezeichnung",
+    "credentialPassword": "Passwort",
+    "credentialUsername": "Benutzername",
+    "credentialsTitle": "Gespeicherte Zugangsdaten",
+    "gridSize": "Rastergrose (px)",
+    "language": "App-Sprache",
+    "maxPersistedApps": "Maximale Anzahl persistenter Apps",
+    "showGrid": "Raster anzeigen",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "Zeitformat",
+    "timeFormat12": "12-Stunden",
+    "timeFormat24": "24-Stunden",
+    "timeZone": "Bevorzugte Zeitzone",
+    "title": "Voreinstellungen"
+  },
+  "preview": {
+    "label": "Vorschau als: {{user}}",
+    "persist": "Vorschau-Änderungen bleiben erhalten"
+  },
+  "settings": {
+    "preferencesLink": "Voreinstellungen",
+    "previewAs": "Anzeigen als",
+    "previewNone": "Keine Vorschau",
+    "previewPersist": "Anderungen in der Vorschau behalten",
+    "previewTitle": "Als Benutzer anzeigen",
+    "title": "Einstellungen",
+    "usersLink": "Benutzer"
+  },
+  "table": {
+    "actions": "Aktionen",
+    "next": "Weiter",
+    "page": "Seite {{current}} von {{total}}",
+    "pageSize": "Zeilen",
+    "prev": "Zuruck"
+  },
+  "todo": {
+    "add": "Hinzufugen",
+    "delete": "Loschen",
+    "deleteTitle": "Dauerhaft loschen",
+    "duplicate": "Duplizieren",
+    "duplicateTitle": "Duplizieren",
+    "error": {
+      "create": "Aufgabe konnte nicht erstellt werden.",
+      "delete": "Aufgabe konnte nicht geloscht werden.",
+      "list": "Aufgaben konnten nicht geladen werden.",
+      "unknown": "Etwas ist schiefgelaufen."
+    },
+    "loading": "Wird geladen…",
+    "placeholder": "Aufgabe hinzufugen",
+    "reload": "Neu laden",
+    "title": "Aufgaben-App"
+  },
+  "topbar": {
+    "collapse": "Obere Leiste einklappen",
+    "expand": "Obere Leiste ausklappen"
+  },
+  "users": {
+    "adminOnly": "Nur Admins konnen Benutzer verwalten.",
+    "create": "Erstellen",
+    "createTitle": "Benutzer erstellen",
+    "delete": "Loschen",
+    "edit": "Bearbeiten",
+    "editTitle": "Benutzer bearbeiten",
+    "empty": "Keine Benutzer gefunden.",
+    "error": {
+      "generic": "Benutzer konnte nicht aktualisiert werden.",
+      "lastAdmin": "Mindestens ein Admin muss bleiben.",
+      "usernameRequired": "Benutzername erforderlich.",
+      "usernameTaken": "Benutzername bereits vergeben."
+    },
+    "password": "Passwort",
+    "reset": "Zurucksetzen",
+    "role": "Rolle",
+    "roleAdmin": "Admin",
+    "roleUser": "Benutzer",
+    "save": "Speichern",
+    "search": "Benutzer suchen",
+    "title": "Benutzer",
+    "username": "Benutzername"
+  },
+  "workspaces": {
+    "button": "Workspaces"
+  }
+}

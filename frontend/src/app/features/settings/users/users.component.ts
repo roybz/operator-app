@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, UserRecord, UserRole } from '../../../core/auth.service';
@@ -35,10 +35,11 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
           <div style="flex: 1; min-width: 280px;">
             <h4 style="margin-top:0;">{{ formTitle() }}</h4>
 
-            <label style="display:block; margin: 8px 0 4px;">
+            <label for="user-username" style="display:block; margin: 8px 0 4px;">
               {{ 'users.username' | translate }}
             </label>
             <input
+              id="user-username"
               #usernameInput
               type="text"
               [value]="username()"
@@ -46,10 +47,11 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
               style="width:100%; padding:8px;"
             />
 
-            <label style="display:block; margin: 8px 0 4px;">
+            <label for="user-password" style="display:block; margin: 8px 0 4px;">
               {{ 'users.password' | translate }}
             </label>
             <input
+              id="user-password"
               #passwordInput
               type="password"
               [value]="password()"
@@ -57,10 +59,11 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
               style="width:100%; padding:8px;"
             />
 
-            <label style="display:block; margin: 8px 0 4px;">
+            <label for="user-role" style="display:block; margin: 8px 0 4px;">
               {{ 'users.role' | translate }}
             </label>
             <select
+              id="user-role"
               #roleSelect
               [value]="role()"
               (change)="onRoleChange(roleSelect.value)"
@@ -95,11 +98,8 @@ export class UsersSettingsComponent {
   password = signal('');
   role = signal<UserRole>('user');
   error = signal<string | null>(null);
-
-  constructor(
-    public auth: AuthService,
-    private translate: TranslateService,
-  ) {}
+  readonly auth = inject(AuthService);
+  private translate = inject(TranslateService);
 
   formTitle() {
     return this.editingId()

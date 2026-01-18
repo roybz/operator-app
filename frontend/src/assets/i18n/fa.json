@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "كپي‌رايت {{year}} روي نونه",
+    "line1": "وب را حرفه‌اي مرور كنيد.",
+    "line2": "عیسی بازمی‌گردد، دوستان.",
+    "title": "درباره"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "برنامه كارها",
+    "todoGroup": "برنامه‌هاي كارها"
+  },
+  "auth": {
+    "error": {
+      "generic": "ورود ممكن نيست.",
+      "invalid": "گذرواژه نامعتبر است.",
+      "notFound": "كاربر پيدا نشد."
+    },
+    "guest": "ادامه به عنوان ميهمان",
+    "password": "گذرواژه (اختياري)",
+    "signIn": "ورود",
+    "title": "ورود",
+    "username": "نام كاربري"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "انصراف",
+    "close": "بستن",
+    "confirm": "حذف",
+    "confirmDelete": "اين نمونه براي هميشه حذف شود؟",
+    "error": {
+      "generic": "باز كردن برنامه ممكن نيست.",
+      "maxPersisted": "حداكثر تعداد برنامه‌هاي ماندگار رسيده است."
+    },
+    "hideAll": "مخفي كردن همه پنجره‌ها",
+    "maximize": "بزرگ‌نمايي",
+    "minimize": "كوچك‌سازي",
+    "reset": "بازنشاني موقعيت پنجره‌ها",
+    "resetLeft": "بازنشاني به چپ",
+    "resetMiddle": "بازنشاني به وسط",
+    "showAll": "نمايش همه پنجره‌ها",
+    "stash": "بايگاني",
+    "trash": "حذف",
+    "unstash": "بازگرداني"
+  },
+  "landing": {
+    "welcome": "به Roy's Operator خوش آمديد."
+  },
+  "mock": {
+    "label": "حالت آزمايشي"
+  },
+  "nav": {
+    "about": "درباره",
+    "collapse": "جمع كردن",
+    "expand": "باز كردن",
+    "logout": "خروج",
+    "settings": "تنظيمات"
+  },
+  "preferences": {
+    "backgroundImageCenter": "وسط‌چين",
+    "backgroundImageMode": "نمايش تصوير پس‌زمينه",
+    "backgroundImageRepeat": "تكرار",
+    "backgroundImageStretch": "كشيدن براي پر كردن",
+    "backgroundImageUrl": "تصوير پس‌زمينه (مسير محلي يا URL)",
+    "city": "شهر محلي",
+    "credentialAdd": "افزودن اعتبارنامه",
+    "credentialDelete": "حذف اعتبارنامه",
+    "credentialLabel": "برچسب",
+    "credentialPassword": "گذرواژه",
+    "credentialUsername": "نام كاربري",
+    "credentialsTitle": "اعتبارنامه‌هاي ذخيره‌شده",
+    "gridSize": "اندازه شبكه (px)",
+    "language": "زبان برنامه",
+    "maxPersistedApps": "حداكثر تعداد برنامه‌هاي ماندگار",
+    "showGrid": "نمايش شبكه",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "فرمت زمان",
+    "timeFormat12": "12 ساعته",
+    "timeFormat24": "24 ساعته",
+    "timeZone": "منطقه زماني ترجيحي",
+    "title": "ترجيحات"
+  },
+  "preview": {
+    "label": "پيش‌نمايش به عنوان: {{user}}",
+    "persist": "تغييرات پيش‌نمايش ذخيره مي‌شود"
+  },
+  "settings": {
+    "preferencesLink": "ترجيحات",
+    "previewAs": "پيش‌نمايش به عنوان",
+    "previewNone": "بدون پيش‌نمايش",
+    "previewPersist": "ذخيره تغييرات هنگام پيش‌نمايش",
+    "previewTitle": "پيش‌نمايش به عنوان كاربر",
+    "title": "تنظيمات",
+    "usersLink": "كاربران"
+  },
+  "table": {
+    "actions": "اقدامات",
+    "next": "بعدي",
+    "page": "صفحه {{current}} از {{total}}",
+    "pageSize": "رديف‌ها",
+    "prev": "قبلي"
+  },
+  "todo": {
+    "add": "افزودن",
+    "delete": "حذف",
+    "deleteTitle": "حذف دائمي",
+    "duplicate": "تكثير",
+    "duplicateTitle": "تكثير",
+    "error": {
+      "create": "ايجاد كار ممكن نيست.",
+      "delete": "حذف كار ممكن نيست.",
+      "list": "بارگذاري كارها ممكن نيست.",
+      "unknown": "مشكل پيش آمد."
+    },
+    "loading": "در حال بارگذاري…",
+    "placeholder": "افزودن يك كار",
+    "reload": "بارگذاري مجدد",
+    "title": "برنامه كارها"
+  },
+  "topbar": {
+    "collapse": "جمع كردن نوار بالا",
+    "expand": "باز كردن نوار بالا"
+  },
+  "users": {
+    "adminOnly": "فقط ادمين‌ها مي‌توانند كاربران را مديريت كنند.",
+    "create": "ايجاد",
+    "createTitle": "ايجاد كاربر",
+    "delete": "حذف",
+    "edit": "ويرايش",
+    "editTitle": "ويرايش كاربر",
+    "empty": "هيچ كاربرى پيدا نشد.",
+    "error": {
+      "generic": "به‌روزرساني كاربر ممكن نيست.",
+      "lastAdmin": "حداقل يك ادمين بايد باقي بماند.",
+      "usernameRequired": "نام كاربري لازم است.",
+      "usernameTaken": "اين نام كاربري قبلاً استفاده شده است."
+    },
+    "password": "گذرواژه",
+    "reset": "بازنشاني",
+    "role": "نقش",
+    "roleAdmin": "ادمين",
+    "roleUser": "كاربر",
+    "save": "ذخيره",
+    "search": "جستجوي كاربران",
+    "title": "كاربران",
+    "username": "نام كاربري"
+  },
+  "workspaces": {
+    "button": "فضاهاي كاري"
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "像专业人士一样浏览网络。",
+    "line2": "耶稣将再来，朋友们。",
+    "title": "关于"
+  },
+  "app": {
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "待办应用",
+    "todoGroup": "待办应用"
+  },
+  "auth": {
+    "error": {
+      "generic": "无法登录。",
+      "invalid": "密码无效。",
+      "notFound": "未找到用户。"
+    },
+    "guest": "以访客身份继续",
+    "password": "密码（可选）",
+    "signIn": "登录",
+    "title": "登录",
+    "username": "用户名"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "删除",
+    "confirmDelete": "永久删除此实例？",
+    "error": {
+      "generic": "无法打开应用。",
+      "maxPersisted": "已达到持久化应用的最大数量。"
+    },
+    "hideAll": "隐藏所有对话框",
+    "maximize": "最大化",
+    "minimize": "最小化",
+    "reset": "重置对话框位置",
+    "resetLeft": "重置到左侧",
+    "resetMiddle": "重置到中间",
+    "showAll": "显示所有对话框",
+    "stash": "收起",
+    "trash": "删除",
+    "unstash": "恢复"
+  },
+  "landing": {
+    "welcome": "欢迎使用 Roy's Operator."
+  },
+  "mock": {
+    "label": "测试模式"
+  },
+  "nav": {
+    "about": "关于",
+    "collapse": "收起",
+    "expand": "展开",
+    "logout": "退出",
+    "settings": "设置"
+  },
+  "preferences": {
+    "backgroundImageCenter": "居中",
+    "backgroundImageMode": "背景图显示方式",
+    "backgroundImageRepeat": "重复",
+    "backgroundImageStretch": "拉伸填充",
+    "backgroundImageUrl": "背景图（本地路径或URL）",
+    "city": "本地城市",
+    "credentialAdd": "添加凭据",
+    "credentialDelete": "移除凭据",
+    "credentialLabel": "标签",
+    "credentialPassword": "密码",
+    "credentialUsername": "用户名",
+    "credentialsTitle": "已保存的凭据",
+    "gridSize": "网格尺寸 (px)",
+    "language": "应用语言",
+    "maxPersistedApps": "持久化应用的最大数量",
+    "showGrid": "显示网格",
+    "showTime": "Show local time in the top bar",
+    "timeFormat": "时间格式",
+    "timeFormat12": "12小时",
+    "timeFormat24": "24小时",
+    "timeZone": "首选时区",
+    "title": "偏好设置"
+  },
+  "preview": {
+    "label": "预览为：{{user}}",
+    "persist": "预览更改已持久化"
+  },
+  "settings": {
+    "preferencesLink": "偏好设置",
+    "previewAs": "预览为",
+    "previewNone": "不预览",
+    "previewPersist": "预览时保留更改",
+    "previewTitle": "以用户预览",
+    "title": "设置",
+    "usersLink": "用户"
+  },
+  "table": {
+    "actions": "操作",
+    "next": "下一页",
+    "page": "第 {{current}} / {{total}} 页",
+    "pageSize": "行数",
+    "prev": "上一页"
+  },
+  "todo": {
+    "add": "添加",
+    "delete": "删除",
+    "deleteTitle": "永久删除",
+    "duplicate": "复制",
+    "duplicateTitle": "复制",
+    "error": {
+      "create": "无法创建待办事项。",
+      "delete": "无法删除待办事项。",
+      "list": "无法加载待办事项。",
+      "unknown": "发生错误。"
+    },
+    "loading": "加载中…",
+    "placeholder": "添加待办事项",
+    "reload": "刷新",
+    "title": "待办应用"
+  },
+  "topbar": {
+    "collapse": "折叠顶部栏",
+    "expand": "展开顶部栏"
+  },
+  "users": {
+    "adminOnly": "只有管理员可以管理用户。",
+    "create": "创建",
+    "createTitle": "创建用户",
+    "delete": "删除",
+    "edit": "编辑",
+    "editTitle": "编辑用户",
+    "empty": "未找到用户。",
+    "error": {
+      "generic": "无法更新用户。",
+      "lastAdmin": "必须至少保留一个管理员。",
+      "usernameRequired": "需要用户名。",
+      "usernameTaken": "用户名已被占用。"
+    },
+    "password": "密码",
+    "reset": "重置",
+    "role": "角色",
+    "roleAdmin": "管理员",
+    "roleUser": "用户",
+    "save": "保存",
+    "search": "搜索用户",
+    "title": "用户",
+    "username": "用户名"
+  },
+  "workspaces": {
+    "button": "工作区"
+  }
+}

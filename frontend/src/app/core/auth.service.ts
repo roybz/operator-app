@@ -1,4 +1,4 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 
 export type UserRole = 'admin' | 'user';
@@ -23,6 +23,11 @@ export interface UserPreferences {
   showTime: boolean;
   timeFormat: '12h' | '24h';
   credentials: SavedCredential[];
+  maxPersistedApps: number;
+  backgroundImageUrl: string;
+  backgroundImageMode: 'repeat' | 'center' | 'stretch';
+  showGrid: boolean;
+  gridSize: number;
 }
 
 interface SessionState {
@@ -31,18 +36,39 @@ interface SessionState {
   previewPersist: boolean;
 }
 
-interface StoredPreferences {
-  [userId: string]: UserPreferences;
-}
-
-interface StoredPreviewPreferences {
-  [userId: string]: UserPreferences;
-}
+type StoredPreferences = Record<string, UserPreferences>;
+type StoredPreviewPreferences = Record<string, UserPreferences>;
 
 const USERS_KEY = 'op_users';
 const SESSION_KEY = 'op_session';
 const PREFS_KEY = 'op_prefs';
 const PREVIEW_PREFS_KEY = 'op_preview_prefs';
+const GUEST_USER_ID = 'u_guest';
+const GUEST_USERNAME = 'guest';
+const SUPPORTED_LANGUAGES = [
+  'en',
+  'es',
+  'fr',
+  'de',
+  'it',
+  'pt',
+  'ru',
+  'uk',
+  'ar',
+  'fa',
+  'hi',
+  'pa',
+  'bn',
+  'ur',
+  'zh-Hans',
+  'zh-Hant',
+  'ja',
+  'ko',
+  'th',
+  'vi',
+  'sw',
+  'ha',
+];
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -72,7 +98,9 @@ export class AuthService {
   readonly previewPersist = computed(() => this.sessionSignal().previewPersist);
   readonly preferences = computed(() => this.getPreferencesFor(this.effectiveUserId()));
 
-  constructor(private translate: TranslateService) {
+  private translate = inject(TranslateService);
+
+  constructor() {
     this.loadFromStorage();
   }
 
@@ -87,6 +115,13 @@ export class AuthService {
     this.persistSession();
     this.applyLanguageFromPreferences();
     return { ok: true };
+  }
+
+  loginAsGuest() {
+    this.ensureGuestUser();
+    this.sessionSignal.set({ userId: GUEST_USER_ID, previewUserId: null, previewPersist: false });
+    this.persistSession();
+    this.applyLanguageFromPreferences();
   }
 
   logout() {
@@ -159,11 +194,13 @@ export class AuthService {
     this.usersSignal.set(next);
     this.persistUsers();
 
-    const { [userId]: _, ...remainingPrefs } = this.prefsSignal();
+    const remainingPrefs = { ...this.prefsSignal() };
+    delete remainingPrefs[userId];
     this.prefsSignal.set(remainingPrefs);
     this.persistPrefs();
 
-    const { [userId]: __, ...remainingPreviewPrefs } = this.previewPrefsSignal();
+    const remainingPreviewPrefs = { ...this.previewPrefsSignal() };
+    delete remainingPreviewPrefs[userId];
     this.previewPrefsSignal.set(remainingPreviewPrefs);
     this.persistPreviewPrefs();
 
@@ -223,10 +260,11 @@ export class AuthService {
 
     if (this.isPreviewing() && !this.previewPersist()) {
       const previewPrefs = this.previewPrefsSignal()[userId];
-      if (previewPrefs) return previewPrefs;
+      if (previewPrefs) return { ...this.defaultPreferences(), ...previewPrefs };
     }
 
-    return this.prefsSignal()[userId] ?? this.defaultPreferences();
+    const stored = this.prefsSignal()[userId];
+    return stored ? { ...this.defaultPreferences(), ...stored } : this.defaultPreferences();
   }
 
   private effectiveUserId(): string | null {
@@ -238,6 +276,10 @@ export class AuthService {
 
     const storedUsers = this.safeJson<UserRecord[]>(USERS_KEY, []);
     const users = storedUsers.length > 0 ? storedUsers : [this.defaultAdmin()];
+    const hasGuest = users.some((user) => user.id === GUEST_USER_ID);
+    if (!hasGuest) {
+      users.push(this.guestUser());
+    }
     this.usersSignal.set(users);
 
     const session = this.safeJson<SessionState>(SESSION_KEY, {
@@ -265,6 +307,9 @@ export class AuthService {
     }
 
     const prefs = this.safeJson<StoredPreferences>(PREFS_KEY, {});
+    if (!prefs[GUEST_USER_ID]) {
+      prefs[GUEST_USER_ID] = this.defaultPreferences();
+    }
     this.prefsSignal.set(prefs);
 
     const previewPrefs = this.safeJson<StoredPreviewPreferences>(PREVIEW_PREFS_KEY, {});
@@ -312,21 +357,70 @@ export class AuthService {
     return { id: this.uid('u'), username: 'admin', password: '', role: 'admin' };
   }
 
+  private guestUser(): UserRecord {
+    return { id: GUEST_USER_ID, username: GUEST_USERNAME, password: '', role: 'user' };
+  }
+
+  private ensureGuestUser() {
+    if (this.usersSignal().some((user) => user.id === GUEST_USER_ID)) return;
+    const next = [...this.usersSignal(), this.guestUser()];
+    this.usersSignal.set(next);
+    this.persistUsers();
+    if (!this.prefsSignal()[GUEST_USER_ID]) {
+      const nextPrefs = { ...this.prefsSignal(), [GUEST_USER_ID]: this.defaultPreferences() };
+      this.prefsSignal.set(nextPrefs);
+      this.persistPrefs();
+    }
+  }
+
   private defaultPreferences(): UserPreferences {
+    const browserTimeZone =
+      typeof Intl !== 'undefined'
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+        : 'UTC';
     return {
-      language: 'en',
-      city: 'New York',
-      timeZone: 'America/New_York',
+      language: '',
+      city: '',
+      timeZone: browserTimeZone,
       showTime: true,
       timeFormat: '12h',
       credentials: [],
+      maxPersistedApps: 30,
+      backgroundImageUrl: '',
+      backgroundImageMode: 'repeat',
+      showGrid: true,
+      gridSize: 50,
     };
   }
 
   private applyLanguageFromPreferences() {
     const prefs = this.getPreferencesFor(this.effectiveUserId());
     this.translate.setDefaultLang('en');
-    this.translate.use(prefs.language || 'en');
+    const fallback = this.getBrowserLanguage();
+    const preferred = this.normalizeLanguage(prefs.language || fallback || 'en');
+    this.translate.use(preferred);
+  }
+
+  private getBrowserLanguage() {
+    if (typeof navigator === 'undefined') return 'en';
+    const raw = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
+    return this.normalizeLanguage(raw);
+  }
+
+  private normalizeLanguage(raw: string) {
+    const normalized = raw.replace('_', '-');
+    const lower = normalized.toLowerCase();
+    if (lower.startsWith('zh')) {
+      if (lower.includes('tw') || lower.includes('hk') || lower.includes('mo')) {
+        return 'zh-Hant';
+      }
+      return 'zh-Hans';
+    }
+    const base = lower.split('-')[0];
+    const exactMatch = SUPPORTED_LANGUAGES.find((code) => code.toLowerCase() === lower);
+    if (exactMatch) return exactMatch;
+    if (SUPPORTED_LANGUAGES.includes(base)) return base;
+    return 'en';
   }
 
   private uid(prefix: string) {

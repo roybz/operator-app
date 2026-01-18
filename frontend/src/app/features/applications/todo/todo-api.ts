@@ -31,9 +31,9 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
 
-function readMockTodos(): Todo[] {
+function readMockTodos(instanceId: string): Todo[] {
   if (!isBrowser()) return [];
-  const raw = window.localStorage.getItem(MOCK_STORAGE_KEY);
+  const raw = window.localStorage.getItem(`${MOCK_STORAGE_KEY}:${instanceId}`);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -43,19 +43,19 @@ function readMockTodos(): Todo[] {
   }
 }
 
-function writeMockTodos(todos: Todo[]) {
+function writeMockTodos(instanceId: string, todos: Todo[]) {
   if (!isBrowser()) return;
-  window.localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(todos));
+  window.localStorage.setItem(`${MOCK_STORAGE_KEY}:${instanceId}`, JSON.stringify(todos));
 }
 
 function newId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export async function listTodos(): Promise<Todo[]> {
+export async function listTodos(instanceId: string): Promise<Todo[]> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos();
+    const items = readMockTodos(instanceId);
     return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
   const res = await fetch(`${API_BASE}/todos`, { credentials: 'omit' });
@@ -63,12 +63,12 @@ export async function listTodos(): Promise<Todo[]> {
   return res.json();
 }
 
-export async function createTodo(text: string): Promise<Todo> {
+export async function createTodo(text: string, instanceId: string): Promise<Todo> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
     const created: Todo = { id: newId(), text, createdAt: new Date().toISOString() };
-    const items = [created, ...readMockTodos()];
-    writeMockTodos(items);
+    const items = [created, ...readMockTodos(instanceId)];
+    writeMockTodos(instanceId, items);
     return created;
   }
   const res = await fetch(`${API_BASE}/todos`, {
@@ -80,11 +80,11 @@ export async function createTodo(text: string): Promise<Todo> {
   return res.json();
 }
 
-export async function deleteTodo(id: string): Promise<void> {
+export async function deleteTodo(id: string, instanceId: string): Promise<void> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos().filter((t) => t.id !== id);
-    writeMockTodos(items);
+    const items = readMockTodos(instanceId).filter((t) => t.id !== id);
+    writeMockTodos(instanceId, items);
     return;
   }
   const res = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {

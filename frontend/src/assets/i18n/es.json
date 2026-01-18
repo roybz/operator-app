@@ -1,106 +1,157 @@
 {
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "Navega la web como un profesional.",
+    "line2": "Jesus viene pronto, amigos.",
+    "title": "Acerca de"
+  },
   "app": {
-    "title": "Operator App"
+    "title": "Roy's Operator"
+  },
+  "apps": {
+    "todo": "App de tareas",
+    "todoGroup": "Apps de tareas"
+  },
+  "auth": {
+    "error": {
+      "generic": "No se pudo iniciar sesión.",
+      "invalid": "Contraseña inválida.",
+      "notFound": "Usuario no encontrado."
+    },
+    "guest": "Continuar como invitado",
+    "password": "Contraseña (opcional)",
+    "signIn": "Entrar",
+    "title": "Iniciar sesión",
+    "username": "Usuario"
+  },
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
+  },
+  "dialogs": {
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "confirm": "Eliminar",
+    "confirmDelete": "Eliminar esta instancia permanentemente?",
+    "error": {
+      "generic": "No se pudo abrir la app.",
+      "maxPersisted": "Se alcanzo el maximo de apps persistentes."
+    },
+    "hideAll": "Ocultar todos los dialogos",
+    "maximize": "Maximizar",
+    "minimize": "Minimizar",
+    "reset": "Restablecer posiciones",
+    "resetLeft": "Restablecer a la izquierda",
+    "resetMiddle": "Restablecer al centro",
+    "showAll": "Mostrar todos los dialogos",
+    "stash": "Archivar",
+    "trash": "Eliminar",
+    "unstash": "Restaurar"
+  },
+  "landing": {
+    "welcome": "Bienvenido a Roy's Operator."
   },
   "mock": {
     "label": "Modo de prueba"
   },
-  "preview": {
-    "label": "Vista previa: {{user}}",
-    "persist": "La vista previa persiste"
-  },
   "nav": {
+    "about": "Acerca de",
     "collapse": "Contraer",
     "expand": "Expandir",
-    "todoApp": "App de tareas",
-    "settings": "Configuración",
-    "logout": "Cerrar sesión"
-  },
-  "landing": {
-    "welcome": "Bienvenido a Operator App."
-  },
-  "auth": {
-    "title": "Iniciar sesión",
-    "username": "Usuario",
-    "password": "Contraseña (opcional)",
-    "signIn": "Entrar",
-    "error": {
-      "notFound": "Usuario no encontrado.",
-      "invalid": "Contraseña inválida.",
-      "generic": "No se pudo iniciar sesión."
-    }
-  },
-  "settings": {
-    "title": "Configuración",
-    "usersLink": "Usuarios",
-    "preferencesLink": "Preferencias",
-    "previewTitle": "Vista previa como usuario",
-    "previewAs": "Vista previa como",
-    "previewNone": "Sin vista previa",
-    "previewPersist": "Mantener cambios durante la vista previa"
-  },
-  "users": {
-    "title": "Usuarios",
-    "adminOnly": "Solo los administradores pueden gestionar usuarios.",
-    "search": "Buscar usuarios",
-    "empty": "No se encontraron usuarios.",
-    "username": "Usuario",
-    "password": "Contraseña",
-    "role": "Rol",
-    "roleAdmin": "Admin",
-    "roleUser": "Usuario",
-    "edit": "Editar",
-    "delete": "Eliminar",
-    "reset": "Restablecer",
-    "save": "Guardar",
-    "create": "Crear",
-    "editTitle": "Editar usuario",
-    "createTitle": "Crear usuario",
-    "error": {
-      "usernameRequired": "El usuario es obligatorio.",
-      "usernameTaken": "Ese usuario ya existe.",
-      "lastAdmin": "Debe haber al menos un admin.",
-      "generic": "No se pudo actualizar el usuario."
-    }
+    "logout": "Cerrar sesión",
+    "settings": "Configuración"
   },
   "preferences": {
-    "title": "Preferencias",
-    "language": "Idioma de la app",
+    "backgroundImageCenter": "Centrar",
+    "backgroundImageMode": "Visualización de la imagen de fondo",
+    "backgroundImageRepeat": "Repetir",
+    "backgroundImageStretch": "Estirar para ajustar",
+    "backgroundImageUrl": "Imagen de fondo (ruta local o URL)",
     "city": "Ciudad local",
-    "timeZone": "Zona horaria preferida",
-    "showTime": "Mostrar hora local",
+    "credentialAdd": "Agregar credencial",
+    "credentialDelete": "Eliminar credencial",
+    "credentialLabel": "Etiqueta",
+    "credentialPassword": "Contraseña",
+    "credentialUsername": "Usuario",
+    "credentialsTitle": "Credenciales guardadas",
+    "gridSize": "Tamaño de cuadrícula (px)",
+    "language": "Idioma de la app",
+    "maxPersistedApps": "Maximo de apps persistentes",
+    "showGrid": "Mostrar cuadrícula",
+    "showTime": "Show local time in the top bar",
     "timeFormat": "Formato de hora",
     "timeFormat12": "12 horas",
     "timeFormat24": "24 horas",
-    "credentialsTitle": "Credenciales guardadas",
-    "credentialLabel": "Etiqueta",
-    "credentialUsername": "Usuario",
-    "credentialPassword": "Contraseña",
-    "credentialDelete": "Eliminar credencial",
-    "credentialAdd": "Agregar credencial"
+    "timeZone": "Zona horaria preferida",
+    "title": "Preferencias"
+  },
+  "preview": {
+    "label": "Vista previa como: {{user}}",
+    "persist": "La vista previa persiste"
+  },
+  "settings": {
+    "preferencesLink": "Preferencias",
+    "previewAs": "Vista previa como",
+    "previewNone": "Sin vista previa",
+    "previewPersist": "Mantener cambios durante la vista previa",
+    "previewTitle": "Vista previa como usuario",
+    "title": "Configuración",
+    "usersLink": "Usuarios"
   },
   "table": {
-    "pageSize": "Filas",
     "actions": "Acciones",
-    "prev": "Anterior",
     "next": "Siguiente",
-    "page": "Página {{current}} de {{total}}"
+    "page": "Pagina {{current}} de {{total}}",
+    "pageSize": "Filas",
+    "prev": "Anterior"
   },
   "todo": {
-    "title": "App de tareas",
-    "placeholder": "Agregar tarea",
     "add": "Agregar",
-    "reload": "Recargar",
-    "loading": "Cargando…",
-    "duplicate": "Duplicar",
     "delete": "Eliminar",
-    "duplicateTitle": "Duplicar",
     "deleteTitle": "Eliminar definitivamente",
+    "duplicate": "Duplicar",
+    "duplicateTitle": "Duplicar",
     "error": {
-      "list": "No se pudieron cargar las tareas.",
       "create": "No se pudo crear la tarea.",
       "delete": "No se pudo eliminar la tarea.",
-      "unknown": "Algo salió mal."
-    }
+      "list": "No se pudieron cargar las tareas.",
+      "unknown": "Algo salio mal."
+    },
+    "loading": "Cargando…",
+    "placeholder": "Agregar tarea",
+    "reload": "Recargar",
+    "title": "App de tareas"
+  },
+  "topbar": {
+    "collapse": "Contraer barra superior",
+    "expand": "Expandir barra superior"
+  },
+  "users": {
+    "adminOnly": "Solo los administradores pueden gestionar usuarios.",
+    "create": "Crear",
+    "createTitle": "Crear usuario",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "editTitle": "Editar usuario",
+    "empty": "No se encontraron usuarios.",
+    "error": {
+      "generic": "No se pudo actualizar el usuario.",
+      "lastAdmin": "Debe haber al menos un admin.",
+      "usernameRequired": "El usuario es obligatorio.",
+      "usernameTaken": "Ese usuario ya existe."
+    },
+    "password": "Contraseña",
+    "reset": "Restablecer",
+    "role": "Rol",
+    "roleAdmin": "Admin",
+    "roleUser": "Usuario",
+    "save": "Guardar",
+    "search": "Buscar usuarios",
+    "title": "Usuarios",
+    "username": "Usuario"
+  },
+  "workspaces": {
+    "button": "Espacios"
   }
 }

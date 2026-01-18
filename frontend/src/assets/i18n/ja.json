@@ -1,106 +1,157 @@
 {
+  "about": {
+    "copyright": "Copyright {{year}} Roy Nouneh",
+    "line1": "プロのようにウェブを閲覧。",
+    "line2": "イエスは戻ってきます、友よ。",
+    "title": "このアプリについて"
+  },
   "app": {
-    "title": "Operator App"
+    "title": "Roy's Operator"
   },
-  "mock": {
-    "label": "モックモード"
-  },
-  "preview": {
-    "label": "プレビュー中: {{user}}",
-    "persist": "プレビューを保存"
-  },
-  "nav": {
-    "collapse": "折りたたむ",
-    "expand": "展開",
-    "todoApp": "Todoアプリ",
-    "settings": "設定",
-    "logout": "ログアウト"
-  },
-  "landing": {
-    "welcome": "Operator Appへようこそ。"
+  "apps": {
+    "todo": "Todoアプリ",
+    "todoGroup": "Todoアプリ"
   },
   "auth": {
-    "title": "サインイン",
-    "username": "ユーザー名",
+    "error": {
+      "generic": "サインインできませんでした。",
+      "invalid": "パスワードが無効です。",
+      "notFound": "ユーザーが見つかりません。"
+    },
+    "guest": "ゲストとして続行",
     "password": "パスワード（任意）",
     "signIn": "サインイン",
-    "error": {
-      "notFound": "ユーザーが見つかりません。",
-      "invalid": "パスワードが無効です。",
-      "generic": "サインインできませんでした。"
-    }
+    "title": "サインイン",
+    "username": "ユーザー名"
   },
-  "settings": {
-    "title": "設定",
-    "usersLink": "ユーザー",
-    "preferencesLink": "環境設定",
-    "previewTitle": "ユーザーとしてプレビュー",
-    "previewAs": "プレビュー対象",
-    "previewNone": "プレビューなし",
-    "previewPersist": "プレビュー中の変更を保存"
+  "canvas": {
+    "originalScale": "Original scale",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out"
   },
-  "users": {
-    "title": "ユーザー",
-    "adminOnly": "管理者のみユーザー管理が可能です。",
-    "search": "ユーザーを検索",
-    "empty": "ユーザーが見つかりません。",
-    "username": "ユーザー名",
-    "password": "パスワード",
-    "role": "役割",
-    "roleAdmin": "管理者",
-    "roleUser": "ユーザー",
-    "edit": "編集",
-    "delete": "削除",
-    "reset": "リセット",
-    "save": "保存",
-    "create": "作成",
-    "editTitle": "ユーザーを編集",
-    "createTitle": "ユーザーを作成",
+  "dialogs": {
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "confirm": "削除",
+    "confirmDelete": "このインスタンスを完全に削除しますか？",
     "error": {
-      "usernameRequired": "ユーザー名は必須です。",
-      "usernameTaken": "そのユーザー名は既に使用されています。",
-      "lastAdmin": "管理者は最低1人必要です。",
-      "generic": "ユーザーを更新できませんでした。"
-    }
+      "generic": "アプリを開けませんでした。",
+      "maxPersisted": "保存できるアプリの最大数に達しました。"
+    },
+    "hideAll": "すべてのダイアログを非表示",
+    "maximize": "最大化",
+    "minimize": "最小化",
+    "reset": "ダイアログ位置をリセット",
+    "resetLeft": "左にリセット",
+    "resetMiddle": "中央にリセット",
+    "showAll": "すべてのダイアログを表示",
+    "stash": "保管",
+    "trash": "削除",
+    "unstash": "戻す"
+  },
+  "landing": {
+    "welcome": "Roy's Operatorへようこそ。"
+  },
+  "mock": {
+    "label": "テストモード"
+  },
+  "nav": {
+    "about": "このアプリについて",
+    "collapse": "折りたたむ",
+    "expand": "展開",
+    "logout": "ログアウト",
+    "settings": "設定"
   },
   "preferences": {
-    "title": "環境設定",
-    "language": "アプリの言語",
+    "backgroundImageCenter": "中央配置",
+    "backgroundImageMode": "背景画像の表示",
+    "backgroundImageRepeat": "繰り返し",
+    "backgroundImageStretch": "画面に合わせて拡大",
+    "backgroundImageUrl": "背景画像（ローカルパスまたはURL）",
     "city": "ローカル都市",
-    "timeZone": "優先タイムゾーン",
-    "showTime": "ローカル時間を表示",
+    "credentialAdd": "認証情報を追加",
+    "credentialDelete": "認証情報を削除",
+    "credentialLabel": "ラベル",
+    "credentialPassword": "パスワード",
+    "credentialUsername": "ユーザー名",
+    "credentialsTitle": "保存済み認証情報",
+    "gridSize": "グリッドサイズ (px)",
+    "language": "アプリの言語",
+    "maxPersistedApps": "保存するアプリの最大数",
+    "showGrid": "グリッドを表示",
+    "showTime": "Show local time in the top bar",
     "timeFormat": "時間形式",
     "timeFormat12": "12時間",
     "timeFormat24": "24時間",
-    "credentialsTitle": "保存済み認証情報",
-    "credentialLabel": "ラベル",
-    "credentialUsername": "ユーザー名",
-    "credentialPassword": "パスワード",
-    "credentialDelete": "認証情報を削除",
-    "credentialAdd": "認証情報を追加"
+    "timeZone": "優先タイムゾーン",
+    "title": "環境設定"
+  },
+  "preview": {
+    "label": "ユーザーとしてプレビュー: {{user}}",
+    "persist": "プレビューを保存"
+  },
+  "settings": {
+    "preferencesLink": "環境設定",
+    "previewAs": "プレビュー対象",
+    "previewNone": "プレビューなし",
+    "previewPersist": "プレビュー中の変更を保存",
+    "previewTitle": "ユーザーとしてプレビュー",
+    "title": "設定",
+    "usersLink": "ユーザー"
   },
   "table": {
-    "pageSize": "行数",
     "actions": "操作",
-    "prev": "前へ",
     "next": "次へ",
-    "page": "{{total}}ページ中{{current}}ページ"
+    "page": "{{total}}ページ中{{current}}ページ",
+    "pageSize": "行数",
+    "prev": "前へ"
   },
   "todo": {
-    "title": "Todos App",
-    "placeholder": "Todoを追加",
     "add": "追加",
-    "reload": "再読み込み",
-    "loading": "読み込み中…",
-    "duplicate": "複製",
     "delete": "削除",
-    "duplicateTitle": "複製",
     "deleteTitle": "完全に削除",
+    "duplicate": "複製",
+    "duplicateTitle": "複製",
     "error": {
-      "list": "Todoを読み込めませんでした。",
       "create": "Todoを作成できませんでした。",
       "delete": "Todoを削除できませんでした。",
+      "list": "Todoを読み込めませんでした。",
       "unknown": "問題が発生しました。"
-    }
+    },
+    "loading": "読み込み中…",
+    "placeholder": "Todoを追加",
+    "reload": "再読み込み",
+    "title": "Todos App"
+  },
+  "topbar": {
+    "collapse": "トップバーを折りたたむ",
+    "expand": "トップバーを展開"
+  },
+  "users": {
+    "adminOnly": "管理者のみユーザー管理が可能です。",
+    "create": "作成",
+    "createTitle": "ユーザーを作成",
+    "delete": "削除",
+    "edit": "編集",
+    "editTitle": "ユーザーを編集",
+    "empty": "ユーザーが見つかりません。",
+    "error": {
+      "generic": "ユーザーを更新できませんでした。",
+      "lastAdmin": "管理者は最低1人必要です。",
+      "usernameRequired": "ユーザー名は必須です。",
+      "usernameTaken": "そのユーザー名は既に使用されています。"
+    },
+    "password": "パスワード",
+    "reset": "リセット",
+    "role": "役割",
+    "roleAdmin": "管理者",
+    "roleUser": "ユーザー",
+    "save": "保存",
+    "search": "ユーザーを検索",
+    "title": "ユーザー",
+    "username": "ユーザー名"
+  },
+  "workspaces": {
+    "button": "ワークスペース"
   }
 }

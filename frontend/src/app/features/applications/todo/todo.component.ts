@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
@@ -62,6 +62,7 @@ import { listTodos, createTodo, deleteTodo, Todo } from './todo-api';
   `,
 })
 export class TodoPageComponent implements OnInit {
+  @Input({ required: true }) instanceId!: string;
   todos = signal<Todo[]>([]);
   loading = signal(false);
   err = signal<string | null>(null);
@@ -75,7 +76,7 @@ export class TodoPageComponent implements OnInit {
     this.err.set(null);
     this.loading.set(true);
     try {
-      this.todos.set(await listTodos());
+      this.todos.set(await listTodos(this.instanceId));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     } finally {
@@ -89,7 +90,7 @@ export class TodoPageComponent implements OnInit {
 
     this.err.set(null);
     try {
-      const created = await createTodo(trimmed);
+      const created = await createTodo(trimmed, this.instanceId);
       this.todos.set([created, ...this.todos()]);
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
@@ -103,7 +104,7 @@ export class TodoPageComponent implements OnInit {
   async onDelete(t: Todo) {
     this.err.set(null);
     try {
-      await deleteTodo(t.id);
+      await deleteTodo(t.id, this.instanceId);
       this.todos.set(this.todos().filter((x) => x.id !== t.id));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
