@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "Operator App"
+  },
+  "mock": {
+    "label": "Modo de prueba"
+  },
+  "preview": {
+    "label": "Vista previa: {{user}}",
+    "persist": "La vista previa persiste"
+  },
+  "nav": {
+    "collapse": "Contraer",
+    "expand": "Expandir",
+    "todoApp": "App de tareas",
+    "settings": "Configuración",
+    "logout": "Cerrar sesión"
+  },
+  "landing": {
+    "welcome": "Bienvenido a Operator App."
+  },
+  "auth": {
+    "title": "Iniciar sesión",
+    "username": "Usuario",
+    "password": "Contraseña (opcional)",
+    "signIn": "Entrar",
+    "error": {
+      "notFound": "Usuario no encontrado.",
+      "invalid": "Contraseña inválida.",
+      "generic": "No se pudo iniciar sesión."
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "usersLink": "Usuarios",
+    "preferencesLink": "Preferencias",
+    "previewTitle": "Vista previa como usuario",
+    "previewAs": "Vista previa como",
+    "previewNone": "Sin vista previa",
+    "previewPersist": "Mantener cambios durante la vista previa"
+  },
+  "users": {
+    "title": "Usuarios",
+    "adminOnly": "Solo los administradores pueden gestionar usuarios.",
+    "search": "Buscar usuarios",
+    "empty": "No se encontraron usuarios.",
+    "username": "Usuario",
+    "password": "Contraseña",
+    "role": "Rol",
+    "roleAdmin": "Admin",
+    "roleUser": "Usuario",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "reset": "Restablecer",
+    "save": "Guardar",
+    "create": "Crear",
+    "editTitle": "Editar usuario",
+    "createTitle": "Crear usuario",
+    "error": {
+      "usernameRequired": "El usuario es obligatorio.",
+      "usernameTaken": "Ese usuario ya existe.",
+      "lastAdmin": "Debe haber al menos un admin.",
+      "generic": "No se pudo actualizar el usuario."
+    }
+  },
+  "preferences": {
+    "title": "Preferencias",
+    "language": "Idioma de la app",
+    "city": "Ciudad local",
+    "timeZone": "Zona horaria preferida",
+    "showTime": "Mostrar hora local",
+    "timeFormat": "Formato de hora",
+    "timeFormat12": "12 horas",
+    "timeFormat24": "24 horas",
+    "credentialsTitle": "Credenciales guardadas",
+    "credentialLabel": "Etiqueta",
+    "credentialUsername": "Usuario",
+    "credentialPassword": "Contraseña",
+    "credentialDelete": "Eliminar credencial",
+    "credentialAdd": "Agregar credencial"
+  },
+  "table": {
+    "pageSize": "Filas",
+    "actions": "Acciones",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "page": "Página {{current}} de {{total}}"
+  },
+  "todo": {
+    "title": "App de tareas",
+    "placeholder": "Agregar tarea",
+    "add": "Agregar",
+    "reload": "Recargar",
+    "loading": "Cargando…",
+    "duplicate": "Duplicar",
+    "delete": "Eliminar",
+    "duplicateTitle": "Duplicar",
+    "deleteTitle": "Eliminar definitivamente",
+    "error": {
+      "list": "No se pudieron cargar las tareas.",
+      "create": "No se pudo crear la tarea.",
+      "delete": "No se pudo eliminar la tarea.",
+      "unknown": "Algo salió mal."
+    }
+  }
+}

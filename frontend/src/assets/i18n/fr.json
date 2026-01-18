@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "Operator App"
+  },
+  "mock": {
+    "label": "Mode maquette"
+  },
+  "preview": {
+    "label": "Aperçu : {{user}}",
+    "persist": "Aperçu persistant"
+  },
+  "nav": {
+    "collapse": "Réduire",
+    "expand": "Développer",
+    "todoApp": "App de tâches",
+    "settings": "Paramètres",
+    "logout": "Se déconnecter"
+  },
+  "landing": {
+    "welcome": "Bienvenue sur Operator App."
+  },
+  "auth": {
+    "title": "Se connecter",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe (optionnel)",
+    "signIn": "Connexion",
+    "error": {
+      "notFound": "Utilisateur introuvable.",
+      "invalid": "Mot de passe invalide.",
+      "generic": "Connexion impossible."
+    }
+  },
+  "settings": {
+    "title": "Paramètres",
+    "usersLink": "Utilisateurs",
+    "preferencesLink": "Préférences",
+    "previewTitle": "Aperçu en tant qu'utilisateur",
+    "previewAs": "Aperçu en tant que",
+    "previewNone": "Aucun aperçu",
+    "previewPersist": "Conserver les changements pendant l'aperçu"
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "adminOnly": "Seuls les admins peuvent gérer les utilisateurs.",
+    "search": "Rechercher des utilisateurs",
+    "empty": "Aucun utilisateur trouvé.",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "role": "Rôle",
+    "roleAdmin": "Admin",
+    "roleUser": "Utilisateur",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "reset": "Réinitialiser",
+    "save": "Enregistrer",
+    "create": "Créer",
+    "editTitle": "Modifier l'utilisateur",
+    "createTitle": "Créer un utilisateur",
+    "error": {
+      "usernameRequired": "Le nom d'utilisateur est requis.",
+      "usernameTaken": "Ce nom d'utilisateur est déjà pris.",
+      "lastAdmin": "Vous devez conserver au moins un admin.",
+      "generic": "Impossible de mettre à jour l'utilisateur."
+    }
+  },
+  "preferences": {
+    "title": "Préférences",
+    "language": "Langue de l'application",
+    "city": "Ville locale",
+    "timeZone": "Fuseau horaire préféré",
+    "showTime": "Afficher l'heure locale",
+    "timeFormat": "Format de l'heure",
+    "timeFormat12": "12 heures",
+    "timeFormat24": "24 heures",
+    "credentialsTitle": "Identifiants enregistrés",
+    "credentialLabel": "Libellé",
+    "credentialUsername": "Nom d'utilisateur",
+    "credentialPassword": "Mot de passe",
+    "credentialDelete": "Supprimer l'identifiant",
+    "credentialAdd": "Ajouter un identifiant"
+  },
+  "table": {
+    "pageSize": "Lignes",
+    "actions": "Actions",
+    "prev": "Précédent",
+    "next": "Suivant",
+    "page": "Page {{current}} sur {{total}}"
+  },
+  "todo": {
+    "title": "App de tâches",
+    "placeholder": "Ajouter une tâche",
+    "add": "Ajouter",
+    "reload": "Recharger",
+    "loading": "Chargement…",
+    "duplicate": "Dupliquer",
+    "delete": "Supprimer",
+    "duplicateTitle": "Dupliquer",
+    "deleteTitle": "Supprimer définitivement",
+    "error": {
+      "list": "Impossible de charger les tâches.",
+      "create": "Impossible de créer la tâche.",
+      "delete": "Impossible de supprimer la tâche.",
+      "unknown": "Une erreur est survenue."
+    }
+  }
+}

@@ -5,13 +5,86 @@
   "mock": {
     "label": "Mock mode"
   },
+  "preview": {
+    "label": "Previewing: {{user}}",
+    "persist": "Preview persists"
+  },
   "nav": {
     "collapse": "Collapse",
     "expand": "Expand",
-    "todoApp": "Todo app"
+    "todoApp": "Todo app",
+    "settings": "Settings",
+    "logout": "Log out"
   },
   "landing": {
     "welcome": "Welcome to Operator App."
+  },
+  "auth": {
+    "title": "Sign in",
+    "username": "Username",
+    "password": "Password (optional)",
+    "signIn": "Sign in",
+    "error": {
+      "notFound": "User not found.",
+      "invalid": "Invalid password.",
+      "generic": "Unable to sign in."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "usersLink": "Users",
+    "preferencesLink": "Preferences",
+    "previewTitle": "Preview as user",
+    "previewAs": "Preview as",
+    "previewNone": "No preview",
+    "previewPersist": "Persist changes while previewing"
+  },
+  "users": {
+    "title": "Users",
+    "adminOnly": "Only admins can manage users.",
+    "search": "Search users",
+    "empty": "No users found.",
+    "username": "Username",
+    "password": "Password",
+    "role": "Role",
+    "roleAdmin": "Admin",
+    "roleUser": "User",
+    "edit": "Edit",
+    "delete": "Delete",
+    "reset": "Reset",
+    "save": "Save",
+    "create": "Create",
+    "editTitle": "Edit user",
+    "createTitle": "Create user",
+    "error": {
+      "usernameRequired": "Username is required.",
+      "usernameTaken": "That username is already taken.",
+      "lastAdmin": "You must keep at least one admin.",
+      "generic": "Unable to update user."
+    }
+  },
+  "preferences": {
+    "title": "Preferences",
+    "language": "App language",
+    "city": "Local city",
+    "timeZone": "Preferred time zone",
+    "showTime": "Show local time",
+    "timeFormat": "Time format",
+    "timeFormat12": "12-hour",
+    "timeFormat24": "24-hour",
+    "credentialsTitle": "Saved credentials",
+    "credentialLabel": "Label",
+    "credentialUsername": "Username",
+    "credentialPassword": "Password",
+    "credentialDelete": "Remove credential",
+    "credentialAdd": "Add credential"
+  },
+  "table": {
+    "pageSize": "Rows",
+    "actions": "Actions",
+    "prev": "Prev",
+    "next": "Next",
+    "page": "Page {{current}} of {{total}}"
   },
   "todo": {
     "title": "Todos App",

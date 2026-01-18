@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "Operator App"
+  },
+  "mock": {
+    "label": "モックモード"
+  },
+  "preview": {
+    "label": "プレビュー中: {{user}}",
+    "persist": "プレビューを保存"
+  },
+  "nav": {
+    "collapse": "折りたたむ",
+    "expand": "展開",
+    "todoApp": "Todoアプリ",
+    "settings": "設定",
+    "logout": "ログアウト"
+  },
+  "landing": {
+    "welcome": "Operator Appへようこそ。"
+  },
+  "auth": {
+    "title": "サインイン",
+    "username": "ユーザー名",
+    "password": "パスワード（任意）",
+    "signIn": "サインイン",
+    "error": {
+      "notFound": "ユーザーが見つかりません。",
+      "invalid": "パスワードが無効です。",
+      "generic": "サインインできませんでした。"
+    }
+  },
+  "settings": {
+    "title": "設定",
+    "usersLink": "ユーザー",
+    "preferencesLink": "環境設定",
+    "previewTitle": "ユーザーとしてプレビュー",
+    "previewAs": "プレビュー対象",
+    "previewNone": "プレビューなし",
+    "previewPersist": "プレビュー中の変更を保存"
+  },
+  "users": {
+    "title": "ユーザー",
+    "adminOnly": "管理者のみユーザー管理が可能です。",
+    "search": "ユーザーを検索",
+    "empty": "ユーザーが見つかりません。",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "role": "役割",
+    "roleAdmin": "管理者",
+    "roleUser": "ユーザー",
+    "edit": "編集",
+    "delete": "削除",
+    "reset": "リセット",
+    "save": "保存",
+    "create": "作成",
+    "editTitle": "ユーザーを編集",
+    "createTitle": "ユーザーを作成",
+    "error": {
+      "usernameRequired": "ユーザー名は必須です。",
+      "usernameTaken": "そのユーザー名は既に使用されています。",
+      "lastAdmin": "管理者は最低1人必要です。",
+      "generic": "ユーザーを更新できませんでした。"
+    }
+  },
+  "preferences": {
+    "title": "環境設定",
+    "language": "アプリの言語",
+    "city": "ローカル都市",
+    "timeZone": "優先タイムゾーン",
+    "showTime": "ローカル時間を表示",
+    "timeFormat": "時間形式",
+    "timeFormat12": "12時間",
+    "timeFormat24": "24時間",
+    "credentialsTitle": "保存済み認証情報",
+    "credentialLabel": "ラベル",
+    "credentialUsername": "ユーザー名",
+    "credentialPassword": "パスワード",
+    "credentialDelete": "認証情報を削除",
+    "credentialAdd": "認証情報を追加"
+  },
+  "table": {
+    "pageSize": "行数",
+    "actions": "操作",
+    "prev": "前へ",
+    "next": "次へ",
+    "page": "{{total}}ページ中{{current}}ページ"
+  },
+  "todo": {
+    "title": "Todos App",
+    "placeholder": "Todoを追加",
+    "add": "追加",
+    "reload": "再読み込み",
+    "loading": "読み込み中…",
+    "duplicate": "複製",
+    "delete": "削除",
+    "duplicateTitle": "複製",
+    "deleteTitle": "完全に削除",
+    "error": {
+      "list": "Todoを読み込めませんでした。",
+      "create": "Todoを作成できませんでした。",
+      "delete": "Todoを削除できませんでした。",
+      "unknown": "問題が発生しました。"
+    }
+  }
+}

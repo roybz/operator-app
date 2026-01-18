@@ -12,6 +12,17 @@ type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean } };
 
 describe('App', () => {
   beforeEach(async () => {
+    window.localStorage.clear();
+    window.localStorage.setItem(
+      'op_users',
+      JSON.stringify([{ id: 'u_admin', username: 'admin', password: '', role: 'admin' }]),
+    );
+    window.localStorage.setItem(
+      'op_session',
+      JSON.stringify({ userId: 'u_admin', previewUserId: null, previewPersist: false }),
+    );
+    window.localStorage.setItem('op_prefs', JSON.stringify({}));
+
     await TestBed.configureTestingModule({
       imports: [
         AppComponent,
@@ -46,7 +57,8 @@ describe('App', () => {
     await fixture.whenStable();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Operator App');
+    const heading = compiled.querySelector('h1')?.textContent ?? '';
+    expect(heading).toContain('Operator App');
     expect(compiled.textContent).toContain('Mock mode');
     expect(compiled.textContent).toContain('Todo app');
   });
