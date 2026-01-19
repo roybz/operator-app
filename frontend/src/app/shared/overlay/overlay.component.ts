@@ -10,7 +10,9 @@ import { CommonModule } from '@angular/common';
       style="position:absolute; inset:0; background:var(--color-surface); z-index:2000; overflow:auto;"
     >
       <div style="position:relative; min-height:100%; padding:24px;">
-        <button style="position:absolute; top:16px; right:16px;" (click)="closed.emit()">✕</button>
+        <div style="position:sticky; top:16px; display:flex; justify-content:flex-end; z-index:5;">
+          <button (click)="closed.emit()">✕</button>
+        </div>
         <ng-content></ng-content>
       </div>
     </div>

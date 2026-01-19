@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { AuthService } from '../../../core/auth.service';
+import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 
 interface NavigatorTab {
   id: string;
@@ -17,9 +17,20 @@ interface NavigatorState {
 }
 
 const stateStore = new Map<string, NavigatorState>();
+// Temporarily disabled to prevent iframe navigation misuse.
+const NAVIGATION_DISABLED = true;
 
 export function clearNavigatorState(instanceId: string) {
   stateStore.delete(instanceId);
+}
+
+export function cloneNavigatorState(fromId: string, toId: string) {
+  const stored = stateStore.get(fromId);
+  if (!stored) return;
+  stateStore.set(toId, {
+    ...stored,
+    tabs: stored.tabs.map((tab) => ({ ...tab, history: [...tab.history] })),
+  });
 }
 
 const createTab = (url: string): NavigatorTab => ({
@@ -46,16 +57,17 @@ const formatTitle = (url: string) => {
   template: `
     <div style="display:flex; flex-direction:column; gap:8px; height:100%;">
       <div style="display:flex; gap:8px; align-items:center;">
-        <button (click)="goBack()">←</button>
-        <button (click)="goForward()">→</button>
-        <button (click)="refresh()">⟳</button>
+        <button (click)="goBack()" [disabled]="navigationDisabled">←</button>
+        <button (click)="goForward()" [disabled]="navigationDisabled">→</button>
+        <button (click)="refresh()" [disabled]="navigationDisabled">⟳</button>
         <input
           type="text"
           [value]="activeTab()?.url"
           (change)="navigate($event)"
+          [disabled]="navigationDisabled"
           style="flex:1; padding:6px;"
         />
-        <button (click)="addTab()">+</button>
+        <button (click)="addTab()" [disabled]="navigationDisabled">+</button>
       </div>
 
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -87,16 +99,16 @@ const formatTitle = (url: string) => {
 export class NavigatorComponent implements OnInit {
   @Input({ required: true }) instanceId!: string;
 
-  private auth = inject(AuthService);
+  private prefs = inject(AppPreferencesService);
   private sanitizer = inject(DomSanitizer);
   state = signal<NavigatorState>({ tabs: [], activeTabId: '' });
   language = signal('en');
+  navigationDisabled = NAVIGATION_DISABLED;
 
   constructor() {
     effect(() => {
       const fallback = typeof navigator !== 'undefined' ? navigator.language.split('-')[0] : 'en';
-      const preferred = this.auth.preferences().language || fallback;
-      this.language.set(preferred);
+      this.language.set(this.prefs.language() || fallback);
     });
   }
 
@@ -106,8 +118,7 @@ export class NavigatorComponent implements OnInit {
       this.state.set({ ...stored, tabs: stored.tabs.map((tab) => ({ ...tab })) });
       return;
     }
-    const initialUrl =
-      typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
+    const initialUrl = 'about:blank';
     const tab = createTab(initialUrl);
     const next = { tabs: [tab], activeTabId: tab.id };
     this.state.set(next);
@@ -124,7 +135,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   addTab() {
-    const url = typeof window !== 'undefined' ? window.location.origin : 'https://example.com';
+    const url = 'about:blank';
     const tab = createTab(url);
     const next = { ...this.state(), tabs: [...this.state().tabs, tab], activeTabId: tab.id };
     this.commit(next);
@@ -138,7 +149,7 @@ export class NavigatorComponent implements OnInit {
   closeTab(id: string) {
     const tabs = this.state().tabs.filter((tab) => tab.id !== id);
     if (!tabs.length) {
-      const fallback = createTab('https://example.com');
+      const fallback = createTab('about:blank');
       this.commit({ tabs: [fallback], activeTabId: fallback.id });
       return;
     }
@@ -147,6 +158,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   navigate(event: Event) {
+    if (NAVIGATION_DISABLED) return;
     const input = (event.target as HTMLInputElement).value.trim();
     if (!input) return;
     const url = input.includes('://') ? input : `https://${input}`;
@@ -165,6 +177,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   goBack() {
+    if (NAVIGATION_DISABLED) return;
     const active = this.activeTab();
     if (!active || active.historyIndex === 0) return;
     const nextIndex = active.historyIndex - 1;
@@ -173,6 +186,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   goForward() {
+    if (NAVIGATION_DISABLED) return;
     const active = this.activeTab();
     if (!active || active.historyIndex >= active.history.length - 1) return;
     const nextIndex = active.historyIndex + 1;
@@ -181,6 +195,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   refresh() {
+    if (NAVIGATION_DISABLED) return;
     const active = this.activeTab();
     if (!active) return;
     this.updateTab({ ...active });
@@ -192,7 +207,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   safeUrl(url?: string): SafeResourceUrl {
-    const next = url ?? 'about:blank';
+    const next = NAVIGATION_DISABLED ? 'about:blank' : (url ?? 'about:blank');
     return this.sanitizer.bypassSecurityTrustResourceUrl(next);
   }
 }

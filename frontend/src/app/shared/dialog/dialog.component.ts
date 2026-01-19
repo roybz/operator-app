@@ -31,21 +31,27 @@ import { DialogInstance } from '../../core/dialog.service';
         </button>
         <div class="dialog__title">
           @if (!isEditingTitle) {
-            <div (dblclick)="startTitleEdit()">{{ title }}</div>
+            <div class="dialog__title-content" (dblclick)="startTitleEdit()">
+              <span class="dialog__title-icon">{{ icon }}</span>
+              <span>{{ title }}</span>
+            </div>
           } @else {
-            <input
-              [value]="titleDraft"
-              (input)="onTitleInput($event)"
-              (blur)="finishTitleEdit()"
-              (keydown.enter)="finishTitleEdit()"
-              (keydown.escape)="cancelTitleEdit()"
-              style="width:100%;"
-            />
+            <div class="dialog__title-content">
+              <span class="dialog__title-icon">{{ icon }}</span>
+              <input
+                [value]="titleDraft"
+                (input)="onTitleInput($event)"
+                (blur)="finishTitleEdit()"
+                (keydown.enter)="finishTitleEdit()"
+                (keydown.escape)="cancelTitleEdit()"
+                style="width:100%;"
+              />
+            </div>
           }
         </div>
         <div class="dialog__actions">
           <button
-            class="dialog__icon"
+            class="dialog__icon dialog__icon--stash"
             (pointerdown)="$event.stopPropagation()"
             (click)="stash.emit()"
             title="{{ 'dialogs.stash' | translate }}"
@@ -110,6 +116,14 @@ import { DialogInstance } from '../../core/dialog.service';
         font-weight: 600;
         font-size: 13px;
       }
+      .dialog__title-content {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .dialog__title-icon {
+        font-size: 14px;
+      }
       .dialog__actions {
         display: flex;
         gap: 6px;
@@ -119,6 +133,13 @@ import { DialogInstance } from '../../core/dialog.service';
         background: transparent;
         cursor: pointer;
         font-size: 14px;
+        border-radius: 6px;
+      }
+      .dialog__icon:hover {
+        outline: 1px solid var(--color-border);
+      }
+      .dialog__icon--stash {
+        filter: grayscale(1);
       }
       .dialog__body {
         flex: 1;
@@ -136,6 +157,9 @@ import { DialogInstance } from '../../core/dialog.service';
         border-radius: 0 0 10px 0;
         background: color-mix(in srgb, var(--color-border) 55%, transparent);
       }
+      .dialog__resize:hover {
+        box-shadow: 0 0 0 1px var(--color-border);
+      }
       .dialog--disabled {
         pointer-events: none;
       }
@@ -148,6 +172,7 @@ export class DialogComponent {
   @Input() disabled = false;
   @Input() trashDisabled = false;
   @Input() title = '';
+  @Input() icon = '';
 
   @Output() moved = new EventEmitter<{ x: number; y: number }>();
   @Output() resized = new EventEmitter<{ width: number; height: number }>();

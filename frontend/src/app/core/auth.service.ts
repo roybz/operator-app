@@ -28,6 +28,7 @@ export interface UserPreferences {
   maxPersistedApps: number;
   canvasWidth: number;
   canvasHeight: number;
+  lockCanvasSize: boolean;
   hideViewportSizingControls: boolean;
   hideZoomControls: boolean;
   backgroundImageUrl: string;
@@ -69,7 +70,8 @@ const DIALOG_STATE_KEY = 'op_dialog_state_v1';
 const PREVIEW_STATE_KEY = 'op_preview_dialog_state_v1';
 const MOCK_TODO_KEY = 'op_mock_todos';
 const DEFAULT_ADMIN_HASH =
-  'sha256:45961da9ce13da68788eac0836edf79c1a0b510746b26bb471acf8c53a9dd63e';
+  'sha256:62d9ba597c35a2f737a0173ea82a5289c6628e5a06674ebbb140848810961838';
+const LOGIN_SECURITY_KEY = 'op_login_security';
 const SUPPORTED_LANGUAGES = [
   'en',
   'es',
@@ -114,6 +116,7 @@ export class AuthService {
   private readonly previewPrefsSignal = signal<StoredPreviewPreferences>({});
   private readonly orgSettingsSignal = signal<OrgSettings>(this.defaultOrgSettings());
   private readonly readySignal = signal(false);
+  private loginSecurity: Record<string, { count: number; lockedUntil: number }> = {};
 
   readonly users = this.usersSignal.asReadonly();
   readonly session = this.sessionSignal.asReadonly();
@@ -143,23 +146,35 @@ export class AuthService {
 
   async login(username: string, password: string): Promise<{ ok: boolean; message?: string }> {
     const trimmed = username.trim();
+    if (this.isLoginLocked(trimmed)) {
+      return { ok: false, message: 'auth.error.locked' };
+    }
     const user = this.usersSignal().find((u) => u.username === trimmed);
-    if (!user) return { ok: false, message: 'auth.error.notFound' };
+    if (!user) {
+      this.recordLoginFailure(trimmed);
+      return { ok: false, message: 'auth.error.notFound' };
+    }
     const expected = user.password ?? '';
     if (expected) {
       if (expected.startsWith('sha256:')) {
         const hashed = await this.hashPassword(password);
-        if (expected !== hashed) return { ok: false, message: 'auth.error.invalid' };
+        if (expected !== hashed) {
+          this.recordLoginFailure(trimmed);
+          return { ok: false, message: 'auth.error.invalid' };
+        }
       } else if (expected !== password) {
+        this.recordLoginFailure(trimmed);
         return { ok: false, message: 'auth.error.invalid' };
       } else {
         const hashed = await this.hashPassword(password);
         this.setUserPassword(user.id, hashed);
       }
     } else if (password.trim().length > 0) {
+      this.recordLoginFailure(trimmed);
       return { ok: false, message: 'auth.error.invalid' };
     }
 
+    this.clearLoginFailures(trimmed);
     this.sessionSignal.set({ userId: user.id, previewUserId: null, previewPersist: false });
     this.persistSession();
     this.applyLanguageFromPreferences();
@@ -367,7 +382,7 @@ export class AuthService {
       users.push(this.guestUser());
     }
     const normalized = users.map((user) => {
-      if (user.username === 'admin' && !(user.password ?? '').trim()) {
+      if (user.username === 'admin') {
         return { ...user, password: DEFAULT_ADMIN_HASH };
       }
       return user;
@@ -423,6 +438,11 @@ export class AuthService {
     this.persistPrefs();
     this.persistOrgSettings();
     this.applyLanguageFromPreferences();
+
+    this.loginSecurity = this.safeJson<Record<string, { count: number; lockedUntil: number }>>(
+      LOGIN_SECURITY_KEY,
+      {},
+    );
   }
 
   private persistUsers() {
@@ -448,6 +468,10 @@ export class AuthService {
   private persist(key: string, value: unknown) {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(key, JSON.stringify(value));
+  }
+
+  private persistLoginSecurity() {
+    this.persist(LOGIN_SECURITY_KEY, this.loginSecurity);
   }
 
   private safeJson<T>(key: string, fallback: T): T {
@@ -499,11 +523,12 @@ export class AuthService {
       maxPersistedApps: 30,
       canvasWidth: org.defaultViewportWidth,
       canvasHeight: org.defaultViewportHeight,
+      lockCanvasSize: false,
       hideViewportSizingControls: false,
       hideZoomControls: false,
       backgroundImageUrl: '',
       backgroundImageMode: 'repeat',
-      disabledApps: ['navigator', 'notes'],
+      disabledApps: ['navigator'],
       showGrid: true,
       gridSize: 50,
     };
@@ -573,6 +598,33 @@ export class AuthService {
     );
     this.usersSignal.set(next);
     this.persistUsers();
+  }
+
+  private isLoginLocked(username: string) {
+    const entry = this.loginSecurity[username];
+    if (!entry) return false;
+    if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true;
+    if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+      delete this.loginSecurity[username];
+      this.persistLoginSecurity();
+    }
+    return false;
+  }
+
+  private recordLoginFailure(username: string) {
+    const entry = this.loginSecurity[username] ?? { count: 0, lockedUntil: 0 };
+    entry.count += 1;
+    if (entry.count >= 6) {
+      entry.lockedUntil = Date.now() + 5 * 60 * 60 * 1000;
+    }
+    this.loginSecurity[username] = entry;
+    this.persistLoginSecurity();
+  }
+
+  private clearLoginFailures(username: string) {
+    if (!this.loginSecurity[username]) return;
+    delete this.loginSecurity[username];
+    this.persistLoginSecurity();
   }
 
   private clearMockTodosForUser(userId: string) {

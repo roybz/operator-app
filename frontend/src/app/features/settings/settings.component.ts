@@ -23,19 +23,30 @@ import { AboutComponent } from '../about/about.component';
   ],
   template: `
     <section>
+      <div
+        style="position:sticky; top:0; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:2;"
+      >
+        <button (click)="apply()" [disabled]="!draft.dirty()">
+          {{ 'settings.apply' | translate }}
+        </button>
+        @if (draft.dirty()) {
+          <button (click)="cancel()">{{ 'settings.cancelChanges' | translate }}</button>
+        }
+      </div>
+
       <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
       <nav style="margin: 16px 0; display:flex; gap:12px;">
         @if (auth.isAdmin()) {
-          <button (click)="tab.set('admin')">{{ 'settings.adminLink' | translate }}</button>
+          <button (click)="selectTab('admin')">{{ 'settings.adminLink' | translate }}</button>
         }
-        <button (click)="tab.set('preferences')">
+        <button (click)="selectTab('preferences')">
           {{ 'settings.preferencesLink' | translate }}
         </button>
-        <button (click)="tab.set('applications')">
+        <button (click)="selectTab('applications')">
           {{ 'settings.applicationsLink' | translate }}
         </button>
-        <button (click)="tab.set('users')">{{ 'settings.usersLink' | translate }}</button>
+        <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
       </nav>
 
       @if (auth.isAdmin() && previewCandidates().length) {
@@ -86,19 +97,6 @@ import { AboutComponent } from '../about/about.component';
         <app-users-settings />
       }
 
-      @if (showApplyBar()) {
-        <div style="margin-top: 24px; display:flex; gap:8px;">
-          @if (draft.dirty()) {
-            <button (click)="apply()">{{ 'settings.apply' | translate }}</button>
-          } @else {
-            <button disabled>{{ 'settings.applied' | translate }}</button>
-          }
-          <button (click)="cancel()" [disabled]="!draft.dirty() && draft.applied()">
-            {{ 'settings.cancel' | translate }}
-          </button>
-        </div>
-      }
-
       <div style="margin-top: 24px; border-top:1px solid var(--color-border); padding-top:12px;">
         <button (click)="aboutOpen.set(!aboutOpen())">{{ 'nav.about' | translate }}</button>
         <div
@@ -122,10 +120,6 @@ export class SettingsComponent {
 
   constructor() {
     this.draft.start();
-  }
-
-  showApplyBar() {
-    return this.draft.dirty() || this.draft.applied();
   }
 
   users() {
@@ -155,5 +149,10 @@ export class SettingsComponent {
   cancel() {
     if (!this.draft.dirty() && !this.draft.applied()) return;
     this.draft.cancel();
+  }
+
+  selectTab(next: 'users' | 'preferences' | 'applications' | 'admin') {
+    this.tab.set(next);
+    this.aboutOpen.set(false);
   }
 }

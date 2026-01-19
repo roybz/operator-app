@@ -24,6 +24,12 @@ export function clearTimerState(instanceId: string) {
   stateStore.delete(instanceId);
 }
 
+export function cloneTimerState(fromId: string, toId: string) {
+  const stored = stateStore.get(fromId);
+  if (!stored) return;
+  stateStore.set(toId, { ...stored });
+}
+
 const defaultState = (): TimerState => ({
   mode: 'stopwatch',
   running: false,

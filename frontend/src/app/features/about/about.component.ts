@@ -12,10 +12,6 @@ import { TranslateModule } from '@ngx-translate/core';
       <p>{{ 'about.line1' | translate }}</p>
       <p>{{ 'about.copyright' | translate: { year: currentYear } }}</p>
       <p>
-        <a href="https://github.com/roybz" target="_blank" rel="noreferrer">
-          {{ 'about.github' | translate }}
-        </a>
-        ·
         <a href="https://www.linkedin.com/in/roynouneh/" target="_blank" rel="noreferrer">
           {{ 'about.linkedin' | translate }}
         </a>

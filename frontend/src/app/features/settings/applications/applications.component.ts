@@ -2,20 +2,18 @@ import { Component, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { UserPreferences } from '../../../core/auth.service';
-import { AppId, DialogService } from '../../../core/dialog.service';
+import { DialogService } from '../../../core/dialog.service';
+import { AppId } from '../../dependencies/app-types';
+import { APP_LIST } from '../../dependencies/app-registry';
 import { clearCalculatorState } from '../../applications/calculator/calculator.component';
 import { clearTimerState } from '../../applications/timer/timer.component';
 import { clearNavigatorState } from '../../applications/navigator/navigator.component';
 import { clearNotesState } from '../../applications/notes/notes.component';
+import { clearCalendarState } from '../../applications/calendar/calendar.component';
+import { clearClockState } from '../../applications/clock/clock.component';
 import { SettingsDraftService } from '../settings-draft.service';
 
-const APPLICATIONS: { id: AppId; labelKey: string }[] = [
-  { id: 'todo', labelKey: 'apps.todo' },
-  { id: 'calculator', labelKey: 'apps.calculator' },
-  { id: 'timer', labelKey: 'apps.timer' },
-  { id: 'navigator', labelKey: 'apps.navigator' },
-  { id: 'notes', labelKey: 'apps.notes' },
-];
+const APPLICATIONS = APP_LIST;
 
 @Component({
   selector: 'app-applications-settings',
@@ -34,11 +32,12 @@ const APPLICATIONS: { id: AppId; labelKey: string }[] = [
                 [checked]="!isDisabled(app.id)"
                 (change)="toggleApp(app.id, $event)"
               />
+              <span>{{ app.icon }}</span>
               {{
                 app.id === 'navigator'
                   ? ('settings.navigatorBeta' | translate)
-                  : app.id === 'notes'
-                    ? ('settings.notesBeta' | translate)
+                  : app.id === 'calendar'
+                    ? ('settings.calendarBeta' | translate)
                     : (app.labelKey | translate)
               }}
             </label>
@@ -111,6 +110,8 @@ export class ApplicationsSettingsComponent {
       if (appId === 'timer') clearTimerState(id);
       if (appId === 'navigator') clearNavigatorState(id);
       if (appId === 'notes') clearNotesState(id);
+      if (appId === 'calendar') clearCalendarState(id);
+      if (appId === 'clock') clearClockState(id);
     });
     this.confirmAppId.set(null);
   }

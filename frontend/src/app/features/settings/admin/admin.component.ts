@@ -39,11 +39,10 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
             (change)="onTestModeToggle($event)"
           />
           {{ 'admin.testMode' | translate }}
-          <span
-            style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:999px; border:1px solid #999; font-size:12px;"
-            [title]="'admin.testModeInfo' | translate"
-            >i</span
-          >
+          <span class="admin-info">
+            i
+            <span class="admin-info__tooltip">{{ 'admin.testModeInfo' | translate }}</span>
+          </span>
         </label>
 
         <label>
@@ -116,6 +115,42 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
       </div>
     </section>
   `,
+  styles: [
+    `
+      .admin-info {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid var(--color-border);
+        font-size: 12px;
+        cursor: help;
+      }
+
+      .admin-info__tooltip {
+        position: absolute;
+        right: 0;
+        top: 22px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 120ms ease;
+        z-index: 3001;
+      }
+
+      .admin-info:hover .admin-info__tooltip {
+        opacity: 1;
+      }
+    `,
+  ],
 })
 export class AdminSettingsComponent {
   private auth = inject(AuthService);

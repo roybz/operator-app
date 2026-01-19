@@ -128,3 +128,15 @@ export async function updateTodo(
   if (!res.ok) throw new Error('todo.error.update');
   return res.json();
 }
+
+export async function cloneTodos(fromInstanceId: string, toInstanceId: string) {
+  const API_BASE = getApiBase();
+  if (!API_BASE) {
+    const items = readMockTodos(fromInstanceId).map((todo) => ({
+      ...todo,
+      id: newId(),
+      createdAt: new Date().toISOString(),
+    }));
+    writeMockTodos(toInstanceId, items);
+  }
+}

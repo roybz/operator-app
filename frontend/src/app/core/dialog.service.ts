@@ -1,14 +1,7 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
-
-export type AppId = 'todo' | 'calculator' | 'timer' | 'navigator' | 'notes';
-
-export interface DialogRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+import { APP_REGISTRY } from '../features/dependencies/app-registry';
+import { AppId, DialogRect } from '../features/dependencies/app-types';
 
 export interface DialogInstance {
   id: string;
@@ -41,13 +34,6 @@ interface DialogState {
 const STATE_KEY = 'op_dialog_state_v1';
 const PREVIEW_STATE_KEY = 'op_preview_dialog_state_v1';
 
-const APP_CONFIG: Record<AppId, { titleKey: string; defaultSize: DialogRect }> = {
-  todo: { titleKey: 'apps.todo', defaultSize: { x: 0, y: 0, width: 480, height: 640 } },
-  calculator: { titleKey: 'apps.calculator', defaultSize: { x: 0, y: 0, width: 320, height: 480 } },
-  timer: { titleKey: 'apps.timer', defaultSize: { x: 0, y: 0, width: 420, height: 520 } },
-  navigator: { titleKey: 'apps.navigator', defaultSize: { x: 0, y: 0, width: 720, height: 520 } },
-  notes: { titleKey: 'apps.notes', defaultSize: { x: 0, y: 0, width: 700, height: 600 } },
-};
 const TILE_SIZE = { width: 180, height: 80 };
 
 @Injectable({ providedIn: 'root' })
@@ -153,12 +139,12 @@ export class DialogService {
       return { ok: false, message: 'dialogs.error.maxPersisted' };
     }
 
-    const config = APP_CONFIG[appId];
+    const config = APP_REGISTRY[appId];
     const rect = this.centerRect(config.defaultSize, bounds);
     const instance: DialogInstance = {
       id: this.uid('dlg'),
       appId,
-      titleKey: config.titleKey,
+      titleKey: config.labelKey,
       rect,
       minimized: false,
       stashed: false,
@@ -447,7 +433,7 @@ export class DialogService {
     Object.entries(state.dialogsByWorkspace ?? {}).forEach(([workspaceId, dialogs]) => {
       dialogsByWorkspace[workspaceId] = dialogs.map((instance) => ({
         ...instance,
-        titleKey: instance.titleKey ?? APP_CONFIG[instance.appId]?.titleKey ?? 'apps.todo',
+        titleKey: instance.titleKey ?? APP_REGISTRY[instance.appId]?.labelKey ?? 'apps.todo',
         titleOverride: instance.titleOverride ?? undefined,
         stashed: instance.stashed ?? false,
         tileRect: instance.tileRect,

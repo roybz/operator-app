@@ -14,6 +14,12 @@ export function clearCalculatorState(instanceId: string) {
   stateStore.delete(instanceId);
 }
 
+export function cloneCalculatorState(fromId: string, toId: string) {
+  const stored = stateStore.get(fromId);
+  if (!stored) return;
+  stateStore.set(toId, { ...stored });
+}
+
 const defaultState = (): CalculatorState => ({
   display: '0',
   accumulator: null,

@@ -1,10 +1,32 @@
 {
   "about": {
-    "copyright": "كپي‌رايت {{year}} روي نونه",
+    "copyright": "كپي‌رايت {{year}} روي نونه.",
     "github": "Github",
-    "line1": "وب را حرفه‌اي مرور كنيد.",
+    "line1": "Plan like a pro.",
     "linkedin": "LinkedIn",
     "title": "درباره"
+  },
+  "accessibility": {
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "confirm": "Continue",
+    "title": "Accessibility setup",
+    "toggle": "Enable accessibility mode"
+  },
+  "admin": {
+    "allowGuestLogin": "Allow guest login",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "applyViewportAll": "Change all users viewport size",
+    "defaultViewport": "Default user viewport size",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "title": "Admin",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?"
   },
   "app": {
     "title": "Roy's Planner"
@@ -12,6 +34,8 @@
   "apps": {
     "calculator": "Calculator",
     "calculatorGroup": "Calculator",
+    "calendar": "Calendar (Beta)",
+    "clock": "Clock",
     "navigator": "Navigator",
     "navigatorGroup": "Navigator",
     "notes": "Notes",
@@ -25,33 +49,64 @@
     "error": {
       "generic": "ورود ممكن نيست.",
       "invalid": "گذرواژه نامعتبر است.",
+      "locked": "Too many failed attempts. Try again later.",
       "notFound": "كاربر پيدا نشد."
     },
     "guest": "ادامه به عنوان ميهمان",
     "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
     "password": "Password",
-    "signIn": "ورود",
-    "title": "ورود",
-    "username": "نام كاربري",
     "resetGuest": "Reset everything for the local guest account?",
     "resetGuestConfirm": "Reset the local guest account and clear its data?",
-    "resetGuestConfirmButton": "Reset guest"
+    "resetGuestConfirmButton": "Reset guest",
+    "signIn": "ورود",
+    "title": "ورود",
+    "username": "نام كاربري"
+  },
+  "calendar": {
+    "add": "Add",
+    "addCalendar": "Add calendar",
+    "addDisabled": "Adding calendars is temporarily disabled.",
+    "color": "Color",
+    "hideSettings": "Hide settings",
+    "import": "Import",
+    "importError": "Unable to import events. Check your JSON.",
+    "importHint": "Paste JSON (array of {title, start, end}) from an external calendar feed.",
+    "importTitle": "Import events",
+    "integrations": "External calendars",
+    "manage": "Manage",
+    "name": "Name",
+    "noEvents": "No events",
+    "remove": "Remove",
+    "showSettings": "Show settings",
+    "sourceUrl": "Source URL",
+    "viewDay": "Day",
+    "viewMonth": "Month",
+    "viewWeek": "Week"
   },
   "canvas": {
+    "lockCanvas": "Lock canvas size?",
     "originalScale": "Original scale",
+    "updateSize": "Update",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
   },
+  "clock": {
+    "timeZone": "Time zone"
+  },
   "dialogs": {
     "cancel": "انصراف",
+    "cloneConfirm": "Clone a new separate instance with all data from the selected instance?",
     "close": "بستن",
+    "collapseList": "Collapse list",
     "confirm": "حذف",
     "confirmDelete": "اين نمونه براي هميشه حذف شود؟",
+    "duplicate": "Duplicate",
     "error": {
       "generic": "باز كردن برنامه ممكن نيست.",
       "maxPersisted": "حداكثر تعداد برنامه‌هاي ماندگار رسيده است."
     },
+    "expandList": "Expand list",
     "hideAll": "مخفي كردن همه پنجره‌ها",
     "lockDelete": "Lock delete",
     "maximize": "بزرگ‌نمايي",
@@ -81,23 +136,39 @@
   "notes": {
     "addFolder": "Add folder",
     "addNote": "Add note",
+    "archive": "Archive",
+    "archiveSelected": "Archive selected",
     "collapseEditor": "Collapse editor",
+    "confirmDelete": "Delete the selected notes and folders?",
     "copySuffix": "copy",
     "defaultFolder": "New folder",
     "defaultNote": "New note",
     "delete": "Delete",
     "deleteSelected": "Delete selected",
+    "deselectAll": "Deselect all",
     "duplicate": "Duplicate",
     "duplicateSelected": "Duplicate selected",
+    "editingActive": "Editing active",
+    "editingInactive": "Visual mode",
+    "emptyHint": "Add a note or folder to begin",
     "expandEditor": "Expand editor",
     "lock": "Lock",
+    "lockedLabel": "Locked",
+    "modeMarkdown": "Markdown mode",
+    "modeRich": "Rich text mode",
+    "modeVisual": "Visual mode",
     "root": "Notes",
+    "selectAll": "Select all",
     "selectHint": "Select a note to begin.",
-    "switchToMarkdown": "Markdown",
-    "switchToRich": "Rich text",
+    "switchToEditing": "Switch to Editing",
+    "switchToMarkdown": "Switch to Markdown",
+    "switchToRich": "Switch to Rich Text",
+    "switchToVisual": "Switch to Visual Mode",
+    "unarchiveSelected": "Unarchive selected",
     "unlock": "Unlock"
   },
   "preferences": {
+    "accessibilityMode": "Accessibility mode (high contrast)",
     "backgroundImageCenter": "وسط‌چين",
     "backgroundImageClear": "Clear background",
     "backgroundImageMode": "نمايش تصوير پس‌زمينه",
@@ -115,6 +186,8 @@
     "credentialUsername": "نام كاربري",
     "credentialsTitle": "اعتبارنامه‌هاي ذخيره‌شده",
     "gridSize": "اندازه شبكه (px)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls",
     "language": "زبان برنامه",
     "maxPersistedApps": "حداكثر تعداد برنامه‌هاي ماندگار",
     "showGrid": "نمايش شبكه",
@@ -122,28 +195,33 @@
     "siteLogo": "Website logo",
     "siteLogoNone": "None",
     "siteTitle": "Website name",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
     "timeFormat": "فرمت زمان",
     "timeFormat12": "12 ساعته",
     "timeFormat24": "24 ساعته",
     "timeZone": "منطقه زماني ترجيحي",
-    "title": "ترجيحات",
-    "themeMode": "Theme",
-    "themeSystem": "System",
-    "themeTimeZone": "Preferred time zone",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "accessibilityMode": "Accessibility mode (high contrast)",
-    "hideViewportSizing": "Hide viewport sizing controls",
-    "hideZoomControls": "Hide zoom controls"
+    "title": "ترجيحات"
   },
   "preview": {
     "label": "پيش‌نمايش به عنوان: {{user}}",
     "persist": "تغييرات پيش‌نمايش ذخيره مي‌شود"
   },
   "settings": {
+    "adminLink": "Admin",
     "applicationsLink": "Applications",
     "applicationsTitle": "Applications",
-    "navigatorBeta": "Navigator (Beta)",
+    "applied": "Applied",
+    "apply": "Apply",
+    "calendarBeta": "Calendar (Beta)",
+    "cancel": "Cancel",
+    "cancelChanges": "Cancel changes",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes",
+    "navigatorBeta": "Navigator (Beta) (Broken, test at your own will)",
     "notesBeta": "Notes (Beta)",
     "preferencesLink": "ترجيحات",
     "previewAs": "پيش‌نمايش به عنوان",
@@ -154,13 +232,7 @@
     "usersLink": "كاربران",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe",
-    "adminLink": "Admin",
-    "apply": "Apply",
-    "applied": "Applied",
-    "cancel": "Cancel",
-    "closeConfirm": "Discard unsaved settings changes?",
-    "discard": "Discard changes"
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "اقدامات",
@@ -219,9 +291,9 @@
     "error": {
       "generic": "به‌روزرساني كاربر ممكن نيست.",
       "lastAdmin": "حداقل يك ادمين بايد باقي بماند.",
+      "passwordRequired": "Password is required.",
       "usernameRequired": "نام كاربري لازم است.",
-      "usernameTaken": "اين نام كاربري قبلاً استفاده شده است.",
-      "passwordRequired": "Password is required."
+      "usernameTaken": "اين نام كاربري قبلاً استفاده شده است."
     },
     "password": "گذرواژه",
     "passwordUpdated": "Password updated successfully.",
@@ -238,27 +310,5 @@
   },
   "workspaces": {
     "button": "فضاهاي كاري"
-  },
-  "accessibility": {
-    "title": "Accessibility setup",
-    "body": "Would you like to keep accessibility mode enabled for this account?",
-    "toggle": "Enable accessibility mode",
-    "confirm": "Continue"
-  },
-  "admin": {
-    "title": "Admin",
-    "siteTitle": "Website name",
-    "siteLogo": "Website logo",
-    "siteLogoNone": "None",
-    "testMode": "Keep test mode enabled",
-    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
-    "defaultViewport": "Default user viewport size",
-    "applyViewportAll": "Change all users viewport size",
-    "allowGuestLogin": "Allow guest login",
-    "wipeGuest": "Wipe all guest accounts",
-    "wipeGuestConfirm": "Wipe all guest account data now?",
-    "allowServerBackground": "Allow server-stored backgrounds when available",
-    "disableViewportSizing": "Disable viewport sizing app-wide",
-    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

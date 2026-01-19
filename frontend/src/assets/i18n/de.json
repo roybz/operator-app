@@ -1,10 +1,32 @@
 {
   "about": {
-    "copyright": "Copyright {{year}} Roy Nouneh",
+    "copyright": "Copyright {{year}} Roy Nouneh.",
     "github": "Github",
-    "line1": "Surfen Sie im Web wie ein Profi.",
+    "line1": "Plan like a pro.",
     "linkedin": "LinkedIn",
     "title": "Info"
+  },
+  "accessibility": {
+    "body": "Would you like to keep accessibility mode enabled for this account?",
+    "confirm": "Continue",
+    "title": "Accessibility setup",
+    "toggle": "Enable accessibility mode"
+  },
+  "admin": {
+    "allowGuestLogin": "Allow guest login",
+    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "applyViewportAll": "Change all users viewport size",
+    "defaultViewport": "Default user viewport size",
+    "disableViewportSizing": "Disable viewport sizing app-wide",
+    "disableZoomControls": "Disable zoom controls app-wide",
+    "siteLogo": "Website logo",
+    "siteLogoNone": "None",
+    "siteTitle": "Website name",
+    "testMode": "Keep test mode enabled",
+    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
+    "title": "Admin",
+    "wipeGuest": "Wipe all guest accounts",
+    "wipeGuestConfirm": "Wipe all guest account data now?"
   },
   "app": {
     "title": "Roy's Planner"
@@ -12,6 +34,8 @@
   "apps": {
     "calculator": "Calculator",
     "calculatorGroup": "Calculator",
+    "calendar": "Calendar (Beta)",
+    "clock": "Clock",
     "navigator": "Navigator",
     "navigatorGroup": "Navigator",
     "notes": "Notes",
@@ -25,33 +49,64 @@
     "error": {
       "generic": "Anmeldung nicht moglich.",
       "invalid": "Ungultiges Passwort.",
+      "locked": "Too many failed attempts. Try again later.",
       "notFound": "Benutzer nicht gefunden."
     },
     "guest": "Als Gast fortfahren",
     "guestDisabled": "Guest access is disabled by an admin.",
     "loggedInAs": "Logged in as {{user}}",
     "password": "Password",
-    "signIn": "Anmelden",
-    "title": "Anmelden",
-    "username": "Benutzername",
     "resetGuest": "Reset everything for the local guest account?",
     "resetGuestConfirm": "Reset the local guest account and clear its data?",
-    "resetGuestConfirmButton": "Reset guest"
+    "resetGuestConfirmButton": "Reset guest",
+    "signIn": "Anmelden",
+    "title": "Anmelden",
+    "username": "Benutzername"
+  },
+  "calendar": {
+    "add": "Add",
+    "addCalendar": "Add calendar",
+    "addDisabled": "Adding calendars is temporarily disabled.",
+    "color": "Color",
+    "hideSettings": "Hide settings",
+    "import": "Import",
+    "importError": "Unable to import events. Check your JSON.",
+    "importHint": "Paste JSON (array of {title, start, end}) from an external calendar feed.",
+    "importTitle": "Import events",
+    "integrations": "External calendars",
+    "manage": "Manage",
+    "name": "Name",
+    "noEvents": "No events",
+    "remove": "Remove",
+    "showSettings": "Show settings",
+    "sourceUrl": "Source URL",
+    "viewDay": "Day",
+    "viewMonth": "Month",
+    "viewWeek": "Week"
   },
   "canvas": {
+    "lockCanvas": "Lock canvas size?",
     "originalScale": "Original scale",
+    "updateSize": "Update",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
   },
+  "clock": {
+    "timeZone": "Time zone"
+  },
   "dialogs": {
     "cancel": "Abbrechen",
+    "cloneConfirm": "Clone a new separate instance with all data from the selected instance?",
     "close": "Schliessen",
+    "collapseList": "Collapse list",
     "confirm": "Loschen",
     "confirmDelete": "Diese Instanz dauerhaft loschen?",
+    "duplicate": "Duplicate",
     "error": {
       "generic": "App konnte nicht geoffnet werden.",
       "maxPersisted": "Maximale Anzahl persistenter Apps erreicht."
     },
+    "expandList": "Expand list",
     "hideAll": "Alle Dialoge ausblenden",
     "lockDelete": "Lock delete",
     "maximize": "Maximieren",
@@ -81,23 +136,39 @@
   "notes": {
     "addFolder": "Add folder",
     "addNote": "Add note",
+    "archive": "Archive",
+    "archiveSelected": "Archive selected",
     "collapseEditor": "Collapse editor",
+    "confirmDelete": "Delete the selected notes and folders?",
     "copySuffix": "copy",
     "defaultFolder": "New folder",
     "defaultNote": "New note",
     "delete": "Delete",
     "deleteSelected": "Delete selected",
+    "deselectAll": "Deselect all",
     "duplicate": "Duplicate",
     "duplicateSelected": "Duplicate selected",
+    "editingActive": "Editing active",
+    "editingInactive": "Visual mode",
+    "emptyHint": "Add a note or folder to begin",
     "expandEditor": "Expand editor",
     "lock": "Lock",
+    "lockedLabel": "Locked",
+    "modeMarkdown": "Markdown mode",
+    "modeRich": "Rich text mode",
+    "modeVisual": "Visual mode",
     "root": "Notes",
+    "selectAll": "Select all",
     "selectHint": "Select a note to begin.",
-    "switchToMarkdown": "Markdown",
-    "switchToRich": "Rich text",
+    "switchToEditing": "Switch to Editing",
+    "switchToMarkdown": "Switch to Markdown",
+    "switchToRich": "Switch to Rich Text",
+    "switchToVisual": "Switch to Visual Mode",
+    "unarchiveSelected": "Unarchive selected",
     "unlock": "Unlock"
   },
   "preferences": {
+    "accessibilityMode": "Accessibility mode (high contrast)",
     "backgroundImageCenter": "Zentrieren",
     "backgroundImageClear": "Clear background",
     "backgroundImageMode": "Anzeige des Hintergrundbilds",
@@ -115,6 +186,8 @@
     "credentialUsername": "Benutzername",
     "credentialsTitle": "Gespeicherte Zugangsdaten",
     "gridSize": "Rastergrose (px)",
+    "hideViewportSizing": "Hide viewport sizing controls",
+    "hideZoomControls": "Hide zoom controls",
     "language": "App-Sprache",
     "maxPersistedApps": "Maximale Anzahl persistenter Apps",
     "showGrid": "Raster anzeigen",
@@ -122,28 +195,33 @@
     "siteLogo": "Website logo",
     "siteLogoNone": "None",
     "siteTitle": "Website name",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "themeMode": "Theme",
+    "themeSystem": "System",
+    "themeTimeZone": "Preferred time zone",
     "timeFormat": "Zeitformat",
     "timeFormat12": "12-Stunden",
     "timeFormat24": "24-Stunden",
     "timeZone": "Bevorzugte Zeitzone",
-    "title": "Voreinstellungen",
-    "themeMode": "Theme",
-    "themeSystem": "System",
-    "themeTimeZone": "Preferred time zone",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "accessibilityMode": "Accessibility mode (high contrast)",
-    "hideViewportSizing": "Hide viewport sizing controls",
-    "hideZoomControls": "Hide zoom controls"
+    "title": "Voreinstellungen"
   },
   "preview": {
     "label": "Vorschau als: {{user}}",
     "persist": "Vorschau-Änderungen bleiben erhalten"
   },
   "settings": {
+    "adminLink": "Admin",
     "applicationsLink": "Applications",
     "applicationsTitle": "Applications",
-    "navigatorBeta": "Navigator (Beta)",
+    "applied": "Applied",
+    "apply": "Apply",
+    "calendarBeta": "Calendar (Beta)",
+    "cancel": "Cancel",
+    "cancelChanges": "Cancel changes",
+    "closeConfirm": "Discard unsaved settings changes?",
+    "discard": "Discard changes",
+    "navigatorBeta": "Navigator (Beta) (Broken, test at your own will)",
     "notesBeta": "Notes (Beta)",
     "preferencesLink": "Voreinstellungen",
     "previewAs": "Anzeigen als",
@@ -154,13 +232,7 @@
     "usersLink": "Benutzer",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe",
-    "adminLink": "Admin",
-    "apply": "Apply",
-    "applied": "Applied",
-    "cancel": "Cancel",
-    "closeConfirm": "Discard unsaved settings changes?",
-    "discard": "Discard changes"
+    "wipeConfirmButton": "Wipe"
   },
   "table": {
     "actions": "Aktionen",
@@ -219,9 +291,9 @@
     "error": {
       "generic": "Benutzer konnte nicht aktualisiert werden.",
       "lastAdmin": "Mindestens ein Admin muss bleiben.",
+      "passwordRequired": "Password is required.",
       "usernameRequired": "Benutzername erforderlich.",
-      "usernameTaken": "Benutzername bereits vergeben.",
-      "passwordRequired": "Password is required."
+      "usernameTaken": "Benutzername bereits vergeben."
     },
     "password": "Passwort",
     "passwordUpdated": "Password updated successfully.",
@@ -238,27 +310,5 @@
   },
   "workspaces": {
     "button": "Workspaces"
-  },
-  "accessibility": {
-    "title": "Accessibility setup",
-    "body": "Would you like to keep accessibility mode enabled for this account?",
-    "toggle": "Enable accessibility mode",
-    "confirm": "Continue"
-  },
-  "admin": {
-    "title": "Admin",
-    "siteTitle": "Website name",
-    "siteLogo": "Website logo",
-    "siteLogoNone": "None",
-    "testMode": "Keep test mode enabled",
-    "testModeInfo": "Test mode can only be disabled after a backend is connected.",
-    "defaultViewport": "Default user viewport size",
-    "applyViewportAll": "Change all users viewport size",
-    "allowGuestLogin": "Allow guest login",
-    "wipeGuest": "Wipe all guest accounts",
-    "wipeGuestConfirm": "Wipe all guest account data now?",
-    "allowServerBackground": "Allow server-stored backgrounds when available",
-    "disableViewportSizing": "Disable viewport sizing app-wide",
-    "disableZoomControls": "Disable zoom controls app-wide"
   }
 }

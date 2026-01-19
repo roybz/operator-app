@@ -182,61 +182,63 @@ const LANGUAGE_OPTIONS = [
       <section style="margin-top: 24px;">
         <h4>{{ 'preferences.credentialsTitle' | translate }}</h4>
 
-        <div style="display:grid; gap:12px; max-width: 520px;">
-          @for (credential of prefs().credentials; track $index; let idx = $index) {
-            <div style="border:1px solid #ddd; padding:12px;">
-              <label
-                [attr.for]="'credential-label-' + idx"
-                style="display:block; margin-bottom: 6px;"
-              >
-                {{ 'preferences.credentialLabel' | translate }}
-              </label>
-              <input
-                [id]="'credential-label-' + idx"
-                type="text"
-                [value]="credential.label"
-                (input)="updateCredential(credential, 'label', $event)"
-                style="width:100%; padding:8px;"
-              />
+        <fieldset disabled style="border:none; padding:0; margin:0; opacity:0.6;">
+          <div style="display:grid; gap:12px; max-width: 520px;">
+            @for (credential of prefs().credentials; track $index; let idx = $index) {
+              <div style="border:1px solid #ddd; padding:12px;">
+                <label
+                  [attr.for]="'credential-label-' + idx"
+                  style="display:block; margin-bottom: 6px;"
+                >
+                  {{ 'preferences.credentialLabel' | translate }}
+                </label>
+                <input
+                  [id]="'credential-label-' + idx"
+                  type="text"
+                  [value]="credential.label"
+                  (input)="updateCredential(credential, 'label', $event)"
+                  style="width:100%; padding:8px;"
+                />
 
-              <label
-                [attr.for]="'credential-username-' + idx"
-                style="display:block; margin: 8px 0 6px;"
-              >
-                {{ 'preferences.credentialUsername' | translate }}
-              </label>
-              <input
-                [id]="'credential-username-' + idx"
-                type="text"
-                [value]="credential.username ?? ''"
-                (input)="updateCredential(credential, 'username', $event)"
-                style="width:100%; padding:8px;"
-              />
+                <label
+                  [attr.for]="'credential-username-' + idx"
+                  style="display:block; margin: 8px 0 6px;"
+                >
+                  {{ 'preferences.credentialUsername' | translate }}
+                </label>
+                <input
+                  [id]="'credential-username-' + idx"
+                  type="text"
+                  [value]="credential.username ?? ''"
+                  (input)="updateCredential(credential, 'username', $event)"
+                  style="width:100%; padding:8px;"
+                />
 
-              <label
-                [attr.for]="'credential-password-' + idx"
-                style="display:block; margin: 8px 0 6px;"
-              >
-                {{ 'preferences.credentialPassword' | translate }}
-              </label>
-              <input
-                [id]="'credential-password-' + idx"
-                type="password"
-                [value]="credential.password ?? ''"
-                (input)="updateCredential(credential, 'password', $event)"
-                style="width:100%; padding:8px;"
-              />
+                <label
+                  [attr.for]="'credential-password-' + idx"
+                  style="display:block; margin: 8px 0 6px;"
+                >
+                  {{ 'preferences.credentialPassword' | translate }}
+                </label>
+                <input
+                  [id]="'credential-password-' + idx"
+                  type="password"
+                  [value]="credential.password ?? ''"
+                  (input)="updateCredential(credential, 'password', $event)"
+                  style="width:100%; padding:8px;"
+                />
 
-              <button style="margin-top: 10px;" (click)="removeCredential(credential)">
-                {{ 'preferences.credentialDelete' | translate }}
-              </button>
-            </div>
-          }
-        </div>
+                <button style="margin-top: 10px;" (click)="removeCredential(credential)">
+                  {{ 'preferences.credentialDelete' | translate }}
+                </button>
+              </div>
+            }
+          </div>
 
-        <button style="margin-top: 12px;" (click)="addCredential()">
-          {{ 'preferences.credentialAdd' | translate }}
-        </button>
+          <button style="margin-top: 12px;" (click)="addCredential()">
+            {{ 'preferences.credentialAdd' | translate }}
+          </button>
+        </fieldset>
       </section>
     </section>
   `,
