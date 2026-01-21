@@ -17,11 +17,19 @@ interface NavigatorState {
 }
 
 const stateStore = new Map<string, NavigatorState>();
+const STORAGE_PREFIX = 'op_app_state:navigator';
 // Temporarily disabled to prevent iframe navigation misuse.
 const NAVIGATION_DISABLED = true;
 
+const storageKey = (userId: string, instanceId: string) =>
+  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
+
 export function clearNavigatorState(instanceId: string) {
   stateStore.delete(instanceId);
+  if (typeof window === 'undefined') return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
+    .forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function cloneNavigatorState(fromId: string, toId: string) {
@@ -113,6 +121,20 @@ export class NavigatorComponent implements OnInit {
   }
 
   ngOnInit() {
+    const userId = this.prefs.userId();
+    if (typeof window !== 'undefined') {
+      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as NavigatorState;
+          this.state.set(parsed);
+          stateStore.set(this.instanceId, parsed);
+          return;
+        } catch {
+          // ignore malformed stored data
+        }
+      }
+    }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       this.state.set({ ...stored, tabs: stored.tabs.map((tab) => ({ ...tab })) });
@@ -123,11 +145,13 @@ export class NavigatorComponent implements OnInit {
     const next = { tabs: [tab], activeTabId: tab.id };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
   }
 
   private commit(next: NavigatorState) {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
   }
 
   activeTab() {
@@ -204,6 +228,12 @@ export class NavigatorComponent implements OnInit {
   private updateTab(nextTab: NavigatorTab) {
     const tabs = this.state().tabs.map((tab) => (tab.id === nextTab.id ? nextTab : tab));
     this.commit({ ...this.state(), tabs });
+  }
+
+  private persistState() {
+    if (typeof window === 'undefined') return;
+    const userId = this.prefs.userId();
+    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   safeUrl(url?: string): SafeResourceUrl {

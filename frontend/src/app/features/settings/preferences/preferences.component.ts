@@ -110,6 +110,15 @@ const LANGUAGE_OPTIONS = [
           </select>
         </label>
 
+        <label>
+          {{ 'preferences.colorTheme' | translate }}
+          <select [value]="prefs().colorTheme" (change)="onColorThemeChange($event)">
+            <option value="standard">{{ 'preferences.themeStandard' | translate }}</option>
+            <option value="notepad">{{ 'preferences.themeNotepad' | translate }}</option>
+            <option value="ice">{{ 'preferences.themeIce' | translate }}</option>
+          </select>
+        </label>
+
         <label style="display:flex; gap:8px; align-items:center;">
           <input
             type="checkbox"
@@ -301,6 +310,11 @@ export class PreferencesSettingsComponent {
       | 'dark'
       | 'timeZone';
     this.save({ ...this.prefs(), themeMode });
+  }
+
+  onColorThemeChange(event: Event) {
+    const colorTheme = (event.target as HTMLSelectElement).value as 'standard' | 'notepad' | 'ice';
+    this.save({ ...this.prefs(), colorTheme });
   }
 
   onAccessibilityToggle(event: Event) {

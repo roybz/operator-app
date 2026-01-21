@@ -85,7 +85,7 @@ describe('App', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     const heading = compiled.querySelector('strong')?.textContent ?? '';
-    expect(heading).toContain("Roy's Planner");
+    expect(heading).toContain('Operator App');
     expect(compiled.textContent).toContain('Test mode');
     expect(compiled.textContent).toContain('Todo');
     expect(compiled.textContent).toContain('Workspaces');

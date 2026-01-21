@@ -87,6 +87,17 @@ import { DialogInstance } from '../../core/dialog.service';
       <div class="dialog__body">
         <ng-content />
       </div>
+      @if (hasSettings) {
+        <button
+          class="dialog__settings"
+          (pointerdown)="$event.stopPropagation()"
+          (click)="settings.emit()"
+          title="{{ 'dialogs.settings' | translate }}"
+          [disabled]="disabled"
+        >
+          ⚙️
+        </button>
+      }
       <div class="dialog__resize" (pointerdown)="startResize($event)"></div>
     </div>
   `,
@@ -160,6 +171,24 @@ import { DialogInstance } from '../../core/dialog.service';
       .dialog__resize:hover {
         box-shadow: 0 0 0 1px var(--color-border);
       }
+      .dialog__settings {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        opacity: 0.4;
+        font-size: 16px;
+        transition: opacity 120ms ease;
+      }
+      .dialog__settings:hover {
+        opacity: 1;
+      }
+      .dialog__settings:disabled {
+        opacity: 0.2;
+        cursor: not-allowed;
+      }
       .dialog--disabled {
         pointer-events: none;
       }
@@ -173,6 +202,7 @@ export class DialogComponent {
   @Input() trashDisabled = false;
   @Input() title = '';
   @Input() icon = '';
+  @Input() hasSettings = false;
 
   @Output() moved = new EventEmitter<{ x: number; y: number }>();
   @Output() resized = new EventEmitter<{ width: number; height: number }>();
@@ -183,6 +213,7 @@ export class DialogComponent {
   @Output() trash = new EventEmitter<void>();
   @Output() bringToFront = new EventEmitter<void>();
   @Output() titleEdited = new EventEmitter<string>();
+  @Output() settings = new EventEmitter<void>();
 
   private dragStart?: { x: number; y: number; left: number; top: number };
   private resizeStart?: { x: number; y: number; width: number; height: number };

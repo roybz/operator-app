@@ -77,7 +77,7 @@ export class DialogService {
 
   addWorkspace() {
     const workspaces = this.state().workspaces;
-    if (workspaces.length >= 5) return false;
+    if (workspaces.length >= 8) return false;
     const next = [
       ...workspaces,
       { id: this.uid('ws'), name: `Workspace ${workspaces.length + 1}` },
@@ -100,6 +100,30 @@ export class DialogService {
       ws.id === id ? { ...ws, name: nextName } : ws,
     );
     this.state.set({ ...this.state(), workspaces: next });
+    this.persist();
+  }
+
+  reorderWorkspaces(fromId: string, toId: string) {
+    if (fromId === toId) return;
+    const workspaces = [...this.state().workspaces];
+    const fromIndex = workspaces.findIndex((ws) => ws.id === fromId);
+    const toIndex = workspaces.findIndex((ws) => ws.id === toId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    const [moved] = workspaces.splice(fromIndex, 1);
+    workspaces.splice(toIndex, 0, moved);
+    this.state.set({ ...this.state(), workspaces });
+    this.persist();
+  }
+
+  reorderWorkspaceToIndex(fromId: string, toIndex: number) {
+    const workspaces = [...this.state().workspaces];
+    const fromIndex = workspaces.findIndex((ws) => ws.id === fromId);
+    if (fromIndex < 0) return;
+    const boundedIndex = Math.max(0, Math.min(workspaces.length, toIndex));
+    const [moved] = workspaces.splice(fromIndex, 1);
+    const nextIndex = fromIndex < boundedIndex ? boundedIndex - 1 : boundedIndex;
+    workspaces.splice(nextIndex, 0, moved);
+    this.state.set({ ...this.state(), workspaces });
     this.persist();
   }
 

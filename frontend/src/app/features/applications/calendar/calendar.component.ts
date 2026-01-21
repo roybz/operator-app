@@ -28,9 +28,17 @@ interface CalendarState {
 }
 
 const stateStore = new Map<string, CalendarState>();
+const STORAGE_PREFIX = 'op_app_state:calendar';
+
+const storageKey = (userId: string, instanceId: string) =>
+  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
 export function clearCalendarState(instanceId: string) {
   stateStore.delete(instanceId);
+  if (typeof window === 'undefined') return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
+    .forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function cloneCalendarState(fromId: string, toId: string) {
@@ -259,6 +267,20 @@ export class CalendarComponent implements OnInit {
   importDraft = signal('');
 
   ngOnInit() {
+    const userId = this.prefs.userId();
+    if (typeof window !== 'undefined') {
+      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as CalendarState;
+          this.state.set(parsed);
+          stateStore.set(this.instanceId, parsed);
+          return;
+        } catch {
+          // ignore malformed stored data
+        }
+      }
+    }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       this.state.set({
@@ -271,11 +293,19 @@ export class CalendarComponent implements OnInit {
       return;
     }
     stateStore.set(this.instanceId, this.state());
+    this.persistState();
   }
 
   private commit(next: CalendarState) {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
+  }
+
+  private persistState() {
+    if (typeof window === 'undefined') return;
+    const userId = this.prefs.userId();
+    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   periodLabel() {

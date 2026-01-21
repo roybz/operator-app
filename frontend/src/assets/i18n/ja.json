@@ -1,8 +1,8 @@
 {
   "about": {
     "copyright": "Copyright {{year}} Roy Nouneh.",
-    "github": "Github",
-    "line1": "Plan like a pro.",
+    "github": "GitHub",
+    "line1": "Operator App is an OS-like browser-first experiment created by Roy Nouneh and was first released under the MIT license in January of 2026.",
     "linkedin": "LinkedIn",
     "title": "このアプリについて"
   },
@@ -29,13 +29,14 @@
     "wipeGuestConfirm": "Wipe all guest account data now?"
   },
   "app": {
-    "title": "Roy's Planner"
+    "title": "Operator App"
   },
   "apps": {
     "calculator": "Calculator",
     "calculatorGroup": "Calculator",
     "calendar": "Calendar (Beta)",
     "clock": "Clock",
+    "kanban": "Kanban",
     "navigator": "Navigator",
     "navigatorGroup": "Navigator",
     "notes": "Notes",
@@ -50,7 +51,8 @@
       "generic": "サインインできませんでした。",
       "invalid": "パスワードが無効です。",
       "locked": "Too many failed attempts. Try again later.",
-      "notFound": "ユーザーが見つかりません。"
+      "notFound": "ユーザーが見つかりません。",
+      "guestOnly": "Guest mode only. Sign-in is disabled."
     },
     "guest": "ゲストとして続行",
     "guestDisabled": "Guest access is disabled by an admin.",
@@ -60,8 +62,19 @@
     "resetGuestConfirm": "Reset the local guest account and clear its data?",
     "resetGuestConfirmButton": "Reset guest",
     "signIn": "サインイン",
-    "title": "サインイン",
-    "username": "ユーザー名"
+    "title": "Operator App",
+    "username": "ユーザー名",
+    "github": "GitHub"
+  },
+  "calculator": {
+    "closeSettings": "Close settings",
+    "convert": "Convert",
+    "currency": "Currency conversion",
+    "currencyDisclaimer": "For fun only. Rates are estimates and not suitable for real-world decisions.",
+    "currencyErrorFetch": "Unable to fetch rates",
+    "currencyErrorInvalid": "Invalid amount",
+    "scientific": "Scientific mode",
+    "settingsTitle": "Calculator settings"
   },
   "calendar": {
     "add": "Add",
@@ -86,12 +99,25 @@
   },
   "canvas": {
     "lockCanvas": "Lock canvas size?",
+    "mode": "Canvas size",
+    "modeFollow": "Canvas follows browser size",
+    "modeLocked": "Locked canvas",
     "originalScale": "Original scale",
     "updateSize": "Update",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
   },
   "clock": {
+    "addClock": "Add clock",
+    "clocksTitle": "Clocks",
+    "closeSettings": "Close settings",
+    "dstActive": "DST active",
+    "dstInactive": "DST inactive",
+    "format12": "12-hour",
+    "format24": "24-hour",
+    "formatLabel": "Time format",
+    "removeClock": "Remove",
+    "settingsTitle": "Clock settings",
     "timeZone": "Time zone"
   },
   "dialogs": {
@@ -114,14 +140,43 @@
     "reset": "ダイアログ位置をリセット",
     "resetLeft": "左にリセット",
     "resetMiddle": "中央にリセット",
+    "settings": "Settings",
     "showAll": "すべてのダイアログを表示",
     "stash": "保管",
     "trash": "削除",
     "unlockDelete": "Unlock delete",
     "unstash": "戻す"
   },
+  "kanban": {
+    "addBoard": "Add board",
+    "addCard": "Add card",
+    "addChecklist": "Add checklist item",
+    "boardLabel": "Board",
+    "cardChecklist": "Checklist",
+    "cardDescription": "Description",
+    "cardDetails": "Card details",
+    "cardDue": "Due date",
+    "cardLabels": "Labels (comma-separated)",
+    "cardTitle": "Title",
+    "closeSettings": "Close settings",
+    "columnDone": "Done",
+    "columnInProgress": "In Progress",
+    "columnTodo": "Todo",
+    "defaultBoard": "Board 1",
+    "defaultCardTitle": "New card",
+    "due": "Due",
+    "removeBoard": "Remove",
+    "settingsTitle": "Kanban settings",
+    "defaultColumn": "New column",
+    "addColumn": "Add column",
+    "removeColumn": "Remove column",
+    "confirmRemoveColumn": "Remove this column?",
+    "moveItemsLeft": "Move items to the column on the left",
+    "deleteItems": "Items will be deleted",
+    "closeDetails": "Close"
+  },
   "landing": {
-    "welcome": "Welcome to Roy's Planner."
+    "welcome": "Welcome to Operator App."
   },
   "mock": {
     "label": "テストモード"
@@ -131,7 +186,8 @@
     "collapse": "折りたたむ",
     "expand": "展開",
     "logout": "ログアウト",
-    "settings": "設定"
+    "settings": "設定",
+    "license": "License & Privacy Policy"
   },
   "notes": {
     "addFolder": "Add folder",
@@ -204,7 +260,11 @@
     "timeFormat12": "12時間",
     "timeFormat24": "24時間",
     "timeZone": "優先タイムゾーン",
-    "title": "環境設定"
+    "title": "環境設定",
+    "colorTheme": "Color theme",
+    "themeStandard": "Standard",
+    "themeNotepad": "Notepad Yellow (Beta)",
+    "themeIce": "Ice Blue (Beta)"
   },
   "preview": {
     "label": "ユーザーとしてプレビュー: {{user}}",
@@ -221,6 +281,11 @@
     "cancelChanges": "Cancel changes",
     "closeConfirm": "Discard unsaved settings changes?",
     "discard": "Discard changes",
+    "exportAppsJson": "Export all data (JSON)",
+    "exportAppsXml": "Export all data (XML)",
+    "importAppsJson": "Import all data (JSON)",
+    "importAppsXml": "Import all data (XML)",
+    "importFailed": "Import failed.",
     "navigatorBeta": "Navigator (Beta) (Broken, test at your own will)",
     "notesBeta": "Notes (Beta)",
     "preferencesLink": "環境設定",
@@ -228,11 +293,15 @@
     "previewNone": "プレビューなし",
     "previewPersist": "プレビュー中の変更を保存",
     "previewTitle": "ユーザーとしてプレビュー",
+    "resetAllApps": "Reset all application data",
+    "resetAllConfirm": "Reset all application data for this user?",
+    "resetAllConfirmButton": "Reset all",
     "title": "設定",
     "usersLink": "ユーザー",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "enableAppLabel": "Enable?"
   },
   "table": {
     "actions": "操作",
@@ -293,7 +362,8 @@
       "lastAdmin": "管理者は最低1人必要です。",
       "passwordRequired": "Password is required.",
       "usernameRequired": "ユーザー名は必須です。",
-      "usernameTaken": "そのユーザー名は既に使用されています。"
+      "usernameTaken": "そのユーザー名は既に使用されています。",
+      "guestOnly": "Guest mode only. User management is disabled."
     },
     "password": "パスワード",
     "passwordUpdated": "Password updated successfully.",
@@ -310,5 +380,12 @@
   },
   "workspaces": {
     "button": "ワークスペース"
+  },
+  "license": {
+    "title": "License & Privacy Policy",
+    "mitTitle": "MIT License",
+    "mitBody": "Copyright (c) 2026 Roy Nouneh\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+    "privacyTitle": "Privacy Policy",
+    "privacyBody": "The demo hosted at roy.bz does not collect personal information, does not track users, and does not use cookies. This is a fun technical experiment intended for people to explore, learn from, and optionally copy or fork.\n\nThis demo also uses external services (for example, public currency conversion APIs) that are subject to their own privacy policies and availability.\n\nBy using this demo or the code, you agree that you are responsible for your own use, and the author is not liable for any outcomes."
   }
 }

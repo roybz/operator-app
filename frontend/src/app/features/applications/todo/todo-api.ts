@@ -43,9 +43,9 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined';
 }
 
-function readMockTodos(instanceId: string): Todo[] {
+function readMockTodos(instanceId: string, userId: string): Todo[] {
   if (!isBrowser()) return [];
-  const raw = window.localStorage.getItem(`${MOCK_STORAGE_KEY}:${instanceId}`);
+  const raw = window.localStorage.getItem(`${MOCK_STORAGE_KEY}:${userId}:${instanceId}`);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -55,19 +55,19 @@ function readMockTodos(instanceId: string): Todo[] {
   }
 }
 
-function writeMockTodos(instanceId: string, todos: Todo[]) {
+function writeMockTodos(instanceId: string, userId: string, todos: Todo[]) {
   if (!isBrowser()) return;
-  window.localStorage.setItem(`${MOCK_STORAGE_KEY}:${instanceId}`, JSON.stringify(todos));
+  window.localStorage.setItem(`${MOCK_STORAGE_KEY}:${userId}:${instanceId}`, JSON.stringify(todos));
 }
 
 function newId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export async function listTodos(instanceId: string): Promise<Todo[]> {
+export async function listTodos(instanceId: string, userId: string): Promise<Todo[]> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos(instanceId);
+    const items = readMockTodos(instanceId, userId);
     return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
   const res = await fetch(`${API_BASE}/todos`, { credentials: 'omit' });
@@ -75,12 +75,12 @@ export async function listTodos(instanceId: string): Promise<Todo[]> {
   return res.json();
 }
 
-export async function createTodo(text: string, instanceId: string): Promise<Todo> {
+export async function createTodo(text: string, instanceId: string, userId: string): Promise<Todo> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
     const created: Todo = { id: newId(), text, createdAt: new Date().toISOString() };
-    const items = [created, ...readMockTodos(instanceId)];
-    writeMockTodos(instanceId, items);
+    const items = [created, ...readMockTodos(instanceId, userId)];
+    writeMockTodos(instanceId, userId, items);
     return created;
   }
   const res = await fetch(`${API_BASE}/todos`, {
@@ -92,11 +92,11 @@ export async function createTodo(text: string, instanceId: string): Promise<Todo
   return res.json();
 }
 
-export async function deleteTodo(id: string, instanceId: string): Promise<void> {
+export async function deleteTodo(id: string, instanceId: string, userId: string): Promise<void> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos(instanceId).filter((t) => t.id !== id);
-    writeMockTodos(instanceId, items);
+    const items = readMockTodos(instanceId, userId).filter((t) => t.id !== id);
+    writeMockTodos(instanceId, userId, items);
     return;
   }
   const res = await fetch(`${API_BASE}/todos/${encodeURIComponent(id)}`, {
@@ -109,13 +109,14 @@ export async function updateTodo(
   id: string,
   updates: Partial<Pick<Todo, 'text' | 'completed'>>,
   instanceId: string,
+  userId: string,
 ): Promise<Todo> {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos(instanceId).map((todo) =>
+    const items = readMockTodos(instanceId, userId).map((todo) =>
       todo.id === id ? { ...todo, ...updates } : todo,
     );
-    writeMockTodos(instanceId, items);
+    writeMockTodos(instanceId, userId, items);
     const next = items.find((todo) => todo.id === id);
     if (!next) throw new Error('todo.error.update');
     return next;
@@ -129,14 +130,14 @@ export async function updateTodo(
   return res.json();
 }
 
-export async function cloneTodos(fromInstanceId: string, toInstanceId: string) {
+export async function cloneTodos(fromInstanceId: string, toInstanceId: string, userId: string) {
   const API_BASE = getApiBase();
   if (!API_BASE) {
-    const items = readMockTodos(fromInstanceId).map((todo) => ({
+    const items = readMockTodos(fromInstanceId, userId).map((todo) => ({
       ...todo,
       id: newId(),
       createdAt: new Date().toISOString(),
     }));
-    writeMockTodos(toInstanceId, items);
+    writeMockTodos(toInstanceId, userId, items);
   }
 }

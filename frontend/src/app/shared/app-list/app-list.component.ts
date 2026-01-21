@@ -126,6 +126,7 @@ export interface AppGroup {
 export class AppListComponent {
   @Input({ required: true }) apps: AppGroup[] = [];
   @Input({ required: true }) instancesByApp: Record<AppId, DialogInstance[]> = {
+    kanban: [],
     todo: [],
     calculator: [],
     timer: [],
@@ -144,6 +145,7 @@ export class AppListComponent {
 
   private translate = inject(TranslateService);
   private collapsed = signal<Record<AppId, boolean>>({
+    kanban: false,
     todo: false,
     calculator: false,
     timer: false,

@@ -28,3 +28,6 @@ yarn-debug.log*
 yarn-error.log*
 .npm-cache/
 **/.playwright-browsers/
+
+# macOS Finder
+.DS_Store

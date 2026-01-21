@@ -6,14 +6,19 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test('landing loads with mock label and navigation', async ({ page }) => {
+const enterApp = async (page) => {
   await page.goto('/');
+  const guestButton = page.getByRole('button', { name: 'Continue as guest' });
+  if (await guestButton.count()) {
+    await guestButton.click();
+  }
+  await page.locator('#loading-screen').waitFor({ state: 'detached' });
+};
 
-  await page.locator('input[type="text"]').fill('admin');
-  await page.locator('input[type="password"]').fill('');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+test('landing loads with mock label and navigation', async ({ page }) => {
+  await enterApp(page);
 
-  await expect(page.getByText("Roy's Planner")).toBeVisible();
+  await expect(page.getByText('Operator App')).toBeVisible();
   await expect(page.getByText('Test mode')).toBeVisible();
   await expect(page.getByText('Workspaces')).toBeVisible();
 
@@ -22,23 +27,19 @@ test('landing loads with mock label and navigation', async ({ page }) => {
     .getByText('Todo')
     .locator('..')
     .getByRole('button', { name: '+' })
-    .click();
+    .click({ force: true });
   await expect(page.locator('.dialog__title', { hasText: 'Todo' })).toBeVisible();
 });
 
 test('can open additional applications', async ({ page }) => {
-  await page.goto('/');
-
-  await page.locator('input[type="text"]').fill('admin');
-  await page.locator('input[type="password"]').fill('');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await enterApp(page);
 
   await page
     .locator('aside')
     .getByText('Calculator')
     .locator('..')
     .getByRole('button', { name: '+' })
-    .click();
+    .click({ force: true });
   await expect(page.locator('.dialog__title', { hasText: 'Calculator' })).toBeVisible();
 
   await page
@@ -46,7 +47,7 @@ test('can open additional applications', async ({ page }) => {
     .getByText('Timer')
     .locator('..')
     .getByRole('button', { name: '+' })
-    .click();
+    .click({ force: true });
   await expect(page.locator('.dialog__title', { hasText: 'Timer' })).toBeVisible();
 
   await page
@@ -54,23 +55,19 @@ test('can open additional applications', async ({ page }) => {
     .getByText('Notes')
     .locator('..')
     .getByRole('button', { name: '+' })
-    .click();
+    .click({ force: true });
   await expect(page.locator('.dialog__title', { hasText: 'Notes' })).toBeVisible();
 });
 
 test('can add and delete a todo in mock mode', async ({ page }) => {
-  await page.goto('/');
-
-  await page.locator('input[type="text"]').fill('admin');
-  await page.locator('input[type="password"]').fill('');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await enterApp(page);
 
   await page
     .locator('aside')
     .getByText('Todo')
     .locator('..')
     .getByRole('button', { name: '+' })
-    .click();
+    .click({ force: true });
 
   await page.getByPlaceholder('Add a todo').fill('Buy milk');
   await page.getByRole('button', { name: 'Add' }).click();

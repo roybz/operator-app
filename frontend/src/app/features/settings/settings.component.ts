@@ -26,7 +26,11 @@ import { AboutComponent } from '../about/about.component';
       <div
         style="position:sticky; top:0; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:2;"
       >
-        <button (click)="apply()" [disabled]="!draft.dirty()">
+        <button
+          (click)="apply()"
+          [disabled]="!draft.dirty()"
+          [style.opacity]="draft.dirty() ? 1 : 0.6"
+        >
           {{ 'settings.apply' | translate }}
         </button>
         @if (draft.dirty()) {
@@ -37,7 +41,7 @@ import { AboutComponent } from '../about/about.component';
       <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
       <nav style="margin: 16px 0; display:flex; gap:12px;">
-        @if (auth.isAdmin()) {
+        @if (auth.isAdmin() && !auth.guestModeOnly()) {
           <button (click)="selectTab('admin')">{{ 'settings.adminLink' | translate }}</button>
         }
         <button (click)="selectTab('preferences')">
@@ -46,7 +50,9 @@ import { AboutComponent } from '../about/about.component';
         <button (click)="selectTab('applications')">
           {{ 'settings.applicationsLink' | translate }}
         </button>
-        <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
+        @if (!auth.guestModeOnly()) {
+          <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
+        }
       </nav>
 
       @if (auth.isAdmin() && previewCandidates().length) {
@@ -84,7 +90,7 @@ import { AboutComponent } from '../about/about.component';
         </section>
       }
 
-      @if (tab() === 'admin') {
+      @if (tab() === 'admin' && auth.isAdmin() && !auth.guestModeOnly()) {
         <app-admin-settings />
       }
       @if (tab() === 'preferences') {
@@ -93,7 +99,7 @@ import { AboutComponent } from '../about/about.component';
       @if (tab() === 'applications') {
         <app-applications-settings />
       }
-      @if (tab() === 'users') {
+      @if (tab() === 'users' && !auth.guestModeOnly()) {
         <app-users-settings />
       }
 

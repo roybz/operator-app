@@ -1,6 +1,7 @@
-import { Component, Input, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 
 type TimerMode = 'stopwatch' | 'countdown' | 'pomodoro';
 type PomodoroPhase = 'work' | 'break' | 'longBreak';
@@ -19,9 +20,17 @@ interface TimerState {
 }
 
 const stateStore = new Map<string, TimerState>();
+const STORAGE_PREFIX = 'op_app_state:timer';
+
+const storageKey = (userId: string, instanceId: string) =>
+  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
 export function clearTimerState(instanceId: string) {
   stateStore.delete(instanceId);
+  if (typeof window === 'undefined') return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
+    .forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function cloneTimerState(fromId: string, toId: string) {
@@ -138,16 +147,32 @@ const defaultState = (): TimerState => ({
 export class TimerComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
+  private prefs = inject(AppPreferencesService);
   state = signal<TimerState>(defaultState());
   private tickId?: number;
 
   ngOnInit() {
+    const userId = this.prefs.userId();
+    if (typeof window !== 'undefined') {
+      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as TimerState;
+          this.state.set(parsed);
+          stateStore.set(this.instanceId, parsed);
+          return;
+        } catch {
+          // ignore malformed stored data
+        }
+      }
+    }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       this.state.set({ ...stored });
     } else {
       stateStore.set(this.instanceId, this.state());
     }
+    this.persistState();
   }
 
   ngOnDestroy() {
@@ -157,6 +182,13 @@ export class TimerComponent implements OnInit, OnDestroy {
   private commit(next: TimerState) {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
+  }
+
+  private persistState() {
+    if (typeof window === 'undefined') return;
+    const userId = this.prefs.userId();
+    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   setMode(mode: TimerMode) {

@@ -21,7 +21,7 @@ describe('LandingComponent', () => {
 
   it('renders translated welcome text', async () => {
     const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('en', { landing: { welcome: "Welcome to Roy's Planner." } });
+    translate.setTranslation('en', { landing: { welcome: 'Welcome to Operator App.' } });
     translate.use('en');
 
     const fixture = TestBed.createComponent(LandingComponent);
@@ -29,6 +29,6 @@ describe('LandingComponent', () => {
     await fixture.whenStable();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain("Welcome to Roy's Planner.");
+    expect(compiled.textContent).toContain('Welcome to Operator App.');
   });
 });

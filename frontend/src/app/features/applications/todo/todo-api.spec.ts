@@ -20,14 +20,14 @@ describe('todo-api mock mode', () => {
 
   it('creates, lists, and deletes todos using localStorage', async () => {
     const instanceId = 'dlg_test';
-    const created = await createTodo('Task one', instanceId);
+    const created = await createTodo('Task one', instanceId, 'u_test');
     expect(created.text).toBe('Task one');
 
-    const listAfterCreate = await listTodos(instanceId);
+    const listAfterCreate = await listTodos(instanceId, 'u_test');
     expect(listAfterCreate.length).toBe(1);
 
-    await deleteTodo(created.id, instanceId);
-    const listAfterDelete = await listTodos(instanceId);
+    await deleteTodo(created.id, instanceId, 'u_test');
+    const listAfterDelete = await listTodos(instanceId, 'u_test');
     expect(listAfterDelete.length).toBe(0);
   });
 });
@@ -49,7 +49,7 @@ describe('todo-api live mode', () => {
   });
 
   it('uses fetch when apiBaseUrl is set', async () => {
-    await listTodos('dlg_live');
+    await listTodos('dlg_live', 'u_live');
     expect(fetchSpy).toHaveBeenCalled();
   });
 });
