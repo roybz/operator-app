@@ -2,6 +2,7 @@ import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { listTodos, createTodo, deleteTodo, updateTodo, Todo } from './todo-api';
+import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 
 @Component({
   selector: 'app-todo-page',
@@ -92,6 +93,7 @@ export class TodoPageComponent implements OnInit {
   editingId = signal<string | null>(null);
   editingText = signal('');
   private readonly translate = inject(TranslateService);
+  private readonly prefs = inject(AppPreferencesService);
 
   async ngOnInit() {
     await this.reload();
@@ -101,7 +103,7 @@ export class TodoPageComponent implements OnInit {
     this.err.set(null);
     this.loading.set(true);
     try {
-      this.todos.set(await listTodos(this.instanceId));
+      this.todos.set(await listTodos(this.instanceId, this.prefs.userId()));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     } finally {
@@ -115,7 +117,7 @@ export class TodoPageComponent implements OnInit {
 
     this.err.set(null);
     try {
-      const created = await createTodo(trimmed, this.instanceId);
+      const created = await createTodo(trimmed, this.instanceId, this.prefs.userId());
       this.todos.set([created, ...this.todos()]);
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
@@ -129,7 +131,7 @@ export class TodoPageComponent implements OnInit {
   async onDelete(t: Todo) {
     this.err.set(null);
     try {
-      await deleteTodo(t.id, this.instanceId);
+      await deleteTodo(t.id, this.instanceId, this.prefs.userId());
       this.todos.set(this.todos().filter((x) => x.id !== t.id));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
@@ -147,7 +149,12 @@ export class TodoPageComponent implements OnInit {
     this.editingId.set(null);
     if (!nextText || nextText === t.text) return;
     try {
-      const updated = await updateTodo(t.id, { text: nextText }, this.instanceId);
+      const updated = await updateTodo(
+        t.id,
+        { text: nextText },
+        this.instanceId,
+        this.prefs.userId(),
+      );
       this.todos.set(this.todos().map((todo) => (todo.id === t.id ? updated : todo)));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
@@ -157,7 +164,7 @@ export class TodoPageComponent implements OnInit {
   async toggleComplete(t: Todo, event: Event) {
     const completed = (event.target as HTMLInputElement).checked;
     try {
-      const updated = await updateTodo(t.id, { completed }, this.instanceId);
+      const updated = await updateTodo(t.id, { completed }, this.instanceId, this.prefs.userId());
       this.todos.set(this.todos().map((todo) => (todo.id === t.id ? updated : todo)));
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));

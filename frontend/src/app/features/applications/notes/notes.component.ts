@@ -1,6 +1,7 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -32,9 +33,17 @@ interface NotesState {
 }
 
 const stateStore = new Map<string, NotesState>();
+const STORAGE_PREFIX = 'op_app_state:notes';
+
+const storageKey = (userId: string, instanceId: string) =>
+  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
 export function clearNotesState(instanceId: string) {
   stateStore.delete(instanceId);
+  if (typeof window === 'undefined') return;
+  Object.keys(window.localStorage)
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
+    .forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function cloneNotesState(fromId: string, toId: string) {
@@ -240,9 +249,11 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             @if (selectedNode()?.editorMode === 'rich') {
               <div
                 contenteditable="true"
-                [innerHTML]="selectedNode()?.content"
+                dir="auto"
+                [innerHTML]="richHtml()"
+                (focus)="startRichEdit()"
                 (input)="onRichInput($event)"
-                (blur)="commitRichEdit()"
+                (blur)="finishRichEdit()"
                 [style.pointerEvents]="selectedNode()?.locked ? 'none' : 'auto'"
                 [style.opacity]="selectedNode()?.locked ? 0.6 : 1"
                 style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:200px;"
@@ -256,7 +267,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               ></textarea>
             } @else {
               <div
-                [innerHTML]="renderMarkdown(selectedNode()?.content ?? '')"
+                [innerHTML]="renderVisual(selectedNode())"
                 style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:200px; background:var(--color-bg); color:var(--color-text);"
               ></div>
             }
@@ -336,6 +347,7 @@ export class NotesComponent implements OnInit {
   @Input({ required: true }) instanceId!: string;
 
   private translate = inject(TranslateService);
+  private prefs = inject(AppPreferencesService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -348,11 +360,32 @@ export class NotesComponent implements OnInit {
   editingNodeId = signal<string | null>(null);
   editingName = signal('');
   bulkDeleteOpen = signal(false);
+  richFocused = signal(false);
+  richSnapshot = signal('');
+  richHtml = computed(() =>
+    this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
+  );
 
   ngOnInit() {
+    const userId = this.prefs.userId();
+    if (typeof window !== 'undefined') {
+      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as NotesState;
+          this.state.set(parsed);
+          stateStore.set(this.instanceId, parsed);
+          this.syncRichSnapshot();
+          return;
+        } catch {
+          // ignore malformed stored data
+        }
+      }
+    }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       this.state.set(this.cloneState(stored));
+      this.syncRichSnapshot();
       return;
     }
     const root = createFolder('Notes');
@@ -363,11 +396,20 @@ export class NotesComponent implements OnInit {
     const next = { ...this.state(), root, selectedId: firstNote.id };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
+    this.syncRichSnapshot();
   }
 
   private commit(next: NotesState) {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
+    this.persistState();
+  }
+
+  private persistState() {
+    if (typeof window === 'undefined') return;
+    const userId = this.prefs.userId();
+    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   activeRoot() {
@@ -389,17 +431,32 @@ export class NotesComponent implements OnInit {
     return id ? this.findNode(this.activeRoot(), id) : null;
   }
 
+  private syncRichSnapshot() {
+    const note = this.selectedNode();
+    if (!note || note.type !== 'note') {
+      this.richSnapshot.set('');
+      this.richFocused.set(false);
+      return;
+    }
+    if (!this.richFocused()) {
+      this.richSnapshot.set(note.content ?? '');
+    }
+  }
+
   selectNode(id: string) {
     if (id === this.activeRoot().id) return;
     this.commit({ ...this.state(), selectedId: id });
+    this.syncRichSnapshot();
   }
 
   toggleView(view: NotesView) {
     if (this.state().view === view) {
       this.commit({ ...this.state(), listCollapsed: !this.state().listCollapsed });
+      this.syncRichSnapshot();
       return;
     }
     this.commit({ ...this.state(), view, listCollapsed: false, selectedId: null, selectedIds: [] });
+    this.syncRichSnapshot();
   }
 
   toggleSidebar() {
@@ -413,6 +470,7 @@ export class NotesComponent implements OnInit {
     const folder = createFolder(this.translate.instant('notes.defaultFolder'), parent.id);
     parent.children?.push(folder);
     this.commit({ ...this.state(), selectedId: folder.id });
+    this.syncRichSnapshot();
   }
 
   addNote() {
@@ -422,6 +480,7 @@ export class NotesComponent implements OnInit {
     const note = createNote(this.translate.instant('notes.defaultNote'), parent.id);
     parent.children?.push(note);
     this.commit({ ...this.state(), selectedId: note.id });
+    this.syncRichSnapshot();
   }
 
   toggleFolder(node: NoteNode) {
@@ -435,15 +494,20 @@ export class NotesComponent implements OnInit {
     if (!note || note.type !== 'note') return;
     note.editorVisible = !note.editorVisible;
     this.commit({ ...this.state() });
+    this.syncRichSnapshot();
   }
 
   toggleEditorMode() {
     const note = this.selectedNode();
     if (!note || note.type !== 'note') return;
     const nextMode = note.lastEditMode === 'rich' ? 'markdown' : 'rich';
+    if (nextMode === 'markdown' && note.lastEditMode === 'rich') {
+      note.content = this.richToPlainText(note.content ?? '');
+    }
     note.editorMode = nextMode;
     note.lastEditMode = nextMode;
     this.commit({ ...this.state() });
+    this.syncRichSnapshot();
   }
 
   toggleVisualMode() {
@@ -455,6 +519,7 @@ export class NotesComponent implements OnInit {
       note.editorMode = 'visual';
     }
     this.commit({ ...this.state() });
+    this.syncRichSnapshot();
   }
 
   toggleLock() {
@@ -465,15 +530,22 @@ export class NotesComponent implements OnInit {
     this.commit({ ...this.state() });
   }
 
+  startRichEdit() {
+    this.richFocused.set(true);
+    this.syncRichSnapshot();
+  }
+
+  finishRichEdit() {
+    this.richFocused.set(false);
+    this.commit({ ...this.state() });
+    this.syncRichSnapshot();
+  }
+
   onRichInput(event: Event) {
     const note = this.selectedNode();
     if (!note || note.type !== 'note' || note.locked) return;
     const target = event.target as HTMLElement;
     note.content = target.innerHTML;
-  }
-
-  commitRichEdit() {
-    this.commit({ ...this.state() });
   }
 
   onMarkdownInput(event: Event) {
@@ -862,5 +934,36 @@ export class NotesComponent implements OnInit {
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/\n/g, '<br />');
+  }
+
+  renderVisual(note: NoteNode | null) {
+    if (!note || note.type !== 'note') return '';
+    const raw = note.content ?? '';
+    if (note.lastEditMode === 'markdown') {
+      return this.renderMarkdown(raw);
+    }
+    return this.normalizeRichHtml(raw);
+  }
+
+  private normalizeRichHtml(input: string) {
+    return input
+      .replace(/\u00a0/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;nbsp;/g, ' ')
+      .replace(/<div><br><\/div>/g, '<br />')
+      .replace(/<div>/g, '')
+      .replace(/<\/div>/g, '<br />');
+  }
+
+  private richToPlainText(input: string) {
+    const normalized = this.normalizeRichHtml(input)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '');
+    return normalized
+      .replace(/\u00a0/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;nbsp;/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trimEnd();
   }
 }

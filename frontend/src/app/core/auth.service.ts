@@ -191,6 +191,7 @@ export class AuthService {
 
   resetGuestAccount() {
     this.clearMockTodosForUser(GUEST_USER_ID);
+    this.clearAppStateForUser(GUEST_USER_ID);
     const prefs = { ...this.prefsSignal() };
     prefs[GUEST_USER_ID] = this.defaultPreferences();
     this.prefsSignal.set(prefs);
@@ -644,7 +645,17 @@ export class AuthService {
         // ignore malformed stored data
       }
     });
-    instanceIds.forEach((id) => window.localStorage.removeItem(`${MOCK_TODO_KEY}:${id}`));
+    instanceIds.forEach((id) => {
+      window.localStorage.removeItem(`${MOCK_TODO_KEY}:${userId}:${id}`);
+      window.localStorage.removeItem(`${MOCK_TODO_KEY}:${id}`);
+    });
+  }
+
+  private clearAppStateForUser(userId: string) {
+    if (typeof window === 'undefined') return;
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith('op_app_state:') && key.includes(`:${userId}:`))
+      .forEach((key) => window.localStorage.removeItem(key));
   }
 
   saveOrgSettings(next: OrgSettings) {

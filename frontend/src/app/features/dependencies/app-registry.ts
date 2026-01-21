@@ -1,6 +1,12 @@
 import { AppDefinition } from './app-types';
 
 export const APP_REGISTRY: Record<AppDefinition['id'], AppDefinition> = {
+  kanban: {
+    id: 'kanban',
+    labelKey: 'apps.kanban',
+    icon: '🗂️',
+    defaultSize: { x: 0, y: 0, width: 900, height: 600 },
+  },
   todo: {
     id: 'todo',
     labelKey: 'apps.todo',

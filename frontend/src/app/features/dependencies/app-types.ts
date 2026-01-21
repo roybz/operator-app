@@ -1,4 +1,12 @@
-export type AppId = 'todo' | 'calculator' | 'timer' | 'navigator' | 'notes' | 'calendar' | 'clock';
+export type AppId =
+  | 'kanban'
+  | 'todo'
+  | 'calculator'
+  | 'timer'
+  | 'navigator'
+  | 'notes'
+  | 'calendar'
+  | 'clock';
 
 export interface DialogRect {
   x: number;

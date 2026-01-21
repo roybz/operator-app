@@ -23,6 +23,7 @@ import { NavigatorComponent } from './features/applications/navigator/navigator.
 import { NotesComponent } from './features/applications/notes/notes.component';
 import { CalendarComponent } from './features/applications/calendar/calendar.component';
 import { ClockComponent } from './features/applications/clock/clock.component';
+import { KanbanComponent } from './features/applications/kanban/kanban.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
 import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
@@ -33,7 +34,9 @@ import { cloneNotesState } from './features/applications/notes/notes.component';
 import { cloneTimerState } from './features/applications/timer/timer.component';
 import { cloneCalendarState } from './features/applications/calendar/calendar.component';
 import { cloneClockState } from './features/applications/clock/clock.component';
+import { cloneKanbanState } from './features/applications/kanban/kanban.component';
 import { cloneTodos } from './features/applications/todo/todo-api';
+import { InstanceSettingsService } from './core/instance-settings.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -75,6 +78,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     NotesComponent,
     CalendarComponent,
     ClockComponent,
+    KanbanComponent,
     SettingsComponent,
   ],
   styles: [
@@ -283,55 +287,64 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
 
             <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
               @if (showViewportSizingControls()) {
-                <label style="display:flex; align-items:center; gap:8px;">
-                  <input
-                    type="checkbox"
-                    [checked]="isCanvasLocked()"
-                    (change)="toggleCanvasLock($event)"
-                  />
-                  {{ 'canvas.lockCanvas' | translate }}
+                <label style="display:flex; flex-direction:column; gap:6px;">
+                  {{ 'canvas.mode' | translate }}
+                  <select
+                    [value]="isCanvasLocked() ? 'locked' : 'follow'"
+                    (change)="setCanvasMode($event)"
+                  >
+                    <option value="follow">{{ 'canvas.modeFollow' | translate }}</option>
+                    <option value="locked">{{ 'canvas.modeLocked' | translate }}</option>
+                  </select>
                 </label>
-                <div
-                  style="display:flex; align-items:center; gap:8px;"
-                  [style.opacity]="isCanvasLocked() ? 1 : 0.5"
-                >
-                  <input
-                    type="number"
-                    [value]="canvasDraftWidth()"
-                    (input)="canvasDraftWidth.set($any($event.target).valueAsNumber)"
-                    [disabled]="!isCanvasLocked()"
-                    min="1024"
-                    max="7680"
-                    style="width:90px; padding:4px;"
-                  />
-                  <span>×</span>
-                  <input
-                    type="number"
-                    [value]="canvasDraftHeight()"
-                    (input)="canvasDraftHeight.set($any($event.target).valueAsNumber)"
-                    [disabled]="!isCanvasLocked()"
-                    min="768"
-                    max="4320"
-                    style="width:90px; padding:4px;"
-                  />
-                  @if (isCanvasLocked()) {
+                @if (isCanvasLocked()) {
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input
+                      type="number"
+                      [value]="canvasDraftWidth()"
+                      (input)="canvasDraftWidth.set($any($event.target).valueAsNumber)"
+                      min="1024"
+                      max="20000"
+                      style="width:90px; padding:4px;"
+                    />
+                    <span>×</span>
+                    <input
+                      type="number"
+                      [value]="canvasDraftHeight()"
+                      (input)="canvasDraftHeight.set($any($event.target).valueAsNumber)"
+                      min="768"
+                      max="20000"
+                      style="width:90px; padding:4px;"
+                    />
                     <button (click)="applyCanvasSize()" [disabled]="!canvasDraftDirty()">
                       {{ 'canvas.updateSize' | translate }}
                     </button>
-                  }
-                </div>
+                  </div>
+                }
               }
               @if (showZoomControls()) {
                 <div
                   style="display:flex; align-items:center; gap:8px; border-top:1px solid var(--color-border); padding-top:8px; margin-top:8px;"
                 >
-                  <button (click)="resetZoom()" [disabled]="settingsOpen()">
+                  <button
+                    (click)="resetZoom()"
+                    [disabled]="settingsOpen()"
+                    [style.opacity]="settingsOpen() ? 0.5 : 1"
+                  >
                     {{ 'canvas.originalScale' | translate }}
                   </button>
-                  <button (click)="zoomOut()" [disabled]="settingsOpen()">
+                  <button
+                    (click)="zoomOut()"
+                    [disabled]="settingsOpen()"
+                    [style.opacity]="settingsOpen() ? 0.5 : 1"
+                  >
                     {{ 'canvas.zoomOut' | translate }}
                   </button>
-                  <button (click)="zoomIn()" [disabled]="settingsOpen()">
+                  <button
+                    (click)="zoomIn()"
+                    [disabled]="settingsOpen()"
+                    [style.opacity]="settingsOpen() ? 0.5 : 1"
+                  >
                     {{ 'canvas.zoomIn' | translate }}
                   </button>
                 </div>
@@ -385,8 +398,9 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
             [style.width.px]="canvasWidth()"
             [style.height.px]="canvasHeight()"
-            style="position:relative; min-width:1024px; min-height:768px; max-width:7680px; max-height:4320px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left; cursor: all-scroll;"
+            style="position:relative; min-width:1024px; min-height:768px; max-width:20000px; max-height:20000px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left;"
             [style.transform]="'scale(' + canvasScale() + ')'"
+            [style.cursor]="isPanning() ? 'grabbing' : 'default'"
             (pointerdown)="startCanvasPan($event)"
           >
             @for (instance of stashedDialogs(); track instance.id) {
@@ -439,6 +453,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   [title]="instanceLabel(instance)"
                   [icon]="instanceIcon(instance.appId)"
                   [trashDisabled]="!!instance.deleteLocked"
+                  [hasSettings]="instanceHasSettings(instance.appId)"
                   (moved)="onDialogMove(instance.id, $event)"
                   (resized)="onDialogResize(instance.id, $event)"
                   (stash)="stashInstance(instance.id)"
@@ -448,9 +463,13 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   (trash)="confirmDelete(instance.id)"
                   (titleEdited)="renameInstance(instance.id, $event)"
                   (bringToFront)="dialogService.bringToFront(instance.id)"
+                  (settings)="toggleInstanceSettings(instance.id)"
                 >
                   @if (instance.appId === 'todo') {
                     <app-todo-page [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'kanban') {
+                    <app-kanban [instanceId]="instance.id" />
                   }
                   @if (instance.appId === 'calculator') {
                     <app-calculator [instanceId]="instance.id" />
@@ -578,6 +597,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
   readonly dialogService = inject(DialogService);
   readonly settingsDraft = inject(SettingsDraftService);
+  readonly instanceSettings = inject(InstanceSettingsService);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
     return !backendConnected || this.auth.orgSettings().testModeEnabled;
@@ -680,6 +700,7 @@ export class AppComponent implements OnInit, OnDestroy {
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
   visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
   instancesByApp = computed(() => ({
+    kanban: this.dialogService.getAppInstances('kanban'),
     todo: this.dialogService.getAppInstances('todo'),
     calculator: this.dialogService.getAppInstances('calculator'),
     timer: this.dialogService.getAppInstances('timer'),
@@ -907,11 +928,12 @@ export class AppComponent implements OnInit, OnDestroy {
     this.workspaceMenuOpen.set(!this.workspaceMenuOpen());
   }
 
-  toggleCanvasLock(event: Event) {
-    const checked = (event.target as HTMLInputElement).checked;
+  setCanvasMode(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    const locked = value === 'locked';
     const prefs = this.auth.preferences();
-    this.auth.savePreferences({ ...prefs, lockCanvasSize: checked });
-    if (checked) {
+    this.auth.savePreferences({ ...prefs, lockCanvasSize: locked });
+    if (locked) {
       this.canvasDraftWidth.set(this.canvasWidth());
       this.canvasDraftHeight.set(this.canvasHeight());
       this.applyCanvasSize();
@@ -1053,7 +1075,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async cloneAppData(appId: AppId, fromId: string, toId: string) {
     if (appId === 'todo') {
-      await cloneTodos(fromId, toId);
+      await cloneTodos(fromId, toId, this.effectiveUserId());
     }
     if (appId === 'calculator') cloneCalculatorState(fromId, toId);
     if (appId === 'timer') cloneTimerState(fromId, toId);
@@ -1061,6 +1083,11 @@ export class AppComponent implements OnInit, OnDestroy {
     if (appId === 'notes') cloneNotesState(fromId, toId);
     if (appId === 'calendar') cloneCalendarState(fromId, toId);
     if (appId === 'clock') cloneClockState(fromId, toId);
+    if (appId === 'kanban') cloneKanbanState(fromId, toId);
+  }
+
+  private effectiveUserId() {
+    return this.auth.session().previewUserId ?? this.auth.session().userId ?? 'guest';
   }
 
   renameInstance(instanceId: string, title: string) {
@@ -1132,6 +1159,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   instanceIcon(appId: AppId) {
     return APP_REGISTRY[appId]?.icon ?? '📦';
+  }
+
+  instanceHasSettings(appId: AppId) {
+    return appId === 'clock' || appId === 'calculator' || appId === 'kanban';
+  }
+
+  toggleInstanceSettings(instanceId: string) {
+    this.instanceSettings.toggle(instanceId);
   }
 
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
@@ -1221,8 +1256,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private clampCanvasSize(width: number, height: number) {
     return {
-      width: Math.min(7680, Math.max(1024, Math.round(width))),
-      height: Math.min(4320, Math.max(768, Math.round(height))),
+      width: Math.min(20000, Math.max(1024, Math.round(width))),
+      height: Math.min(20000, Math.max(768, Math.round(height))),
     };
   }
 
@@ -1236,6 +1271,10 @@ export class AppComponent implements OnInit, OnDestroy {
     );
     this.canvasWidth.set(width);
     this.canvasHeight.set(height);
+    if (!this.isCanvasLocked()) {
+      this.canvasDraftWidth.set(width);
+      this.canvasDraftHeight.set(height);
+    }
   }
 
   applyAccessibilityPrompt() {
