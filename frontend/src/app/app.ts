@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   HostListener,
   OnDestroy,
   OnInit,
@@ -7,6 +8,7 @@ import {
   effect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
@@ -119,7 +121,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       }
 
       .workspace-chip span {
-        pointer-events: none;
+        user-select: none;
       }
 
       .workspace-drop-line {
@@ -184,6 +186,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                     <button
                       draggable="false"
                       (pointerdown)="onWorkspacePointerDown(ws.id, $event)"
+                      (dblclick)="startWorkspaceRename(ws); $event.stopPropagation()"
                       (click)="onWorkspaceClick(ws.id)"
                       [class.workspace-chip]="true"
                       [class.dragging]="workspaceDragId() === ws.id"
@@ -200,16 +203,18 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                       @if (hoverWorkspaceId() === ws.id && hoverWorkspaceSide() === 'right') {
                         <span class="workspace-drop-line right"></span>
                       }
-                      <span draggable="false" (dblclick)="startWorkspaceRename(ws)">
+                      <span draggable="false">
                         {{ ws.name }}
                       </span>
                     </button>
                   } @else {
                     <input
+                      #workspaceRenameInput
                       [value]="editingWorkspaceName()"
                       (input)="editingWorkspaceName.set($any($event.target).value)"
                       (blur)="finishWorkspaceRename(ws)"
                       (keydown.enter)="finishWorkspaceRename(ws)"
+                      (keydown.escape)="cancelWorkspaceRename()"
                       style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); width:140px;"
                     />
                   }
@@ -572,9 +577,15 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             </app-overlay>
           }
           @if (licenseOpen()) {
-            <app-overlay (closed)="licenseOpen.set(false)">
-              <app-license [showClose]="false" (closed)="licenseOpen.set(false)" />
-            </app-overlay>
+            <div
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+            >
+              <div
+                style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
+              >
+                <app-license (closed)="licenseOpen.set(false)" />
+              </div>
+            </div>
           }
         </section>
       </main>
@@ -728,6 +739,7 @@ export class AppComponent implements OnInit, OnDestroy {
   canvasScale = signal(1);
   canvasDraftWidth = signal(1920);
   canvasDraftHeight = signal(1080);
+  workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
 
   activeDialogs = computed(() => this.dialogService.getActiveDialogs());
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
@@ -879,6 +891,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.accessibilityPromptOpen.set(true);
     });
     effect(() => {
+      if (typeof window === 'undefined') return;
       if (!this.auth.ready()) return;
       if (!this.auth.isLoggedIn()) {
         this.loadingVisible.set(false);
@@ -1104,6 +1117,10 @@ export class AppComponent implements OnInit, OnDestroy {
   startWorkspaceRename(ws: { id: string; name: string }) {
     this.editingWorkspaceId.set(ws.id);
     this.editingWorkspaceName.set(ws.name);
+    setTimeout(() => {
+      this.workspaceRenameInput()?.nativeElement?.focus();
+      this.workspaceRenameInput()?.nativeElement?.select();
+    }, 0);
   }
 
   finishWorkspaceRename(ws: { id: string }) {
@@ -1114,6 +1131,11 @@ export class AppComponent implements OnInit, OnDestroy {
     this.dialogService.renameWorkspace(ws.id, nextName);
   }
 
+  cancelWorkspaceRename() {
+    this.editingWorkspaceId.set(null);
+    this.editingWorkspaceName.set('');
+  }
+
   closeWorkspace(ws: { id: string }) {
     if (this.dialogService.getWorkspaces().length <= 1) return;
     this.dialogService.closeWorkspace(ws.id);
@@ -1121,6 +1143,10 @@ export class AppComponent implements OnInit, OnDestroy {
 
   onWorkspacePointerDown = (id: string, event: PointerEvent) => {
     if (event.button !== 0) return;
+    if (event.detail > 1) return;
+    if (this.editingWorkspaceId() === id) {
+      this.finishWorkspaceRename({ id });
+    }
     event.preventDefault();
     (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
     this.workspacePointerState = { id, startX: event.clientX, startY: event.clientY, moved: false };

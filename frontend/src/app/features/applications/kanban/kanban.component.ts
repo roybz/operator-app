@@ -96,7 +96,9 @@ export function cloneKanbanState(fromId: string, toId: string) {
             {{ 'kanban.boardLabel' | translate }}
             <select [value]="state().activeBoardId" (change)="selectBoard($event)">
               @for (board of state().boards; track board.id) {
-                <option [value]="board.id">{{ board.name }}</option>
+                <option [value]="board.id" [selected]="board.id === state().activeBoardId">
+                  {{ board.name }}
+                </option>
               }
             </select>
           </label>

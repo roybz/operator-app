@@ -181,13 +181,17 @@ const currencyCache = new Map<string, { rate: number; ts: number }>();
               />
               <select [value]="state().currencyFrom" (change)="updateCurrencyFrom($event)">
                 @for (code of currencies; track code) {
-                  <option [value]="code">{{ code }}</option>
+                  <option [value]="code" [selected]="code === state().currencyFrom">
+                    {{ code }}
+                  </option>
                 }
               </select>
               <span>→</span>
               <select [value]="state().currencyTo" (change)="updateCurrencyTo($event)">
                 @for (code of currencies; track code) {
-                  <option [value]="code">{{ code }}</option>
+                  <option [value]="code" [selected]="code === state().currencyTo">
+                    {{ code }}
+                  </option>
                 }
               </select>
               <button (click)="convertCurrency()">{{ 'calculator.convert' | translate }}</button>
