@@ -1,4 +1,5 @@
 # Operator App
+![Spatial workspace overview](screenshots/workspace-overview.jpeg)
 
 Operator App is an OS-like, browser-first experiment for running multiple lightweight apps (todos, notes, kanban, timers, etc.) inside movable dialogs with workspaces.
 
