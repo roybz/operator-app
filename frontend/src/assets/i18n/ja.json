@@ -76,6 +76,16 @@
     "scientific": "Scientific mode",
     "settingsTitle": "Calculator settings"
   },
+  "calculator": {
+    "closeSettings": "Close settings",
+    "convert": "Convert",
+    "currency": "Currency conversion",
+    "currencyDisclaimer": "For fun only. Rates are estimates and not suitable for real-world decisions.",
+    "currencyErrorFetch": "Unable to fetch rates",
+    "currencyErrorInvalid": "Invalid amount",
+    "scientific": "Scientific mode",
+    "settingsTitle": "Calculator settings"
+  },
   "calendar": {
     "add": "Add",
     "addCalendar": "Add calendar",
