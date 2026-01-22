@@ -25,6 +25,7 @@ import { CalendarComponent } from './features/applications/calendar/calendar.com
 import { ClockComponent } from './features/applications/clock/clock.component';
 import { KanbanComponent } from './features/applications/kanban/kanban.component';
 import { SettingsComponent } from './features/settings/settings.component';
+import { LicenseComponent } from './features/license/license.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
 import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
 import { AppId } from './features/dependencies/app-types';
@@ -39,6 +40,10 @@ import { cloneTodos } from './features/applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
+
+const RESERVED_SIDEBAR_WIDTH = 240;
+const RESERVED_TOPBAR_HEIGHT = 48;
+const RESERVED_WORKSPACE_HEIGHT = 72;
 
 const createFallbackRect = (width: number, height: number): DOMRect => {
   if (typeof DOMRect !== 'undefined') return new DOMRect(0, 0, width, height);
@@ -80,6 +85,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     ClockComponent,
     KanbanComponent,
     SettingsComponent,
+    LicenseComponent,
   ],
   styles: [
     `
@@ -93,11 +99,52 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       .floating-control:hover {
         opacity: 1;
       }
+
+      .workspace-chip {
+        transition:
+          transform 120ms ease,
+          box-shadow 120ms ease,
+          background 120ms ease;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .workspace-shell {
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .workspace-chip.dragging {
+        opacity: 0.5;
+      }
+
+      .workspace-chip span {
+        pointer-events: none;
+      }
+
+      .workspace-drop-line {
+        position: absolute;
+        top: 6px;
+        bottom: 6px;
+        width: 2px;
+        background: var(--color-accent);
+        box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent) 60%, transparent);
+        border-radius: 2px;
+      }
+
+      .workspace-drop-line.left {
+        left: -6px;
+      }
+
+      .workspace-drop-line.right {
+        right: -6px;
+      }
     `,
   ],
   template: `
     @if (loadingVisible()) {
       <div
+        id="loading-screen"
         style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:4000; transition:opacity 120ms ease;"
         [style.opacity]="loadingFading() ? 0 : 1"
       >
@@ -106,6 +153,14 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     }
 
     @if (auth.ready() && !auth.isLoggedIn()) {
+      @if (loginLoadingVisible()) {
+        <div
+          style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:3500; transition:opacity 120ms ease;"
+          [style.opacity]="loginLoadingFading() ? 0 : 1"
+        >
+          <div style="font-size:18px; letter-spacing:0.04em;">{{ 'loading' | translate }}</div>
+        </div>
+      }
       <router-outlet />
     } @else if (auth.isLoggedIn()) {
       <div style="position:relative;">
@@ -120,18 +175,34 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               style="display:flex; justify-content:center; gap:12px; align-items:center; padding:12px 16px;"
             >
               @for (ws of dialogService.getWorkspaces(); track ws.id) {
-                <div style="position:relative;">
+                <div
+                  style="position:relative;"
+                  [class.workspace-shell]="true"
+                  [attr.data-workspace-id]="ws.id"
+                >
                   @if (editingWorkspaceId() !== ws.id) {
                     <button
-                      (click)="dialogService.switchWorkspace(ws.id)"
+                      draggable="false"
+                      (pointerdown)="onWorkspacePointerDown(ws.id, $event)"
+                      (click)="onWorkspaceClick(ws.id)"
+                      [class.workspace-chip]="true"
+                      [class.dragging]="workspaceDragId() === ws.id"
                       [style.boxShadow]="
                         dialogService.getActiveWorkspaceId() === ws.id
                           ? '0 0 0 2px #00c2d1'
                           : 'none'
                       "
-                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
+                      style="position:relative; padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
                     >
-                      <span (dblclick)="startWorkspaceRename(ws)">{{ ws.name }}</span>
+                      @if (hoverWorkspaceId() === ws.id && hoverWorkspaceSide() === 'left') {
+                        <span class="workspace-drop-line left"></span>
+                      }
+                      @if (hoverWorkspaceId() === ws.id && hoverWorkspaceSide() === 'right') {
+                        <span class="workspace-drop-line right"></span>
+                      }
+                      <span draggable="false" (dblclick)="startWorkspaceRename(ws)">
+                        {{ ws.name }}
+                      </span>
                     </button>
                   } @else {
                     <input
@@ -154,7 +225,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               }
               <button
                 (click)="dialogService.addWorkspace()"
-                [disabled]="dialogService.getWorkspaces().length >= 5"
+                [disabled]="dialogService.getWorkspaces().length >= 8"
                 style="padding:8px 12px;"
               >
                 +
@@ -350,6 +421,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 </div>
               }
               <button (click)="toggleSettings()">{{ 'nav.settings' | translate }}</button>
+              <button (click)="openLicense()">{{ 'nav.license' | translate }}</button>
               <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
             </div>
           }
@@ -357,7 +429,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
 
         <section
           id="app-viewport"
-          style="flex:1; position:relative;"
+          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center;"
           [style.overflow]="isOverlayActive() ? 'hidden' : 'auto'"
         >
           @if (!topBarOpen()) {
@@ -398,7 +470,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
             [style.width.px]="canvasWidth()"
             [style.height.px]="canvasHeight()"
-            style="position:relative; min-width:1024px; min-height:768px; max-width:20000px; max-height:20000px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left;"
+            style="position:relative; flex:0 0 auto; min-width:1024px; min-height:768px; max-width:20000px; max-height:20000px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left;"
             [style.transform]="'scale(' + canvasScale() + ')'"
             [style.cursor]="isPanning() ? 'grabbing' : 'default'"
             (pointerdown)="startCanvasPan($event)"
@@ -497,6 +569,11 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (settingsOpen()) {
             <app-overlay (closed)="requestCloseSettings()">
               <app-settings />
+            </app-overlay>
+          }
+          @if (licenseOpen()) {
+            <app-overlay (closed)="licenseOpen.set(false)">
+              <app-license [showClose]="false" (closed)="licenseOpen.set(false)" />
             </app-overlay>
           }
         </section>
@@ -605,13 +682,25 @@ export class AppComponent implements OnInit, OnDestroy {
   navOpen = true;
   editingWorkspaceId = signal<string | null>(null);
   editingWorkspaceName = signal('');
+  workspaceDragId = signal<string | null>(null);
   private readonly translate = inject(TranslateService);
   private timeInterval?: number;
   private loadingTimeout?: number;
+  private loginLoadingTimeout?: number;
   private now = signal(new Date());
   workspaceMenuOpen = signal(false);
+  hoverWorkspaceId = signal<string | null>(null);
+  hoverWorkspaceSide = signal<'left' | 'right' | null>(null);
+  workspacePointerState: {
+    id: string;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null = null;
+  suppressWorkspaceClick = false;
   topBarOpen = signal(true);
   settingsOpen = signal(false);
+  licenseOpen = signal(false);
   settingsCloseConfirmOpen = signal(false);
   resetMenuOpen = signal(false);
   deleteTargetId = signal<string | null>(null);
@@ -620,6 +709,8 @@ export class AppComponent implements OnInit, OnDestroy {
   accessibilityPromptEnabled = signal(true);
   loadingVisible = signal(true);
   loadingFading = signal(false);
+  loginLoadingVisible = signal(true);
+  loginLoadingFading = signal(false);
   canvasBounds = signal<DOMRect>(createFallbackRect(1920, 1080));
   viewportBounds = signal<DOMRect>(createFallbackRect(0, 0));
   editingTileId = signal<string | null>(null);
@@ -651,6 +742,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.settingsOpen() ||
       Boolean(this.deleteTargetId()) ||
       this.settingsCloseConfirmOpen() ||
+      this.licenseOpen() ||
       this.accessibilityPromptOpen() ||
       this.guestBlocked() ||
       this.loadingVisible() ||
@@ -695,7 +787,7 @@ export class AppComponent implements OnInit, OnDestroy {
   );
 
   previewUserLabel = computed(() => this.auth.currentUser()?.username ?? '');
-  siteTitle = computed(() => this.auth.orgSettings().siteTitle || "Roy's Planner");
+  siteTitle = computed(() => this.auth.orgSettings().siteTitle || 'Operator App');
   siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
   visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
@@ -791,10 +883,22 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!this.auth.isLoggedIn()) {
         this.loadingVisible.set(false);
         this.loadingFading.set(false);
+        this.loginLoadingVisible.set(true);
+        this.loginLoadingFading.set(false);
+        if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
+        this.loginLoadingTimeout = window.setTimeout(() => {
+          this.loginLoadingFading.set(true);
+          this.loginLoadingTimeout = window.setTimeout(() => {
+            this.loginLoadingVisible.set(false);
+            this.loginLoadingFading.set(false);
+          }, 120);
+        }, 0);
         return;
       }
       this.loadingVisible.set(true);
       this.loadingFading.set(false);
+      this.loginLoadingVisible.set(false);
+      this.loginLoadingFading.set(false);
       if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
       this.loadingTimeout = window.setTimeout(() => {
         this.loadingFading.set(true);
@@ -836,6 +940,7 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     if (this.timeInterval) window.clearInterval(this.timeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
+    if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.updateCanvasBounds);
     }
@@ -875,10 +980,33 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.panState) {
       const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
       if (!viewport) return;
+      event.preventDefault();
       const dx = event.clientX - this.panState.startX;
       const dy = event.clientY - this.panState.startY;
       viewport.scrollLeft = this.panState.scrollLeft - dx;
       viewport.scrollTop = this.panState.scrollTop - dy;
+    }
+
+    if (this.workspacePointerState) {
+      const dx = event.clientX - this.workspacePointerState.startX;
+      const dy = event.clientY - this.workspacePointerState.startY;
+      if (!this.workspacePointerState.moved && Math.hypot(dx, dy) > 6) {
+        this.workspacePointerState.moved = true;
+        this.workspaceDragId.set(this.workspacePointerState.id);
+        this.suppressWorkspaceClick = true;
+      }
+      if (this.workspacePointerState.moved) {
+        const target = document
+          .elementFromPoint(event.clientX, event.clientY)
+          ?.closest('[data-workspace-id]') as HTMLElement | null;
+        if (!target) return;
+        const targetId = target.dataset['workspaceId'] ?? null;
+        if (!targetId) return;
+        const rect = target.getBoundingClientRect();
+        const isLeft = event.clientX < rect.left + rect.width / 2;
+        this.hoverWorkspaceId.set(targetId);
+        this.hoverWorkspaceSide.set(isLeft ? 'left' : 'right');
+      }
     }
   }
 
@@ -887,6 +1015,34 @@ export class AppComponent implements OnInit, OnDestroy {
     this.tileDragState = null;
     this.panState = null;
     this.isPanning.set(false);
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('no-select');
+    }
+    if (this.workspacePointerState) {
+      if (this.workspacePointerState.moved) {
+        const fromId = this.workspacePointerState.id;
+        const targetId = this.hoverWorkspaceId();
+        if (targetId && fromId !== targetId) {
+          const workspaces = this.dialogService.getWorkspaces();
+          const fromIndex = workspaces.findIndex((ws) => ws.id === fromId);
+          const targetIndex = workspaces.findIndex((ws) => ws.id === targetId);
+          if (fromIndex >= 0 && targetIndex >= 0) {
+            const dropIndex = this.hoverWorkspaceSide() === 'right' ? targetIndex + 1 : targetIndex;
+            this.dialogService.reorderWorkspaceToIndex(fromId, dropIndex);
+          }
+        }
+      }
+      this.workspacePointerState = null;
+      this.workspaceDragId.set(null);
+      this.hoverWorkspaceId.set(null);
+      this.hoverWorkspaceSide.set(null);
+      if (typeof document !== 'undefined') {
+        document.body.classList.remove('no-select');
+      }
+      setTimeout(() => {
+        this.suppressWorkspaceClick = false;
+      }, 0);
+    }
   }
 
   toggleNav() {
@@ -963,6 +1119,23 @@ export class AppComponent implements OnInit, OnDestroy {
     this.dialogService.closeWorkspace(ws.id);
   }
 
+  onWorkspacePointerDown = (id: string, event: PointerEvent) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+    this.workspacePointerState = { id, startX: event.clientX, startY: event.clientY, moved: false };
+    this.hoverWorkspaceId.set(null);
+    this.hoverWorkspaceSide.set(null);
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('no-select');
+    }
+  };
+
+  onWorkspaceClick = (id: string) => {
+    if (this.suppressWorkspaceClick) return;
+    this.dialogService.switchWorkspace(id);
+  };
+
   private updateFavicon(emoji: string) {
     if (typeof document === 'undefined') return;
     const icon = emoji?.trim();
@@ -1003,6 +1176,18 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     this.settingsOpen.set(false);
+  }
+
+  openLicense() {
+    if (this.licenseOpen()) {
+      this.licenseOpen.set(false);
+      return;
+    }
+    if (typeof document !== 'undefined') {
+      const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
+      viewport?.scrollTo({ top: 0, left: 0 });
+    }
+    this.licenseOpen.set(true);
   }
 
   confirmCloseSettings() {
@@ -1207,12 +1392,16 @@ export class AppComponent implements OnInit, OnDestroy {
     if (target?.closest('button, input, textarea, select')) return;
     const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
     if (!viewport) return;
+    event.preventDefault();
     this.panState = {
       startX: event.clientX,
       startY: event.clientY,
       scrollLeft: viewport.scrollLeft,
       scrollTop: viewport.scrollTop,
     };
+    if (typeof document !== 'undefined') {
+      document.body.classList.add('no-select');
+    }
     this.isPanning.set(true);
   }
 
@@ -1265,10 +1454,13 @@ export class AppComponent implements OnInit, OnDestroy {
     if (typeof document === 'undefined') return;
     const target = viewport ?? (document.querySelector('#app-viewport') as HTMLElement | null);
     if (!target) return;
-    const { width, height } = this.clampCanvasSize(
-      target.clientWidth || target.offsetWidth,
-      target.clientHeight || target.offsetHeight,
-    );
+    let rawWidth = target.clientWidth || target.offsetWidth;
+    let rawHeight = target.clientHeight || target.offsetHeight;
+    if (typeof window !== 'undefined') {
+      rawWidth = window.innerWidth - RESERVED_SIDEBAR_WIDTH;
+      rawHeight = window.innerHeight - RESERVED_TOPBAR_HEIGHT - RESERVED_WORKSPACE_HEIGHT;
+    }
+    const { width, height } = this.clampCanvasSize(rawWidth, rawHeight);
     this.canvasWidth.set(width);
     this.canvasHeight.set(height);
     if (!this.isCanvasLocked()) {
@@ -1298,8 +1490,12 @@ export class AppComponent implements OnInit, OnDestroy {
       ? this.accessibilityPromptEnabled()
       : prefs.accessibilityMode;
     const resolvedTheme = this.resolveTheme(prefs.themeMode);
+    const colorTheme = prefs.colorTheme || 'standard';
     body.classList.toggle('theme-light', resolvedTheme === 'light');
     body.classList.toggle('theme-dark', resolvedTheme === 'dark');
+    body.classList.toggle('theme-color-standard', colorTheme === 'standard');
+    body.classList.toggle('theme-color-notepad', colorTheme === 'notepad');
+    body.classList.toggle('theme-color-ice', colorTheme === 'ice');
     body.classList.toggle('accessibility-on', accessibilityOn);
   }
 

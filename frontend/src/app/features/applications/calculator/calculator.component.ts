@@ -489,8 +489,19 @@ export class CalculatorComponent implements OnInit {
 
   private ensureDefaultCurrencyPair() {
     const current = this.state();
-    if (current.currencyFrom === current.currencyTo && current.currencyFrom === 'USD') {
-      const next = { ...current, currencyTo: 'EUR' };
+    const from = current.currencyFrom || 'USD';
+    const to = current.currencyTo || 'EUR';
+    const fromValid = CURRENCIES.includes(from);
+    const toValid = CURRENCIES.includes(to);
+    const nextFrom = fromValid ? from : 'USD';
+    const nextTo = toValid ? to : 'EUR';
+    const needsDefault = !fromValid || !toValid || (nextFrom === nextTo && nextFrom === 'USD');
+    if (needsDefault) {
+      const next = {
+        ...current,
+        currencyFrom: nextFrom,
+        currencyTo: nextFrom === nextTo ? 'EUR' : nextTo,
+      };
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.persistState();

@@ -2,10 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Roy's Planner</title>
+    <title>Operator App</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <script>
+      (function () {
+        try {
+          var prefsRaw = localStorage.getItem('op_prefs');
+          var sessionRaw = localStorage.getItem('op_session');
+          var prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
+          var session = sessionRaw ? JSON.parse(sessionRaw) : {};
+          var userId = session && session.userId ? session.userId : 'u_guest';
+          var userPrefs = prefs && prefs[userId] ? prefs[userId] : {};
+          var mode = userPrefs.themeMode || 'system';
+          var colorTheme = userPrefs.colorTheme || 'standard';
+          var accessibility = !!userPrefs.accessibilityMode;
+          var prefersDark =
+            typeof window !== 'undefined' &&
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme =
+            mode === 'dark' ? 'dark' : mode === 'light' ? 'light' : prefersDark ? 'dark' : 'light';
+          var body = document.body;
+          body.classList.toggle('theme-dark', theme === 'dark');
+          body.classList.toggle('theme-light', theme === 'light');
+          body.classList.toggle('theme-color-standard', colorTheme === 'standard');
+          body.classList.toggle('theme-color-notepad', colorTheme === 'notepad');
+          body.classList.toggle('theme-color-ice', colorTheme === 'ice');
+          body.classList.toggle('accessibility-on', accessibility);
+        } catch (e) {
+          // ignore preflight failures
+        }
+      })();
+    </script>
     <script src="assets/op-config.js"></script>
   </head>
   <body>

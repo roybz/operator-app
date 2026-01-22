@@ -13,6 +13,10 @@ body {
   color: var(--color-text);
 }
 
+body.no-select {
+  user-select: none;
+}
+
 body.theme-dark {
   --color-bg: #0f172a;
   --color-surface: #111827;
@@ -21,6 +25,45 @@ body.theme-dark {
   --color-muted: #94a3b8;
   --color-accent: #38bdf8;
   --color-overlay: rgba(0, 0, 0, 0.6);
+}
+
+body.theme-color-standard {
+}
+
+body.theme-color-notepad {
+  --color-bg: #fff9db;
+  --color-surface: #fffef5;
+  --color-border: #e5c26a;
+  --color-text: #3b2f1a;
+  --color-muted: #7c6a3a;
+  --color-accent: #d97706;
+}
+
+body.theme-color-ice {
+  --color-bg: #e6f6ff;
+  --color-surface: #f7fbff;
+  --color-border: #9dd1f1;
+  --color-text: #0f172a;
+  --color-muted: #577089;
+  --color-accent: #3b82f6;
+}
+
+body.theme-dark.theme-color-notepad {
+  --color-bg: #2a1f0f;
+  --color-surface: #362714;
+  --color-border: #7a5b2a;
+  --color-text: #f5e6c9;
+  --color-muted: #cbb58a;
+  --color-accent: #f59e0b;
+}
+
+body.theme-dark.theme-color-ice {
+  --color-bg: #0b1b2b;
+  --color-surface: #122338;
+  --color-border: #2f5a78;
+  --color-text: #dbeafe;
+  --color-muted: #9bb6cc;
+  --color-accent: #60a5fa;
 }
 
 body.accessibility-on {

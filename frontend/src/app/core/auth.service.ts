@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
+import packageJson from '../../../package.json';
 
 export type UserRole = 'admin' | 'user';
 
@@ -23,6 +24,7 @@ export interface UserPreferences {
   showTime: boolean;
   timeFormat: '12h' | '24h';
   themeMode: 'system' | 'light' | 'dark' | 'timeZone';
+  colorTheme: 'standard' | 'notepad' | 'ice';
   accessibilityMode: boolean;
   credentials: SavedCredential[];
   maxPersistedApps: number;
@@ -145,6 +147,9 @@ export class AuthService {
   }
 
   async login(username: string, password: string): Promise<{ ok: boolean; message?: string }> {
+    if (this.guestModeOnly()) {
+      return { ok: false, message: 'auth.error.guestOnly' };
+    }
     const trimmed = username.trim();
     if (this.isLoginLocked(trimmed)) {
       return { ok: false, message: 'auth.error.locked' };
@@ -182,7 +187,7 @@ export class AuthService {
   }
 
   loginAsGuest() {
-    if (!this.orgSettingsSignal().allowGuestLogin) return;
+    if (!this.orgSettingsSignal().allowGuestLogin && !this.guestModeOnly()) return;
     this.ensureGuestUser();
     this.sessionSignal.set({ userId: GUEST_USER_ID, previewUserId: null, previewPersist: false });
     this.persistSession();
@@ -216,6 +221,9 @@ export class AuthService {
     ok: boolean;
     message?: string;
   }> {
+    if (this.guestModeOnly()) {
+      return { ok: false, message: 'users.error.guestOnly' };
+    }
     const username = input.username.trim();
     if (!username) return { ok: false, message: 'users.error.usernameRequired' };
     if (!input.password || !input.password.trim()) {
@@ -370,6 +378,7 @@ export class AuthService {
   }
 
   private effectiveUserId(): string | null {
+    if (this.guestModeOnly()) return GUEST_USER_ID;
     return this.sessionSignal().previewUserId ?? this.sessionSignal().userId;
   }
 
@@ -388,17 +397,23 @@ export class AuthService {
       }
       return user;
     });
-    this.usersSignal.set(normalized);
+    const guestOnly = this.guestModeOnly();
+    const normalizedUsers = guestOnly ? [this.guestUser()] : normalized;
+    this.usersSignal.set(normalizedUsers);
 
     const orgSettings = this.safeJson<OrgSettings>(ORG_SETTINGS_KEY, this.defaultOrgSettings());
     const legacyDisable = (orgSettings as { disableViewportAdjustments?: boolean })
       .disableViewportAdjustments;
-    this.orgSettingsSignal.set({
+    const nextOrg = {
       ...this.defaultOrgSettings(),
       ...orgSettings,
       ...(legacyDisable !== undefined
         ? { disableViewportSizing: legacyDisable, disableZoomControls: legacyDisable }
         : {}),
+    };
+    this.orgSettingsSignal.set({
+      ...nextOrg,
+      allowGuestLogin: guestOnly ? true : nextOrg.allowGuestLogin,
     });
 
     const session = this.safeJson<SessionState>(SESSION_KEY, {
@@ -406,9 +421,9 @@ export class AuthService {
       previewUserId: null,
       previewPersist: false,
     });
-    const validUserId = users.find((user) => user.id === session.userId)?.id ?? null;
+    const validUserId = normalizedUsers.find((user) => user.id === session.userId)?.id ?? null;
     const validPreviewId =
-      session.previewUserId && users.some((user) => user.id === session.previewUserId)
+      session.previewUserId && normalizedUsers.some((user) => user.id === session.previewUserId)
         ? session.previewUserId
         : null;
     this.sessionSignal.set(session);
@@ -420,19 +435,33 @@ export class AuthService {
       });
     }
 
-    const actualRole = users.find((user) => user.id === validUserId)?.role ?? 'user';
+    const actualRole = normalizedUsers.find((user) => user.id === validUserId)?.role ?? 'user';
     if (actualRole !== 'admin') {
       this.sessionSignal.set({ userId: validUserId, previewUserId: null, previewPersist: false });
+    }
+
+    if (guestOnly) {
+      const nextSession = this.sessionSignal();
+      const keepGuest = nextSession.userId === GUEST_USER_ID;
+      this.sessionSignal.set({
+        userId: keepGuest ? GUEST_USER_ID : null,
+        previewUserId: null,
+        previewPersist: false,
+      });
     }
 
     const prefs = this.safeJson<StoredPreferences>(PREFS_KEY, {});
     if (!prefs[GUEST_USER_ID]) {
       prefs[GUEST_USER_ID] = this.defaultPreferences();
     }
-    this.prefsSignal.set(prefs);
+    if (guestOnly) {
+      this.prefsSignal.set({ [GUEST_USER_ID]: prefs[GUEST_USER_ID] });
+    } else {
+      this.prefsSignal.set(prefs);
+    }
 
     const previewPrefs = this.safeJson<StoredPreviewPreferences>(PREVIEW_PREFS_KEY, {});
-    this.previewPrefsSignal.set(previewPrefs);
+    this.previewPrefsSignal.set(guestOnly ? {} : previewPrefs);
 
     this.persistUsers();
     this.persistSession();
@@ -519,9 +548,10 @@ export class AuthService {
       showTime: true,
       timeFormat: '12h',
       themeMode: 'system',
+      colorTheme: 'standard',
       accessibilityMode: false,
       credentials: [],
-      maxPersistedApps: 30,
+      maxPersistedApps: 60,
       canvasWidth: org.defaultViewportWidth,
       canvasHeight: org.defaultViewportHeight,
       lockCanvasSize: false,
@@ -537,7 +567,7 @@ export class AuthService {
 
   private defaultOrgSettings(): OrgSettings {
     return {
-      siteTitle: "Roy's Planner",
+      siteTitle: 'Operator App',
       siteLogoEmoji: '🌎',
       testModeEnabled: true,
       allowGuestLogin: true,
@@ -678,6 +708,13 @@ export class AuthService {
     if (typeof window === 'undefined') return false;
     const config = (window as Window & { __OP_CONFIG__?: { apiBaseUrl?: string } }).__OP_CONFIG__;
     return Boolean(config?.apiBaseUrl);
+  }
+
+  guestModeOnly(): boolean {
+    if (typeof window === 'undefined') return Boolean(packageJson.guestModeOnly);
+    const config = (window as Window & { __OP_CONFIG__?: { guestModeOnly?: boolean } })
+      .__OP_CONFIG__;
+    return Boolean(config?.guestModeOnly ?? packageJson.guestModeOnly);
   }
 
   markAccessibilityPromptShown(userId: string) {
