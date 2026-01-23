@@ -77,7 +77,7 @@ export class DialogService {
 
   addWorkspace() {
     const workspaces = this.state().workspaces;
-    if (workspaces.length >= 8) return false;
+    if (workspaces.length >= 12) return false;
     const next = [
       ...workspaces,
       { id: this.uid('ws'), name: `Workspace ${workspaces.length + 1}` },
@@ -124,6 +124,35 @@ export class DialogService {
     const nextIndex = fromIndex < boundedIndex ? boundedIndex - 1 : boundedIndex;
     workspaces.splice(nextIndex, 0, moved);
     this.state.set({ ...this.state(), workspaces });
+    this.persist();
+  }
+
+  findWorkspaceForInstance(instanceId: string) {
+    for (const [workspaceId, dialogs] of Object.entries(this.state().dialogsByWorkspace)) {
+      if (dialogs.some((instance) => instance.id === instanceId)) return workspaceId;
+    }
+    return null;
+  }
+
+  moveInstanceToWorkspace(instanceId: string, targetWorkspaceId: string) {
+    const fromWorkspaceId = this.findWorkspaceForInstance(instanceId);
+    if (!fromWorkspaceId || fromWorkspaceId === targetWorkspaceId) return;
+    const fromDialogs = this.getDialogsForWorkspace(fromWorkspaceId);
+    const targetDialogs = this.getDialogsForWorkspace(targetWorkspaceId);
+    const instance = fromDialogs.find((item) => item.id === instanceId);
+    if (!instance) return;
+    const nextInstance = { ...instance, z: this.state().zCounter + 1 };
+    const nextFrom = fromDialogs.filter((item) => item.id !== instanceId);
+    const nextTarget = [...targetDialogs, nextInstance];
+    this.state.set({
+      ...this.state(),
+      zCounter: nextInstance.z,
+      dialogsByWorkspace: {
+        ...this.state().dialogsByWorkspace,
+        [fromWorkspaceId]: nextFrom,
+        [targetWorkspaceId]: nextTarget,
+      },
+    });
     this.persist();
   }
 

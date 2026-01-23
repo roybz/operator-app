@@ -12,6 +12,8 @@ import { clearNotesState } from '../../applications/notes/notes.component';
 import { clearCalendarState } from '../../applications/calendar/calendar.component';
 import { clearClockState } from '../../applications/clock/clock.component';
 import { clearKanbanState } from '../../applications/kanban/kanban.component';
+import { clearStickyNoteState } from '../../applications/sticky-notes/sticky-notes.component';
+import { clearDataTableState } from '../../applications/data-table/data-table.component';
 import { SettingsDraftService } from '../settings-draft.service';
 
 const APPLICATIONS = APP_LIST;
@@ -158,9 +160,11 @@ export class ApplicationsSettingsComponent {
       if (appId === 'timer') clearTimerState(id);
       if (appId === 'navigator') clearNavigatorState(id);
       if (appId === 'notes') clearNotesState(id);
+      if (appId === 'stickyNotes') clearStickyNoteState(id);
       if (appId === 'calendar') clearCalendarState(id);
       if (appId === 'clock') clearClockState(id);
       if (appId === 'kanban') clearKanbanState(id);
+      if (appId === 'dataTable') clearDataTableState(id);
     });
     this.confirmAppId.set(null);
   }

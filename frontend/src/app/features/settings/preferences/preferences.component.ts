@@ -94,10 +94,21 @@ const LANGUAGE_OPTIONS = [
           <input
             type="number"
             min="0"
-            max="99"
+            max="255"
             [value]="prefs().maxPersistedApps"
             (input)="onMaxPersistedChange($event)"
           />
+        </label>
+
+        <label>
+          {{ 'preferences.stickyDefaultMode' | translate }}
+          <select
+            [value]="prefs().stickyNoteDefaultMode"
+            (change)="onStickyDefaultModeChange($event)"
+          >
+            <option value="rich">{{ 'preferences.stickyModeRich' | translate }}</option>
+            <option value="markdown">{{ 'preferences.stickyModeMarkdown' | translate }}</option>
+          </select>
         </label>
 
         <label>
@@ -299,8 +310,13 @@ export class PreferencesSettingsComponent {
 
   onMaxPersistedChange(event: Event) {
     const raw = Number((event.target as HTMLInputElement).value);
-    const maxPersistedApps = Math.min(99, Math.max(0, Number.isFinite(raw) ? raw : 0));
+    const maxPersistedApps = Math.min(255, Math.max(0, Number.isFinite(raw) ? raw : 0));
     this.save({ ...this.prefs(), maxPersistedApps });
+  }
+
+  onStickyDefaultModeChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value as 'rich' | 'markdown';
+    this.save({ ...this.prefs(), stickyNoteDefaultMode: value });
   }
 
   onThemeModeChange(event: Event) {

@@ -26,6 +26,8 @@ import { NotesComponent } from './features/applications/notes/notes.component';
 import { CalendarComponent } from './features/applications/calendar/calendar.component';
 import { ClockComponent } from './features/applications/clock/clock.component';
 import { KanbanComponent } from './features/applications/kanban/kanban.component';
+import { StickyNotesComponent } from './features/applications/sticky-notes/sticky-notes.component';
+import { DataTableComponent } from './features/applications/data-table/data-table.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { LicenseComponent } from './features/license/license.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
@@ -38,6 +40,8 @@ import { cloneTimerState } from './features/applications/timer/timer.component';
 import { cloneCalendarState } from './features/applications/calendar/calendar.component';
 import { cloneClockState } from './features/applications/clock/clock.component';
 import { cloneKanbanState } from './features/applications/kanban/kanban.component';
+import { cloneStickyNoteState } from './features/applications/sticky-notes/sticky-notes.component';
+import { cloneDataTableState } from './features/applications/data-table/data-table.component';
 import { cloneTodos } from './features/applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
 
@@ -83,9 +87,11 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     TimerComponent,
     NavigatorComponent,
     NotesComponent,
+    StickyNotesComponent,
     CalendarComponent,
     ClockComponent,
     KanbanComponent,
+    DataTableComponent,
     SettingsComponent,
     LicenseComponent,
   ],
@@ -531,6 +537,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   [icon]="instanceIcon(instance.appId)"
                   [trashDisabled]="!!instance.deleteLocked"
                   [hasSettings]="instanceHasSettings(instance.appId)"
+                  [canMoveWorkspace]="dialogService.getWorkspaces().length > 1"
                   (moved)="onDialogMove(instance.id, $event)"
                   (resized)="onDialogResize(instance.id, $event)"
                   (stash)="stashInstance(instance.id)"
@@ -541,6 +548,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   (titleEdited)="renameInstance(instance.id, $event)"
                   (bringToFront)="dialogService.bringToFront(instance.id)"
                   (settings)="toggleInstanceSettings(instance.id)"
+                  (moveWorkspace)="openMoveWorkspace(instance.id)"
                 >
                   @if (instance.appId === 'todo') {
                     <app-todo-page [instanceId]="instance.id" />
@@ -560,11 +568,17 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   @if (instance.appId === 'notes') {
                     <app-notes [instanceId]="instance.id" />
                   }
+                  @if (instance.appId === 'stickyNotes') {
+                    <app-sticky-notes [instanceId]="instance.id" />
+                  }
                   @if (instance.appId === 'calendar') {
                     <app-calendar [instanceId]="instance.id" />
                   }
                   @if (instance.appId === 'clock') {
                     <app-clock [instanceId]="instance.id" />
+                  }
+                  @if (instance.appId === 'dataTable') {
+                    <app-data-table [instanceId]="instance.id" />
                   }
                 </app-dialog>
               }
@@ -584,6 +598,41 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
               >
                 <app-license (closed)="licenseOpen.set(false)" />
+              </div>
+            </div>
+          }
+          @if (moveWorkspaceTargetId()) {
+            <div
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
+            >
+              <div
+                style="background:var(--color-surface); padding:24px; border-radius:12px; width:min(640px, 92vw);"
+              >
+                <h3 style="margin:0 0 16px;">
+                  {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
+                </h3>
+                <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                  @for (ws of dialogService.getWorkspaces(); track ws.id) {
+                    <button
+                      (click)="moveInstanceToWorkspace(ws.id)"
+                      [disabled]="ws.id === moveWorkspaceCurrentId()"
+                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
+                      [style.opacity]="ws.id === moveWorkspaceCurrentId() ? 0.5 : 1"
+                      [style.boxShadow]="
+                        ws.id === moveWorkspaceCurrentId() ? 'none' : '0 0 0 rgba(0,0,0,0)'
+                      "
+                      (mouseenter)="
+                        $any($event.target).style.boxShadow = '0 0 8px rgba(0, 194, 209, 0.6)'
+                      "
+                      (mouseleave)="$any($event.target).style.boxShadow = 'none'"
+                    >
+                      {{ ws.name }}
+                    </button>
+                  }
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+                  <button (click)="closeMoveWorkspace()">{{ 'dialogs.cancel' | translate }}</button>
+                </div>
               </div>
             </div>
           }
@@ -716,6 +765,7 @@ export class AppComponent implements OnInit, OnDestroy {
   resetMenuOpen = signal(false);
   deleteTargetId = signal<string | null>(null);
   cloneTargetId = signal<string | null>(null);
+  moveWorkspaceTargetId = signal<string | null>(null);
   accessibilityPromptOpen = signal(false);
   accessibilityPromptEnabled = signal(true);
   loadingVisible = signal(true);
@@ -758,8 +808,26 @@ export class AppComponent implements OnInit, OnDestroy {
       this.accessibilityPromptOpen() ||
       this.guestBlocked() ||
       this.loadingVisible() ||
-      Boolean(this.cloneTargetId()),
+      Boolean(this.cloneTargetId()) ||
+      Boolean(this.moveWorkspaceTargetId()),
   );
+
+  moveWorkspaceInstance = computed(() => {
+    const id = this.moveWorkspaceTargetId();
+    if (!id) return null;
+    return this.dialogService.getActiveDialogs().find((instance) => instance.id === id) ?? null;
+  });
+
+  moveWorkspaceCurrentId = computed(() => {
+    const id = this.moveWorkspaceTargetId();
+    if (!id) return null;
+    return this.dialogService.findWorkspaceForInstance(id);
+  });
+
+  moveWorkspaceLabel = computed(() => {
+    const instance = this.moveWorkspaceInstance();
+    return instance ? this.instanceLabel(instance) : '';
+  });
 
   timeLabel = computed(() => {
     const prefs = this.auth.preferences();
@@ -810,8 +878,10 @@ export class AppComponent implements OnInit, OnDestroy {
     timer: this.dialogService.getAppInstances('timer'),
     navigator: this.dialogService.getAppInstances('navigator'),
     notes: this.dialogService.getAppInstances('notes'),
+    stickyNotes: this.dialogService.getAppInstances('stickyNotes'),
     calendar: this.dialogService.getAppInstances('calendar'),
     clock: this.dialogService.getAppInstances('clock'),
+    dataTable: this.dialogService.getAppInstances('dataTable'),
   }));
   canvasStyle = computed(() => {
     const prefs = this.auth.preferences();
@@ -1227,6 +1297,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openApp(appId: AppId) {
+    this.updateCanvasBounds();
     const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
     const viewportBounds = this.viewportBounds();
     const result = this.dialogService.createInstance(appId, viewportBounds);
@@ -1292,9 +1363,11 @@ export class AppComponent implements OnInit, OnDestroy {
     if (appId === 'timer') cloneTimerState(fromId, toId);
     if (appId === 'navigator') cloneNavigatorState(fromId, toId);
     if (appId === 'notes') cloneNotesState(fromId, toId);
+    if (appId === 'stickyNotes') cloneStickyNoteState(fromId, toId);
     if (appId === 'calendar') cloneCalendarState(fromId, toId);
     if (appId === 'clock') cloneClockState(fromId, toId);
     if (appId === 'kanban') cloneKanbanState(fromId, toId);
+    if (appId === 'dataTable') cloneDataTableState(fromId, toId);
   }
 
   private effectiveUserId() {
@@ -1373,11 +1446,33 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   instanceHasSettings(appId: AppId) {
-    return appId === 'clock' || appId === 'calculator' || appId === 'kanban';
+    return (
+      appId === 'clock' ||
+      appId === 'calculator' ||
+      appId === 'kanban' ||
+      appId === 'stickyNotes' ||
+      appId === 'dataTable'
+    );
   }
 
   toggleInstanceSettings(instanceId: string) {
     this.instanceSettings.toggle(instanceId);
+  }
+
+  openMoveWorkspace(instanceId: string) {
+    if (this.dialogService.getWorkspaces().length <= 1) return;
+    this.moveWorkspaceTargetId.set(instanceId);
+  }
+
+  closeMoveWorkspace() {
+    this.moveWorkspaceTargetId.set(null);
+  }
+
+  moveInstanceToWorkspace(workspaceId: string) {
+    const instanceId = this.moveWorkspaceTargetId();
+    if (!instanceId) return;
+    this.dialogService.moveInstanceToWorkspace(instanceId, workspaceId);
+    this.moveWorkspaceTargetId.set(null);
   }
 
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {

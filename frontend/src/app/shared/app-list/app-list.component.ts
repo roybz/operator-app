@@ -132,8 +132,10 @@ export class AppListComponent {
     timer: [],
     navigator: [],
     notes: [],
+    stickyNotes: [],
     calendar: [],
     clock: [],
+    dataTable: [],
   };
   @Input() deleteTargetActive = false;
   @Input() actionsDisabled = false;
@@ -151,8 +153,10 @@ export class AppListComponent {
     timer: false,
     navigator: false,
     notes: false,
+    stickyNotes: false,
     calendar: false,
     clock: false,
+    dataTable: false,
   });
 
   instanceLabel(instance: DialogInstance) {

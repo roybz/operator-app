@@ -44,7 +44,9 @@
     "timer": "Timer",
     "timerGroup": "Timer",
     "todo": "Todo",
-    "todoGroup": "Todo"
+    "todoGroup": "Todo",
+    "stickyNotes": "Sticky Notes",
+    "dataTable": "Data Table"
   },
   "auth": {
     "error": {
@@ -65,16 +67,6 @@
     "title": "Operator App",
     "username": "Usuario",
     "github": "GitHub"
-  },
-  "calculator": {
-    "closeSettings": "Close settings",
-    "convert": "Convert",
-    "currency": "Currency conversion",
-    "currencyDisclaimer": "For fun only. Rates are estimates and not suitable for real-world decisions.",
-    "currencyErrorFetch": "Unable to fetch rates",
-    "currencyErrorInvalid": "Invalid amount",
-    "scientific": "Scientific mode",
-    "settingsTitle": "Calculator settings"
   },
   "calculator": {
     "closeSettings": "Close settings",
@@ -155,7 +147,9 @@
     "stash": "Archivar",
     "trash": "Eliminar",
     "unlockDelete": "Unlock delete",
-    "unstash": "Restaurar"
+    "unstash": "Restaurar",
+    "moveWorkspace": "Move to workspace",
+    "moveWorkspaceTitle": "Move {{name}} to another Workspace?"
   },
   "kanban": {
     "addBoard": "Add board",
@@ -274,7 +268,10 @@
     "colorTheme": "Color theme",
     "themeStandard": "Standard",
     "themeNotepad": "Notepad Yellow (Beta)",
-    "themeIce": "Ice Blue (Beta)"
+    "themeIce": "Ice Blue (Beta)",
+    "stickyDefaultMode": "Default sticky note mode",
+    "stickyModeRich": "Rich text",
+    "stickyModeMarkdown": "Markdown"
   },
   "preview": {
     "label": "Vista previa como: {{user}}",
@@ -397,5 +394,45 @@
     "mitBody": "Copyright © 2026 Roy Nouneh\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "privacyTitle": "Privacy Policy",
     "privacyBody": "The demo hosted at roy.bz does not collect personal information, does not track users, and does not use cookies. This is a fun technical experiment intended for people to explore, learn from, and optionally copy or fork.\n\nThis demo also uses external services (for example, public currency conversion APIs) that are subject to their own privacy policies and availability.\n\nBy using this demo or the code, you agree that you are responsible for your own use, and the author is not liable for any outcomes."
+  },
+  "sticky": {
+    "settingsTitle": "Sticky Note Settings",
+    "closeSettings": "Close settings",
+    "modeRich": "Rich text",
+    "modeMarkdown": "Markdown",
+    "visualMode": "Visual mode",
+    "editMode": "Edit mode",
+    "locked": "Locked",
+    "unlocked": "Unlocked",
+    "fontSize": "Font size (px)",
+    "colorsEnabled": "Enable custom colors",
+    "backgroundColor": "Background color",
+    "textColor": "Text color",
+    "currentlyIn": "Currently in",
+    "currentlyLocked": "Currently locked",
+    "currentlyUnlocked": "Currently unlocked"
+  },
+  "dataTable": {
+    "settingsTitle": "Data Table Settings",
+    "closeSettings": "Close settings",
+    "addTable": "Add table",
+    "deleteTable": "Delete table",
+    "deleteConfirm": "Are you sure you want to delete this table?",
+    "defaultTable": "New table",
+    "defaultColumn": "New column",
+    "tableLabel": "Table",
+    "search": "Search",
+    "addRow": "Add row",
+    "addColumn": "Add column",
+    "deleteRow": "Delete row",
+    "type": {
+      "text": "Text",
+      "number": "Number",
+      "date": "Date",
+      "emoji": "Emoji",
+      "image": "Image URL",
+      "url": "URL",
+      "boolean": "Checkbox"
+    }
   }
 }
