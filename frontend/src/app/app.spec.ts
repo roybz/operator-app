@@ -8,7 +8,7 @@ import {
 } from '@ngx-translate/core';
 import { AppComponent } from './app';
 
-type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean } };
+type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean; guestModeOnly?: boolean } };
 
 describe('App', () => {
   beforeEach(async () => {
@@ -41,9 +41,9 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('renders translated header and mock label', async () => {
+  it('renders translated header and mock label', () => {
     const w = window as OpWindow;
-    w.__OP_CONFIG__ = { mockMode: true };
+    w.__OP_CONFIG__ = { mockMode: true, guestModeOnly: false };
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
@@ -81,7 +81,6 @@ describe('App', () => {
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    await fixture.whenStable();
 
     const compiled = fixture.nativeElement as HTMLElement;
     const heading = compiled.querySelector('strong')?.textContent ?? '';

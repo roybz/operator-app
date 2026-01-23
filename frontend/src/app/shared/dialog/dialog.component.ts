@@ -59,6 +59,15 @@ import { DialogInstance } from '../../core/dialog.service';
             📦
           </button>
           <button
+            class="dialog__icon dialog__icon--workspace"
+            (pointerdown)="$event.stopPropagation()"
+            (click)="moveWorkspace.emit()"
+            [disabled]="!canMoveWorkspace"
+            title="{{ 'dialogs.moveWorkspace' | translate }}"
+          >
+            🖥️
+          </button>
+          <button
             class="dialog__icon"
             (pointerdown)="$event.stopPropagation()"
             (click)="minimize.emit()"
@@ -152,6 +161,13 @@ import { DialogInstance } from '../../core/dialog.service';
       .dialog__icon--stash {
         filter: grayscale(1);
       }
+      .dialog__icon--workspace {
+        filter: grayscale(1);
+      }
+      .dialog__icon:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
       .dialog__body {
         flex: 1;
         overflow: auto;
@@ -203,6 +219,7 @@ export class DialogComponent {
   @Input() title = '';
   @Input() icon = '';
   @Input() hasSettings = false;
+  @Input() canMoveWorkspace = false;
 
   @Output() moved = new EventEmitter<{ x: number; y: number }>();
   @Output() resized = new EventEmitter<{ width: number; height: number }>();
@@ -214,6 +231,7 @@ export class DialogComponent {
   @Output() bringToFront = new EventEmitter<void>();
   @Output() titleEdited = new EventEmitter<string>();
   @Output() settings = new EventEmitter<void>();
+  @Output() moveWorkspace = new EventEmitter<void>();
 
   private dragStart?: { x: number; y: number; left: number; top: number };
   private resizeStart?: { x: number; y: number; width: number; height: number };

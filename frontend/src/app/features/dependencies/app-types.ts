@@ -5,8 +5,10 @@ export type AppId =
   | 'timer'
   | 'navigator'
   | 'notes'
+  | 'stickyNotes'
   | 'calendar'
-  | 'clock';
+  | 'clock'
+  | 'dataTable';
 
 export interface DialogRect {
   x: number;

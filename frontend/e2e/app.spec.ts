@@ -9,10 +9,19 @@ test.beforeEach(async ({ page }) => {
 const enterApp = async (page) => {
   await page.goto('/');
   const guestButton = page.getByRole('button', { name: 'Continue as guest' });
-  if (await guestButton.count()) {
+  if ((await guestButton.count()) && (await guestButton.isVisible())) {
     await guestButton.click();
   }
   await page.locator('#loading-screen').waitFor({ state: 'detached' });
+  await page.locator('aside').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
+    return !!viewport && viewport.clientWidth > 0 && viewport.clientHeight > 0;
+  });
+  const accessibilityContinue = page.getByRole('button', { name: /continue/i });
+  if ((await accessibilityContinue.count()) && (await accessibilityContinue.isVisible())) {
+    await accessibilityContinue.click();
+  }
 };
 
 test('landing loads with mock label and navigation', async ({ page }) => {
@@ -23,54 +32,72 @@ test('landing loads with mock label and navigation', async ({ page }) => {
   await expect(page.getByText('Workspaces')).toBeVisible();
 
   await page
-    .locator('aside')
+    .locator('app-app-list')
     .getByText('Todo')
     .locator('..')
-    .getByRole('button', { name: '+' })
+    .locator('button.app-list__icon--add')
     .click({ force: true });
-  await expect(page.locator('.dialog__title', { hasText: 'Todo' })).toBeVisible();
+  await expect(page.locator('app-todo-page')).toBeVisible();
 });
 
 test('can open additional applications', async ({ page }) => {
   await enterApp(page);
 
   await page
-    .locator('aside')
+    .locator('app-app-list')
     .getByText('Calculator')
     .locator('..')
-    .getByRole('button', { name: '+' })
+    .locator('button.app-list__icon--add')
     .click({ force: true });
-  await expect(page.locator('.dialog__title', { hasText: 'Calculator' })).toBeVisible();
+  await expect(page.locator('app-calculator')).toBeVisible();
 
   await page
-    .locator('aside')
+    .locator('app-app-list')
     .getByText('Timer')
     .locator('..')
-    .getByRole('button', { name: '+' })
+    .locator('button.app-list__icon--add')
     .click({ force: true });
-  await expect(page.locator('.dialog__title', { hasText: 'Timer' })).toBeVisible();
+  await expect(page.locator('app-timer')).toBeVisible();
 
   await page
-    .locator('aside')
-    .getByText('Notes')
+    .locator('app-app-list')
+    .getByText('🗒️')
     .locator('..')
-    .getByRole('button', { name: '+' })
+    .locator('..')
+    .locator('button.app-list__icon--add')
     .click({ force: true });
-  await expect(page.locator('.dialog__title', { hasText: 'Notes' })).toBeVisible();
+  await expect(page.locator('app-notes')).toBeVisible();
+
+  await page
+    .locator('app-app-list')
+    .getByText('Sticky Notes')
+    .locator('..')
+    .locator('button.app-list__icon--add')
+    .click({ force: true });
+  await expect(page.locator('app-sticky-notes')).toBeVisible();
+
+  await page
+    .locator('app-app-list')
+    .getByText('Data Table')
+    .locator('..')
+    .locator('button.app-list__icon--add')
+    .click({ force: true });
+  await expect(page.locator('app-data-table')).toBeVisible();
 });
 
 test('can add and delete a todo in mock mode', async ({ page }) => {
   await enterApp(page);
 
   await page
-    .locator('aside')
+    .locator('app-app-list')
     .getByText('Todo')
     .locator('..')
-    .getByRole('button', { name: '+' })
+    .locator('button.app-list__icon--add')
     .click({ force: true });
 
-  await page.getByPlaceholder('Add a todo').fill('Buy milk');
-  await page.getByRole('button', { name: 'Add' }).click();
+  const todoRoot = page.locator('app-todo-page');
+  await todoRoot.locator('input').first().fill('Buy milk');
+  await todoRoot.getByRole('button').first().click();
   await expect(page.getByText('Buy milk')).toBeVisible();
 
   const row = page.locator('article', { hasText: 'Buy milk' });

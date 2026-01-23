@@ -23,6 +23,7 @@ export interface UserPreferences {
   timeZone: string;
   showTime: boolean;
   timeFormat: '12h' | '24h';
+  stickyNoteDefaultMode: 'rich' | 'markdown';
   themeMode: 'system' | 'light' | 'dark' | 'timeZone';
   colorTheme: 'standard' | 'notepad' | 'ice';
   accessibilityMode: boolean;
@@ -547,11 +548,12 @@ export class AuthService {
       timeZone: browserTimeZone,
       showTime: true,
       timeFormat: '12h',
+      stickyNoteDefaultMode: 'rich',
       themeMode: 'system',
       colorTheme: 'standard',
       accessibilityMode: false,
       credentials: [],
-      maxPersistedApps: 60,
+      maxPersistedApps: 255,
       canvasWidth: org.defaultViewportWidth,
       canvasHeight: org.defaultViewportHeight,
       lockCanvasSize: false,

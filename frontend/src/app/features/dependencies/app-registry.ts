@@ -37,6 +37,12 @@ export const APP_REGISTRY: Record<AppDefinition['id'], AppDefinition> = {
     icon: '🗒️',
     defaultSize: { x: 0, y: 0, width: 700, height: 600 },
   },
+  stickyNotes: {
+    id: 'stickyNotes',
+    labelKey: 'apps.stickyNotes',
+    icon: '🟨',
+    defaultSize: { x: 0, y: 0, width: 320, height: 320 },
+  },
   calendar: {
     id: 'calendar',
     labelKey: 'apps.calendar',
@@ -49,6 +55,23 @@ export const APP_REGISTRY: Record<AppDefinition['id'], AppDefinition> = {
     icon: '🕒',
     defaultSize: { x: 0, y: 0, width: 360, height: 220 },
   },
+  dataTable: {
+    id: 'dataTable',
+    labelKey: 'apps.dataTable',
+    icon: '📋',
+    defaultSize: { x: 0, y: 0, width: 860, height: 520 },
+  },
 };
 
-export const APP_LIST = Object.values(APP_REGISTRY);
+export const APP_LIST: AppDefinition[] = [
+  APP_REGISTRY.kanban,
+  APP_REGISTRY.todo,
+  APP_REGISTRY.calculator,
+  APP_REGISTRY.timer,
+  APP_REGISTRY.navigator,
+  APP_REGISTRY.notes,
+  APP_REGISTRY.stickyNotes,
+  APP_REGISTRY.calendar,
+  APP_REGISTRY.clock,
+  APP_REGISTRY.dataTable,
+];

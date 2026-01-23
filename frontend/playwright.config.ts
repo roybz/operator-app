@@ -14,6 +14,6 @@ export default defineConfig({
     command: 'npm run start -- --port=4200 --configuration=development',
     url: 'http://localhost:4200',
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });
