@@ -1,7 +1,7 @@
 import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 
 type TimerMode = 'stopwatch' | 'countdown' | 'pomodoro';
 type PomodoroPhase = 'work' | 'break' | 'longBreak';

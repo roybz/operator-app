@@ -1,8 +1,11 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { ImportGuardService } from '../../../../core/import-guard.service';
+import { ExportGuardService } from '../../../../core/export-guard.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -93,11 +96,38 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
   standalone: true,
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
-    <div style="display:flex; gap:12px; height:100%;">
+    <div style="display:flex; gap:12px; height:100%; position:relative;">
+      @if (settingsOpen()) {
+        <div
+          style="position:absolute; inset:0; background:var(--color-surface); padding:16px; z-index:2; display:flex; flex-direction:column; gap:12px;"
+        >
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="margin:0;">{{ 'notes.settingsTitle' | translate }}</h3>
+            <button (click)="closeSettings()">{{ 'notes.closeSettings' | translate }}</button>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button (click)="exportInstance()">{{ 'notes.exportInstance' | translate }}</button>
+            <label style="display:inline-flex; align-items:center; gap:8px;">
+              <span>{{ 'notes.importInstance' | translate }}</span>
+              <input type="file" accept=".json" (change)="queueImport($event)" />
+            </label>
+            <button (click)="confirmWipeInstance()">
+              {{ 'notes.wipeInstance' | translate }}
+            </button>
+          </div>
+          @if (importStatus() === 'loading') {
+            <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+          } @else if (importStatus() === 'success') {
+            <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+          } @else if (importStatus() === 'error') {
+            <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+          }
+        </div>
+      }
       <aside
         [style.width]="state().sidebarOpen ? '240px' : '40px'"
         [style.minWidth]="state().sidebarOpen ? '200px' : '40px'"
-        style="border-right:1px solid var(--color-border); padding-right:8px; overflow:auto; transition:width 160ms ease;"
+        style="border-right:1px solid var(--color-border); padding-right:8px; overflow:auto; transition:width 160ms ease; display:flex; flex-direction:column;"
       >
         @if (state().sidebarOpen) {
           <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
@@ -187,11 +217,21 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               *ngTemplateOutlet="treeTemplate; context: { $implicit: activeRoot(), depth: 0 }"
             ></ng-container>
           }
+
+          <div style="margin-top:auto; display:flex; flex-wrap:wrap; padding-left:20px;">
+            <div style="font-size:12px; color:var(--color-muted);">
+              {{ 'notes.folderCount' | translate: { count: folderCount() } }}
+            </div>
+            <span> </span>
+            <div style="font-size:12px; color:var(--color-muted);">
+              {{ 'notes.noteCount' | translate: { count: noteCount() } }}
+            </div>
+          </div>
         }
       </aside>
 
       <section style="flex:1; display:flex; flex-direction:column; gap:12px;">
-        @if (selectedNode() && selectedNode()?.type === 'note') {
+        @if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             @if (editingNodeId() === selectedNode()?.id) {
               <input
@@ -313,7 +353,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             [style.fontStyle]="node.locked ? 'italic' : 'normal'"
             [style.boxShadow]="isActive(node.id) ? activeGlow() : 'none'"
           >
-            {{ node.id === activeRoot().id ? activeTitle() : node.name }}
+            {{ nodeLabel(node) }}
           </button>
         }
         @if (node.type === 'folder' && node.id !== activeRoot().id) {
@@ -338,6 +378,41 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         (canceled)="bulkDeleteOpen.set(false)"
       />
     }
+    @if (wipeInstanceOpen()) {
+      <app-confirm-dialog
+        [message]="'notes.confirmWipeInstance' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="wipeInstance()"
+        (canceled)="wipeInstanceOpen.set(false)"
+      />
+    }
+    @if (pendingImport()) {
+      <app-confirm-dialog
+        [title]="'dialogs.importTitle' | translate"
+        [message]="'dialogs.importConfirm' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmImport()"
+        (canceled)="cancelImport()"
+      />
+    }
+    @if (importLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.importLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="importLimitOpen.set(false)"
+      />
+    }
+    @if (exportLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.exportLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="exportLimitOpen.set(false)"
+      />
+    }
   `,
 })
 export class NotesComponent implements OnInit {
@@ -345,6 +420,9 @@ export class NotesComponent implements OnInit {
 
   private translate = inject(TranslateService);
   private prefs = inject(AppPreferencesService);
+  private instanceSettings = inject(InstanceSettingsService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -357,6 +435,12 @@ export class NotesComponent implements OnInit {
   editingNodeId = signal<string | null>(null);
   editingName = signal('');
   bulkDeleteOpen = signal(false);
+  wipeInstanceOpen = signal(false);
+  pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
   richFocused = signal(false);
   richSnapshot = signal('');
   richHtml = computed(() =>
@@ -458,6 +542,38 @@ export class NotesComponent implements OnInit {
 
   toggleSidebar() {
     this.commit({ ...this.state(), sidebarOpen: !this.state().sidebarOpen });
+  }
+
+  settingsOpen() {
+    return this.instanceSettings.isOpen(this.instanceId);
+  }
+
+  closeSettings() {
+    this.instanceSettings.close(this.instanceId);
+  }
+
+  folderCount() {
+    return this.countNodes(this.activeRoot(), 'folder');
+  }
+
+  noteCount() {
+    return this.countNodes(this.activeRoot(), 'note');
+  }
+
+  nodeLabel(node: NoteNode) {
+    if (node.id === this.activeRoot().id) return this.activeTitle();
+    if (node.type === 'folder') {
+      const direct = this.directNoteCount(node);
+      const total = this.totalNoteCount(node);
+      if (total > direct) {
+        return `${node.name} (${direct}) (${total})`;
+      }
+      if (direct > 0) {
+        return `${node.name} (${direct})`;
+      }
+      return node.name;
+    }
+    return node.name;
   }
 
   addFolder() {
@@ -691,6 +807,137 @@ export class NotesComponent implements OnInit {
       selectedIds: [],
       selectedId: null,
     });
+  }
+
+  exportInstance() {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
+    const data = JSON.stringify(this.state(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `notes-${this.instanceId}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
+  }
+
+  queueImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}')) as NotesState;
+        this.mergeImported(parsed);
+        this.importStatus.set('success');
+        this.importMessage.set('dialogs.importSuccess');
+      } catch {
+        this.importStatus.set('error');
+        this.importMessage.set('dialogs.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
+      }
+    };
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('dialogs.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
+  }
+
+  confirmWipeInstance() {
+    this.wipeInstanceOpen.set(true);
+  }
+
+  wipeInstance() {
+    const root = createFolder('Notes');
+    const firstFolder = createFolder('New folder', root.id);
+    const firstNote = createNote('New note', firstFolder.id);
+    firstFolder.children = [firstNote];
+    root.children = [firstFolder];
+    const next = { ...this.state(), root, selectedId: firstNote.id };
+    this.commit(next);
+    this.wipeInstanceOpen.set(false);
+  }
+
+  private mergeImported(imported: NotesState) {
+    const root = this.state().root;
+    const archive = this.state().archiveRoot;
+    const importedRoot = this.cloneTreeWithNewIds(imported.root, root.id);
+    const importedArchive = this.cloneTreeWithNewIds(imported.archiveRoot, archive.id);
+    root.children = [...(root.children ?? []), ...(importedRoot.children ?? [])];
+    archive.children = [...(archive.children ?? []), ...(importedArchive.children ?? [])];
+    this.commit({ ...this.state(), root, archiveRoot: archive });
+  }
+
+  private cloneTreeWithNewIds(node: NoteNode, parentId?: string): NoteNode {
+    const nextId = `${node.type}_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
+    const copy: NoteNode = { ...node, id: nextId, parentId };
+    if (node.type === 'folder') {
+      copy.children = (node.children ?? []).map((child) =>
+        this.cloneTreeWithNewIds(child, copy.id),
+      );
+    }
+    return copy;
+  }
+
+  private countNodes(node: NoteNode, type: NodeType): number {
+    let count = 0;
+    if (node.type === type && node.id !== this.activeRoot().id) count += 1;
+    if (node.type === 'folder') {
+      for (const child of node.children ?? []) {
+        count += this.countNodes(child, type);
+      }
+    }
+    return count;
+  }
+
+  private directNoteCount(node: NoteNode): number {
+    if (node.type !== 'folder') return 0;
+    return (node.children ?? []).filter((child) => child.type === 'note').length;
+  }
+
+  private totalNoteCount(node: NoteNode): number {
+    if (node.type !== 'folder') return 0;
+    let count = 0;
+    for (const child of node.children ?? []) {
+      if (child.type === 'note') count += 1;
+      if (child.type === 'folder') count += this.totalNoteCount(child);
+    }
+    return count;
   }
 
   activeGlow() {

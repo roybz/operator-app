@@ -5,7 +5,7 @@ import {
   TranslateModule,
   TranslateService,
 } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { KanbanComponent } from './kanban.component';
 
 describe('KanbanComponent', () => {

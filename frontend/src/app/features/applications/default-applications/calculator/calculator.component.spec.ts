@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateFakeLoader, TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { CalculatorComponent } from './calculator.component';
 
 describe('CalculatorComponent', () => {

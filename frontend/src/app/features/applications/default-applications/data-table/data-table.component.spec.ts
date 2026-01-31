@@ -1,9 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DataTableComponent } from './data-table.component';
 import { TranslateFakeLoader, TranslateLoader, TranslateModule } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
-import { UserPreferences } from '../../../core/auth.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { UserPreferences } from '../../../../core/auth.service';
 
 class MockPrefsService {
   preferences() {

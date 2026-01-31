@@ -1,5 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
+import { APP_REGISTRY } from '../features/dependencies/app-registry';
+import { AppId, DialogRect } from '../features/dependencies/app-types';
 import packageJson from '../../../package.json';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
@@ -108,6 +110,26 @@ interface SessionState {
 
 type StoredPreferences = Record<string, UserPreferences>;
 type StoredPreviewPreferences = Record<string, UserPreferences>;
+
+interface DialogInstanceState {
+  id: string;
+  appId: AppId;
+  titleKey: string;
+  rect: DialogRect;
+  minimized: boolean;
+  stashed: boolean;
+  z: number;
+  isMaximized: boolean;
+  deleteLocked?: boolean;
+}
+
+interface DialogStateSnapshot {
+  workspaces: { id: string; name: string }[];
+  activeWorkspaceId: string;
+  dialogsByWorkspace: Record<string, DialogInstanceState[]>;
+  hiddenWorkspaces: Record<string, boolean>;
+  zCounter: number;
+}
 
 const USERS_KEY = 'op_users';
 const SESSION_KEY = 'op_session';
@@ -307,6 +329,9 @@ export class AuthService {
 
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(`op_accessibility_prompted_${GUEST_USER_ID}`);
+      Object.keys(window.localStorage)
+        .filter((key) => key.startsWith(`op_accessibility_prompted_${GUEST_USER_ID}:`))
+        .forEach((key) => window.localStorage.removeItem(key));
     }
   }
 
@@ -493,7 +518,19 @@ export class AuthService {
     if (!effectiveId) return;
     const universeId = this.getActiveUniverseId(effectiveId) ?? prefs.universeId;
     const key = this.universeKey(effectiveId, universeId || this.createUniverseId());
-    const safeName = prefs.universeName?.trim() || 'Universe';
+    const currentName = universeId
+      ? this.getUniversesForUser(effectiveId).find((u) => u.id === universeId)?.name
+      : undefined;
+    const trimmedName = prefs.universeName?.trim() || '';
+    const defaultName = this.defaultPreferences().universeName ?? 'Universe';
+    const safeName =
+      !trimmedName ||
+      (currentName &&
+        currentName.trim() &&
+        (trimmedName === defaultName || trimmedName === 'Universe') &&
+        currentName !== 'Universe')
+        ? currentName || defaultName
+        : trimmedName;
     const nextPrefs = {
       ...prefs,
       universeId: universeId ?? prefs.universeId,
@@ -598,10 +635,15 @@ export class AuthService {
     const nextList = [...list, { id, name: trimmed }];
     this.universesSignal.set({ ...this.universesSignal(), [userId]: nextList });
     this.persistUniverses();
+    const baseUniverseId = this.getActiveUniverseId(userId) ?? list[0]?.id ?? null;
+    const basePrefs = baseUniverseId
+      ? this.getUniversePreferences(userId, baseUniverseId)
+      : this.defaultPreferences();
     const prefs = {
       ...this.defaultPreferences(),
       universeId: id,
       universeName: trimmed,
+      accessibilityMode: basePrefs.accessibilityMode,
     };
     const key = this.universeKey(userId, id);
     this.prefsSignal.set({ ...this.prefsSignal(), [key]: prefs });
@@ -984,6 +1026,7 @@ export class AuthService {
       userId: string,
       universe: UniverseInfo,
       base?: UserPreferences,
+      baseAccessibility?: boolean,
     ) => {
       const key = this.universeKey(userId, universe.id);
       if (!prefs[key]) {
@@ -993,6 +1036,9 @@ export class AuthService {
           universeId: universe.id,
           universeName: universe.name,
         };
+        if (baseAccessibility) {
+          prefs[key].accessibilityMode = true;
+        }
         prefsUpdated = true;
       }
       if (!prefs[key].universeId) {
@@ -1000,6 +1046,10 @@ export class AuthService {
         prefsUpdated = true;
       }
       if (!prefs[key].universeName?.trim()) {
+        prefs[key] = { ...prefs[key], universeName: universe.name };
+        prefsUpdated = true;
+      }
+      if (prefs[key].universeName === 'Universe' && universe.name !== 'Universe') {
         prefs[key] = { ...prefs[key], universeName: universe.name };
         prefsUpdated = true;
       }
@@ -1035,12 +1085,59 @@ export class AuthService {
       let list = universes[userId] ?? [];
       if (!list.length) {
         const universeId = legacy?.universeId ?? this.createUniverseId();
-        const universeName = legacy?.universeName?.trim() || 'Universe';
+        const universeName =
+          userId === GUEST_USER_ID
+            ? 'Default universe'
+            : legacy?.universeName?.trim() || 'Universe';
         list = [{ id: universeId, name: universeName }];
+        if (userId === GUEST_USER_ID) {
+          list.push({
+            id: this.createUniverseId(),
+            name: 'Example universe for guests 2',
+          });
+          list.push({
+            id: this.createUniverseId(),
+            name: 'Example universe for guests 3',
+          });
+        }
         universes[userId] = list;
         universesUpdated = true;
       }
-      list.forEach((u) => ensureUniversePrefs(userId, u, legacy));
+      if (userId === GUEST_USER_ID && list.length >= 1) {
+        const defaultName = list[0].name?.trim();
+        if (!defaultName || defaultName === 'Universe') {
+          list[0] = { ...list[0], name: 'Default universe' };
+          universes[userId] = list;
+          universesUpdated = true;
+        }
+        if (list.length < 3) {
+          const existingNames = new Set(list.map((u) => u.name));
+          if (!existingNames.has('Example universe for guests 2')) {
+            list.push({
+              id: this.createUniverseId(),
+              name: 'Example universe for guests 2',
+            });
+          }
+          if (!existingNames.has('Example universe for guests 3')) {
+            list.push({
+              id: this.createUniverseId(),
+              name: 'Example universe for guests 3',
+            });
+          }
+          universes[userId] = list;
+          universesUpdated = true;
+        }
+      }
+      if (list.length) {
+        ensureUniversePrefs(userId, list[0], legacy);
+      }
+      const baseKey = list.length ? this.universeKey(userId, list[0].id) : null;
+      const basePrefs = baseKey ? prefs[baseKey] : undefined;
+      const baseAccessibility = Boolean(basePrefs?.accessibilityMode);
+      list.forEach((u, idx) => {
+        if (idx === 0) return;
+        ensureUniversePrefs(userId, u, undefined, baseAccessibility);
+      });
       if (legacy) {
         delete prefs[userId];
         prefsUpdated = true;
@@ -1075,6 +1172,8 @@ export class AuthService {
       this.prefsSignal.set(prefs);
     }
 
+    this.seedGuestUniverseDialogs(universes[GUEST_USER_ID] ?? []);
+
     const previewPrefs = this.safeJson<StoredPreviewPreferences>(PREVIEW_PREFS_KEY, {});
     this.previewPrefsSignal.set(guestOnly ? {} : previewPrefs);
 
@@ -1095,6 +1194,43 @@ export class AuthService {
       LOGIN_SECURITY_KEY,
       {},
     );
+  }
+
+  private seedGuestUniverseDialogs(universes: UniverseInfo[]) {
+    if (typeof window === 'undefined') return;
+    if (!universes.length) return;
+    universes.forEach((universe) => {
+      const key = `${DIALOG_STATE_KEY}:${GUEST_USER_ID}:${universe.id}`;
+      if (window.localStorage.getItem(key)) return;
+      const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const instances: DialogInstanceState[] = [];
+      const addInstance = (appId: AppId, x: number, y: number, z: number) => {
+        const def = APP_REGISTRY[appId];
+        const rect = def?.defaultSize ?? { x: 0, y: 0, width: 480, height: 360 };
+        instances.push({
+          id: `dlg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+          appId,
+          titleKey: def?.labelKey ?? `apps.${appId}`,
+          rect: { x, y, width: rect.width, height: rect.height },
+          minimized: false,
+          stashed: false,
+          z,
+          isMaximized: false,
+          deleteLocked: false,
+        });
+      };
+      addInstance('clock', 40, 40, 1);
+      addInstance('stickyNotes', 420, 40, 2);
+      addInstance('notes', 40, 320, 3);
+      const snapshot: DialogStateSnapshot = {
+        workspaces: [{ id: workspaceId, name: 'Workspace 1' }],
+        activeWorkspaceId: workspaceId,
+        dialogsByWorkspace: { [workspaceId]: instances },
+        hiddenWorkspaces: {},
+        zCounter: instances.length,
+      };
+      window.localStorage.setItem(key, JSON.stringify(snapshot));
+    });
   }
 
   private persistUsers() {
@@ -1610,13 +1746,16 @@ export class AuthService {
     return Boolean(config?.guestModeOnly ?? packageJson.guestModeOnly);
   }
 
-  markAccessibilityPromptShown(userId: string) {
+  markAccessibilityPromptShown(userId: string, universeId?: string | null) {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(`op_accessibility_prompted_${userId}`, 'true');
+    const key = universeId ? `${userId}:${universeId}` : userId;
+    window.localStorage.setItem(`op_accessibility_prompted_${key}`, 'true');
   }
 
-  hasSeenAccessibilityPrompt(userId: string) {
+  hasSeenAccessibilityPrompt(userId: string, universeId?: string | null) {
     if (typeof window === 'undefined') return false;
+    const key = universeId ? `${userId}:${universeId}` : userId;
+    if (window.localStorage.getItem(`op_accessibility_prompted_${key}`) === 'true') return true;
     return window.localStorage.getItem(`op_accessibility_prompted_${userId}`) === 'true';
   }
 

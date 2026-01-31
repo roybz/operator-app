@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { StickyNotesComponent } from './sticky-notes.component';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
-import { UserPreferences } from '../../../core/auth.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { UserPreferences } from '../../../../core/auth.service';
 
 class MockPrefsService {
   preferences() {

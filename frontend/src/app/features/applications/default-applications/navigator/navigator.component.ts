@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 
 interface NavigatorTab {
   id: string;

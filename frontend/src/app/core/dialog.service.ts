@@ -11,6 +11,7 @@ export interface DialogInstance {
   rect: DialogRect;
   minimized: boolean;
   stashed: boolean;
+  archived?: boolean;
   tileRect?: DialogRect;
   z: number;
   isMaximized: boolean;
@@ -77,8 +78,13 @@ export class DialogService {
     return this.getDialogsForWorkspace(this.getActiveWorkspaceId());
   }
 
-  getAppInstances(appId: AppId) {
-    return this.getActiveDialogs().filter((instance) => instance.appId === appId);
+  getAppInstances(appId: AppId, options?: { includeArchived?: boolean }) {
+    const includeArchived = options?.includeArchived ?? true;
+    return this.getActiveDialogs().filter((instance) => {
+      if (instance.appId !== appId) return false;
+      if (!includeArchived && instance.archived) return false;
+      return true;
+    });
   }
 
   addWorkspace() {
@@ -207,6 +213,7 @@ export class DialogService {
       rect,
       minimized: false,
       stashed: false,
+      archived: false,
       tileRect: undefined,
       deleteLocked: false,
       z: this.state().zCounter + 1,
@@ -271,6 +278,22 @@ export class DialogService {
     this.updateInstance(instanceId, (instance) => ({
       ...instance,
       deleteLocked: !instance.deleteLocked,
+    }));
+  }
+
+  archiveInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      archived: true,
+      minimized: false,
+      stashed: false,
+    }));
+  }
+
+  unarchiveInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      archived: false,
     }));
   }
 
@@ -352,7 +375,7 @@ export class DialogService {
     const workspaceId = this.getActiveWorkspaceId();
     const dialogs = this.getDialogsForWorkspace(workspaceId);
     const nextDialogs = dialogs.map((instance) => {
-      if (instance.stashed) return instance;
+      if (instance.stashed || instance.archived) return instance;
       const rect =
         mode === 'left' ? { ...instance.rect, x: 0, y: 0 } : this.centerRect(instance.rect, bounds);
       return { ...instance, rect };
@@ -518,6 +541,7 @@ export class DialogService {
         titleKey: instance.titleKey ?? APP_REGISTRY[instance.appId]?.labelKey ?? 'apps.todo',
         titleOverride: instance.titleOverride ?? undefined,
         stashed: instance.stashed ?? false,
+        archived: instance.archived ?? false,
         tileRect: instance.tileRect,
         deleteLocked: instance.deleteLocked ?? false,
       }));

@@ -1,8 +1,8 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 
 interface CalculatorState {
   display: string;

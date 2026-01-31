@@ -1,6 +1,6 @@
 {
   "name": "operator-app",
-  "version": "0.0.1-010",
+  "version": "0.0.1-011",
   "guestModeOnly": true,
   "license": "MIT",
   "scripts": {

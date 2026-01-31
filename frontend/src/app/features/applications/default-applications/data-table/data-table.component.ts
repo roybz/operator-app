@@ -1,9 +1,11 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
+import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { ImportGuardService } from '../../../../core/import-guard.service';
+import { ExportGuardService } from '../../../../core/export-guard.service';
 
 export type ColumnType = 'text' | 'number' | 'date' | 'emoji' | 'image' | 'url' | 'boolean';
 
@@ -105,6 +107,27 @@ const uid = (prefix: string) =>
               </div>
             }
             <button (click)="addTable()">{{ 'dataTable.addTable' | translate }}</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button (click)="exportInstance()">
+                {{ 'dataTable.exportInstance' | translate }}
+              </button>
+              <label style="display:inline-flex; align-items:center; gap:8px;">
+                <span>{{ 'dataTable.importInstance' | translate }}</span>
+                <input type="file" accept=".json" (change)="queueImport($event)" />
+              </label>
+              <button (click)="confirmWipeInstance()">
+                {{ 'dataTable.wipeInstance' | translate }}
+              </button>
+            </div>
+            @if (importStatus() === 'loading') {
+              <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+            } @else if (importStatus() === 'success') {
+              <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+            } @else if (importStatus() === 'error') {
+              <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+            }
           </div>
           @if (pendingDeleteId()) {
             <app-confirm-dialog
@@ -224,6 +247,42 @@ const uid = (prefix: string) =>
         </div>
       }
     </div>
+
+    @if (confirmWipeOpen()) {
+      <app-confirm-dialog
+        [message]="'dataTable.confirmWipeInstance' | translate"
+        [confirmLabel]="'dataTable.wipeInstance' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="wipeInstance()"
+        (canceled)="confirmWipeOpen.set(false)"
+      />
+    }
+    @if (pendingImport()) {
+      <app-confirm-dialog
+        [title]="'dialogs.importTitle' | translate"
+        [message]="'dialogs.importConfirm' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmImport()"
+        (canceled)="cancelImport()"
+      />
+    }
+    @if (importLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.importLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="importLimitOpen.set(false)"
+      />
+    }
+    @if (exportLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.exportLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="exportLimitOpen.set(false)"
+      />
+    }
   `,
 })
 export class DataTableComponent implements OnInit {
@@ -232,11 +291,19 @@ export class DataTableComponent implements OnInit {
   private prefs = inject(AppPreferencesService);
   private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
 
   state = signal<DataTableState>(defaultState(this.translate));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
   columnTypes = columnTypes;
   pendingDeleteId = signal<string | null>(null);
+  confirmWipeOpen = signal(false);
+  pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -446,6 +513,117 @@ export class DataTableComponent implements OnInit {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
     this.persistState();
+  }
+
+  exportInstance() {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
+    const data = JSON.stringify(this.state(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `data-table-${this.instanceId}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
+  }
+
+  queueImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}')) as DataTableState;
+        this.mergeImported(parsed);
+        this.importStatus.set('success');
+        this.importMessage.set('dialogs.importSuccess');
+      } catch {
+        this.importStatus.set('error');
+        this.importMessage.set('dialogs.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
+      }
+    };
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('dialogs.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
+  }
+
+  confirmWipeInstance() {
+    this.confirmWipeOpen.set(true);
+  }
+
+  wipeInstance() {
+    const next = defaultState(this.translate);
+    this.state.set(next);
+    stateStore.set(this.instanceId, next);
+    this.persistState();
+    this.confirmWipeOpen.set(false);
+  }
+
+  private mergeImported(imported: DataTableState) {
+    if (!imported || !Array.isArray(imported.tables)) return;
+    const tables = imported.tables.map((table) => this.cloneTable(table));
+    const nextTables = [...this.state().tables, ...tables];
+    const next = { ...this.state(), tables: nextTables };
+    this.state.set(next);
+    this.persistState();
+  }
+
+  private cloneTable(table: DataTable): DataTable {
+    const columnMap = new Map<string, string>();
+    const columns = (table.columns ?? []).map((col) => {
+      const nextId = uid('col');
+      columnMap.set(col.id, nextId);
+      return { ...col, id: nextId };
+    });
+    const rows = (table.rows ?? []).map((row) => {
+      const values: Record<string, string> = {};
+      Object.entries(row.values ?? {}).forEach(([key, value]) => {
+        const nextKey = columnMap.get(key);
+        if (nextKey) values[nextKey] = String(value);
+      });
+      return { id: uid('row'), values };
+    });
+    return {
+      id: uid('table'),
+      name: table.name || this.translate.instant('dataTable.defaultTable'),
+      columns,
+      rows,
+    };
   }
 
   private persistState() {

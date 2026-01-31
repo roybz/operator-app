@@ -24,36 +24,36 @@ import { DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
 import { AppListComponent, AppGroup } from './shared/app-list/app-list.component';
 import { ConfirmDialogComponent } from './shared/confirm-dialog/confirm-dialog.component';
-import { TodoPageComponent } from './features/applications/todo/todo.component';
-import { CalculatorComponent } from './features/applications/calculator/calculator.component';
-import { TimerComponent } from './features/applications/timer/timer.component';
-import { NavigatorComponent } from './features/applications/navigator/navigator.component';
-import { NotesComponent } from './features/applications/notes/notes.component';
-import { CalendarComponent } from './features/applications/calendar/calendar.component';
-import { ClockComponent } from './features/applications/clock/clock.component';
-import { KanbanComponent } from './features/applications/kanban/kanban.component';
-import { StickyNotesComponent } from './features/applications/sticky-notes/sticky-notes.component';
-import { DataTableComponent } from './features/applications/data-table/data-table.component';
+import { TodoPageComponent } from './features/applications/default-applications/todo/todo.component';
+import { CalculatorComponent } from './features/applications/default-applications/calculator/calculator.component';
+import { TimerComponent } from './features/applications/default-applications/timer/timer.component';
+import { NavigatorComponent } from './features/applications/default-applications/navigator/navigator.component';
+import { NotesComponent } from './features/applications/default-applications/notes/notes.component';
+import { CalendarComponent } from './features/applications/default-applications/calendar/calendar.component';
+import { ClockComponent } from './features/applications/default-applications/clock/clock.component';
+import { KanbanComponent } from './features/applications/default-applications/kanban/kanban.component';
+import { StickyNotesComponent } from './features/applications/default-applications/sticky-notes/sticky-notes.component';
+import { DataTableComponent } from './features/applications/default-applications/data-table/data-table.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { LicenseComponent } from './features/license/license.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
 import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
 import { AppId } from './features/dependencies/app-types';
-import { cloneCalculatorState } from './features/applications/calculator/calculator.component';
-import { cloneNavigatorState } from './features/applications/navigator/navigator.component';
-import { cloneNotesState } from './features/applications/notes/notes.component';
-import { cloneTimerState } from './features/applications/timer/timer.component';
-import { cloneCalendarState } from './features/applications/calendar/calendar.component';
-import { cloneClockState } from './features/applications/clock/clock.component';
-import { cloneKanbanState } from './features/applications/kanban/kanban.component';
-import { cloneStickyNoteState } from './features/applications/sticky-notes/sticky-notes.component';
-import { cloneDataTableState } from './features/applications/data-table/data-table.component';
-import { cloneTodos } from './features/applications/todo/todo-api';
+import { cloneCalculatorState } from './features/applications/default-applications/calculator/calculator.component';
+import { cloneNavigatorState } from './features/applications/default-applications/navigator/navigator.component';
+import { cloneNotesState } from './features/applications/default-applications/notes/notes.component';
+import { cloneTimerState } from './features/applications/default-applications/timer/timer.component';
+import { cloneCalendarState } from './features/applications/default-applications/calendar/calendar.component';
+import { cloneClockState } from './features/applications/default-applications/clock/clock.component';
+import { cloneKanbanState } from './features/applications/default-applications/kanban/kanban.component';
+import { cloneStickyNoteState } from './features/applications/default-applications/sticky-notes/sticky-notes.component';
+import { cloneDataTableState } from './features/applications/default-applications/data-table/data-table.component';
+import { cloneTodoState } from './features/applications/default-applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
-const RESERVED_SIDEBAR_WIDTH = 240;
+const RESERVED_SIDEBAR_WIDTH = 267;
 const RESERVED_TOPBAR_HEIGHT = 48;
 const RESERVED_WORKSPACE_HEIGHT = 72;
 
@@ -242,9 +242,10 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       }
       <router-outlet />
     } @else if (auth.isLoggedIn()) {
-      <div style="position:relative;">
+      <div style="position:relative; display:flex; flex-direction:column; overflow:hidden;">
         @if (topBarOpen()) {
           <div
+            id="workspace-bar"
             [style.maxHeight.px]="workspaceMenuOpen() ? 72 : 0"
             [style.opacity]="workspaceMenuOpen() ? 1 : 0"
             [style.borderBottom]="workspaceMenuOpen() ? '1px solid var(--color-border)' : 'none'"
@@ -316,6 +317,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           </div>
 
           <header
+            id="topbar-header"
             style="background:var(--color-surface); border-bottom:1px solid var(--color-border); padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
           >
             <div style="position:relative;">
@@ -416,16 +418,16 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         }
       </div>
 
-      <main [style.height]="topBarOpen() ? 'calc(100vh - 48px)' : '100vh'" style="display:flex;">
+      <main style="display:flex; flex:1; min-height:0; overflow:hidden;">
         <aside
-          [style.width]="navOpen ? '240px' : '0'"
+          [style.width]="navOpen ? '267px' : '0'"
           [style.padding]="navOpen ? '16px' : '0'"
-          [style.borderRight]="navOpen ? '1px solid var(--color-border)' : 'none'"
-          [style.overflow]="navOpen ? 'visible' : 'hidden'"
-          style="display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box;"
+          [style.borderRight]="navOpen ? 'none' : 'none'"
+          [style.overflow]="'hidden'"
+          style="display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box; height:100%; max-height:100%;"
         >
           @if (navOpen) {
-            <div>
+            <div style="display:flex; flex-direction:column; height:100%; min-height:0;">
               <button (click)="toggleNav()" style="margin-bottom: 8px;">
                 {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
               </button>
@@ -446,6 +448,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   (click)="toggleResetMenu()"
                   [disabled]="settingsOpen() || !canEdit()"
                   [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
+                  style="width:100%;"
                 >
                   {{ 'dialogs.reset' | translate }}
                 </button>
@@ -468,103 +471,116 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   </div>
                 }
               </div>
-              <app-app-list
-                [apps]="visibleAppGroups()"
-                [instancesByApp]="instancesByApp()"
-                [deleteTargetActive]="!!deleteTargetId()"
-                [actionsDisabled]="settingsOpen() || !canEdit()"
-                (openApp)="openApp($event)"
-                (restore)="restoreInstance($event)"
-                (duplicate)="duplicateInstance($event)"
-                (toggleLock)="toggleDeleteLock($event)"
-              />
-            </div>
-
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-              @if (showViewportSizingControls()) {
-                <label style="display:flex; flex-direction:column; gap:6px;">
-                  {{ 'canvas.mode' | translate }}
-                  <select
-                    [value]="isCanvasLocked() ? 'locked' : 'follow'"
-                    (change)="setCanvasMode($event)"
+              <div
+                style="border-top:1px solid var(--color-border); margin:12px 0; opacity:0.6;"
+              ></div>
+              <div style="flex:1; min-height:0; overflow:auto;">
+                <app-app-list
+                  [apps]="visibleAppGroups()"
+                  [instancesByApp]="instancesByApp()"
+                  [deleteTargetActive]="!!deleteTargetId()"
+                  [actionsDisabled]="settingsOpen() || !canEdit()"
+                  (openApp)="openApp($event)"
+                  (restore)="restoreInstance($event)"
+                  (duplicate)="duplicateInstance($event)"
+                  (toggleLock)="toggleDeleteLock($event)"
+                  (archive)="confirmArchive($event)"
+                  (unarchive)="unarchiveInstance($event)"
+                />
+              </div>
+              <div
+                style="position:fixed; bottom:22px; left:16px; width:246px; display:flex; flex-direction:column; gap:8px;"
+              >
+                @if (showViewportSizingControls()) {
+                  <label style="display:flex; flex-direction:column; gap:6px;">
+                    <span style="margin-left:4px; font-size:14px;">
+                      {{ 'canvas.mode' | translate }}
+                    </span>
+                    <select
+                      [value]="isCanvasLocked() ? 'locked' : 'follow'"
+                      (change)="setCanvasMode($event)"
+                    >
+                      <option value="follow">{{ 'canvas.modeFollow' | translate }}</option>
+                      <option value="locked">{{ 'canvas.modeLocked' | translate }}</option>
+                    </select>
+                  </label>
+                  @if (isCanvasLocked()) {
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <input
+                        type="number"
+                        [value]="canvasDraftWidth()"
+                        (input)="canvasDraftWidth.set($any($event.target).valueAsNumber)"
+                        min="1024"
+                        max="20000"
+                        style="width:90px; padding:4px;"
+                      />
+                      <span>×</span>
+                      <input
+                        type="number"
+                        [value]="canvasDraftHeight()"
+                        (input)="canvasDraftHeight.set($any($event.target).valueAsNumber)"
+                        min="768"
+                        max="20000"
+                        style="width:90px; padding:4px;"
+                      />
+                      <button (click)="applyCanvasSize()" [disabled]="!canvasDraftDirty()">
+                        {{ 'canvas.updateSize' | translate }}
+                      </button>
+                    </div>
+                  }
+                }
+                @if (showZoomControls()) {
+                  <div
+                    style="display:flex; align-items:center; gap:8px;"
+                    [style.borderTop]="
+                      showCanvasDivider() ? '1px solid var(--color-border)' : 'none'
+                    "
+                    [style.paddingTop]="showCanvasDivider() ? '8px' : '0'"
+                    [style.marginTop]="showCanvasDivider() ? '8px' : '0'"
                   >
-                    <option value="follow">{{ 'canvas.modeFollow' | translate }}</option>
-                    <option value="locked">{{ 'canvas.modeLocked' | translate }}</option>
-                  </select>
-                </label>
-                @if (isCanvasLocked()) {
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <input
-                      type="number"
-                      [value]="canvasDraftWidth()"
-                      (input)="canvasDraftWidth.set($any($event.target).valueAsNumber)"
-                      min="1024"
-                      max="20000"
-                      style="width:90px; padding:4px;"
-                    />
-                    <span>×</span>
-                    <input
-                      type="number"
-                      [value]="canvasDraftHeight()"
-                      (input)="canvasDraftHeight.set($any($event.target).valueAsNumber)"
-                      min="768"
-                      max="20000"
-                      style="width:90px; padding:4px;"
-                    />
-                    <button (click)="applyCanvasSize()" [disabled]="!canvasDraftDirty()">
-                      {{ 'canvas.updateSize' | translate }}
+                    <button
+                      (click)="resetZoom()"
+                      [disabled]="settingsOpen()"
+                      [style.opacity]="settingsOpen() ? 0.5 : 1"
+                    >
+                      {{ 'canvas.originalScale' | translate }}
+                    </button>
+                    <button
+                      (click)="zoomOut()"
+                      [disabled]="settingsOpen()"
+                      [style.opacity]="settingsOpen() ? 0.5 : 1"
+                    >
+                      {{ 'canvas.zoomOut' | translate }}
+                    </button>
+                    <button
+                      (click)="zoomIn()"
+                      [disabled]="settingsOpen()"
+                      [style.opacity]="settingsOpen() ? 0.5 : 1"
+                    >
+                      {{ 'canvas.zoomIn' | translate }}
                     </button>
                   </div>
                 }
-              }
-              @if (showZoomControls()) {
-                <div
-                  style="display:flex; align-items:center; gap:8px;"
-                  [style.borderTop]="showCanvasDivider() ? '1px solid var(--color-border)' : 'none'"
-                  [style.paddingTop]="showCanvasDivider() ? '8px' : '0'"
-                  [style.marginTop]="showCanvasDivider() ? '8px' : '0'"
+                <button
+                  (click)="toggleSettings()"
+                  [disabled]="!canOpenSettings()"
+                  [style.opacity]="!canOpenSettings() ? 0.5 : 1"
+                  [style.cursor]="!canOpenSettings() ? 'not-allowed' : 'pointer'"
                 >
-                  <button
-                    (click)="resetZoom()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.originalScale' | translate }}
-                  </button>
-                  <button
-                    (click)="zoomOut()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.zoomOut' | translate }}
-                  </button>
-                  <button
-                    (click)="zoomIn()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.zoomIn' | translate }}
-                  </button>
-                </div>
-              }
-              <button
-                (click)="toggleSettings()"
-                [disabled]="!canOpenSettings()"
-                [style.opacity]="!canOpenSettings() ? 0.5 : 1"
-                [style.cursor]="!canOpenSettings() ? 'not-allowed' : 'pointer'"
-              >
-                {{ 'nav.settings' | translate }}
-              </button>
-              <button (click)="openLicense()">{{ 'nav.license' | translate }}</button>
-              <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
+                  {{ 'nav.settings' | translate }}
+                </button>
+                <button (click)="openLicense()">{{ 'nav.license' | translate }}</button>
+                <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
+              </div>
             </div>
           }
         </aside>
 
         <section
           id="app-viewport"
-          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center;"
+          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:auto;"
           [style.overflow]="isOverlayActive() ? 'hidden' : 'auto'"
+          [style.borderLeft]="navOpen ? '1px solid var(--color-border)' : 'none'"
         >
           @if (!topBarOpen()) {
             <button
@@ -620,11 +636,13 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   [style.height.px]="instance.tileRect.height"
                   [style.zIndex]="1"
                   [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
+                  [style.cursor]="tileDragState?.id === instance.id ? 'grabbing' : 'grab'"
                   (pointerdown)="$event.stopPropagation(); startTileDrag(instance, $event)"
                 >
                   <div style="flex:1; min-width:0;">
                     @if (editingTileId() === instance.id) {
                       <input
+                        [attr.data-tile-input]="instance.id"
                         [value]="editingTitle()"
                         (input)="editingTitle.set($any($event.target).value)"
                         (blur)="finishRename(instance)"
@@ -761,7 +779,9 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 <h3 style="margin:0 0 16px;">
                   {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
                 </h3>
-                <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                <div
+                  style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;"
+                >
                   @for (ws of dialogService.getWorkspaces(); track ws.id) {
                     <button
                       (click)="moveInstanceToWorkspace(ws.id)"
@@ -935,6 +955,16 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         />
       }
 
+      @if (archiveTargetId()) {
+        <app-confirm-dialog
+          [message]="'dialogs.confirmArchive' | translate"
+          [confirmLabel]="'dialogs.archive' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="archiveConfirmed()"
+          (canceled)="archiveTargetId.set(null)"
+        />
+      }
+
       @if (settingsCloseConfirmOpen()) {
         <app-confirm-dialog
           [message]="'settings.closeConfirm' | translate"
@@ -1024,6 +1054,7 @@ export class AppComponent implements OnInit, OnDestroy {
   resetMenuOpen = signal(false);
   deleteTargetId = signal<string | null>(null);
   cloneTargetId = signal<string | null>(null);
+  archiveTargetId = signal<string | null>(null);
   moveWorkspaceTargetId = signal<string | null>(null);
   universeMenuOpen = signal(false);
   universeSwitchConfirmOpen = signal(false);
@@ -1067,10 +1098,13 @@ export class AppComponent implements OnInit, OnDestroy {
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
   visibleDialogs = computed(() =>
     this.activeDialogs().filter(
-      (instance) => !this.dialogsHidden() && !instance.stashed && !instance.minimized,
+      (instance) =>
+        !this.dialogsHidden() && !instance.stashed && !instance.minimized && !instance.archived,
     ),
   );
-  stashedDialogs = computed(() => this.activeDialogs().filter((instance) => instance.stashed));
+  stashedDialogs = computed(() =>
+    this.activeDialogs().filter((instance) => instance.stashed && !instance.archived),
+  );
   isOverlayActive = computed(
     () =>
       this.settingsOpen() ||
@@ -1081,6 +1115,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.guestBlocked() ||
       this.loadingVisible() ||
       Boolean(this.cloneTargetId()) ||
+      Boolean(this.archiveTargetId()) ||
       Boolean(this.moveWorkspaceTargetId()) ||
       this.universeSwitchConfirmOpen(),
   );
@@ -1209,16 +1244,16 @@ export class AppComponent implements OnInit, OnDestroy {
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
   visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
   instancesByApp = computed(() => ({
-    kanban: this.dialogService.getAppInstances('kanban'),
-    todo: this.dialogService.getAppInstances('todo'),
-    calculator: this.dialogService.getAppInstances('calculator'),
-    timer: this.dialogService.getAppInstances('timer'),
-    navigator: this.dialogService.getAppInstances('navigator'),
-    notes: this.dialogService.getAppInstances('notes'),
-    stickyNotes: this.dialogService.getAppInstances('stickyNotes'),
-    calendar: this.dialogService.getAppInstances('calendar'),
-    clock: this.dialogService.getAppInstances('clock'),
-    dataTable: this.dialogService.getAppInstances('dataTable'),
+    kanban: this.dialogService.getAppInstances('kanban', { includeArchived: true }),
+    todo: this.dialogService.getAppInstances('todo', { includeArchived: true }),
+    calculator: this.dialogService.getAppInstances('calculator', { includeArchived: true }),
+    timer: this.dialogService.getAppInstances('timer', { includeArchived: true }),
+    navigator: this.dialogService.getAppInstances('navigator', { includeArchived: true }),
+    notes: this.dialogService.getAppInstances('notes', { includeArchived: true }),
+    stickyNotes: this.dialogService.getAppInstances('stickyNotes', { includeArchived: true }),
+    calendar: this.dialogService.getAppInstances('calendar', { includeArchived: true }),
+    clock: this.dialogService.getAppInstances('clock', { includeArchived: true }),
+    dataTable: this.dialogService.getAppInstances('dataTable', { includeArchived: true }),
   }));
   canvasStyle = computed(() => {
     const prefs = this.auth.preferences();
@@ -1293,7 +1328,9 @@ export class AppComponent implements OnInit, OnDestroy {
         this.accessibilityPromptOpen.set(false);
         return;
       }
-      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id)) return;
+      const universeId = this.auth.getActiveUniverseId(actualUser.id) ?? null;
+      if (this.auth.preferences().accessibilityMode) return;
+      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) return;
       this.accessibilityPromptEnabled.set(false);
       this.accessibilityPromptOpen.set(true);
     });
@@ -1459,16 +1496,25 @@ export class AppComponent implements OnInit, OnDestroy {
         this.suppressWorkspaceClick = true;
       }
       if (this.workspacePointerState.moved) {
-        const target = document
-          .elementFromPoint(event.clientX, event.clientY)
-          ?.closest('[data-workspace-id]') as HTMLElement | null;
-        if (!target) return;
-        const targetId = target.dataset['workspaceId'] ?? null;
-        if (!targetId) return;
-        const rect = target.getBoundingClientRect();
-        const isLeft = event.clientX < rect.left + rect.width / 2;
-        this.hoverWorkspaceId.set(targetId);
-        this.hoverWorkspaceSide.set(isLeft ? 'left' : 'right');
+        const rows = Array.from(document.querySelectorAll('[data-workspace-id]')) as HTMLElement[];
+        if (!rows.length) return;
+        const positions = rows.map((row) => ({
+          id: row.dataset['workspaceId'] ?? '',
+          rect: row.getBoundingClientRect(),
+        }));
+        let insertIndex = positions.findIndex(
+          (pos) => event.clientX < pos.rect.left + pos.rect.width / 2,
+        );
+        if (insertIndex === -1) insertIndex = positions.length;
+        if (insertIndex >= positions.length) {
+          const last = positions[positions.length - 1];
+          this.hoverWorkspaceId.set(last.id);
+          this.hoverWorkspaceSide.set('right');
+        } else {
+          const target = positions[insertIndex];
+          this.hoverWorkspaceId.set(target.id);
+          this.hoverWorkspaceSide.set('left');
+        }
       }
     }
   }
@@ -1518,8 +1564,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   floatingSidebarToggleTop() {
     if (!this.topBarOpen()) return 12;
-    const headerHeight = 48;
-    const workspaceHeight = this.workspaceMenuOpen() ? 72 : 0;
+    if (typeof document === 'undefined') return 12 + 48 + (this.workspaceMenuOpen() ? 72 : 0);
+    const headerHeight = document.getElementById('topbar-header')?.offsetHeight ?? 48;
+    const workspaceHeight = this.workspaceMenuOpen()
+      ? (document.getElementById('workspace-bar')?.offsetHeight ?? 72)
+      : 0;
     return 12 + headerHeight + workspaceHeight;
   }
 
@@ -1791,7 +1840,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async cloneAppData(appId: AppId, fromId: string, toId: string) {
     if (appId === 'todo') {
-      await cloneTodos(fromId, toId, this.effectiveUserId());
+      cloneTodoState(fromId, toId, this.effectiveUserId());
     }
     if (appId === 'calculator') cloneCalculatorState(fromId, toId);
     if (appId === 'timer') cloneTimerState(fromId, toId);
@@ -1826,6 +1875,13 @@ export class AppComponent implements OnInit, OnDestroy {
   restoreFromStash(instance: { id: string }) {
     if (!this.canEdit()) return;
     this.dialogService.unstashInstance(instance.id);
+    const target = this.activeDialogs().find((dialog) => dialog.id === instance.id);
+    if (target) {
+      const bounds = this.canvasBounds();
+      const nextX = Math.max(0, (bounds.width - target.rect.width) / 2);
+      const nextY = Math.max(0, (bounds.height - target.rect.height) / 2);
+      this.dialogService.moveInstance(instance.id, { x: nextX, y: nextY }, bounds);
+    }
     this.dialogService.bringToFront(instance.id);
   }
 
@@ -1857,10 +1913,26 @@ export class AppComponent implements OnInit, OnDestroy {
     this.deleteTargetId.set(instanceId);
   }
 
+  confirmArchive(instanceId: string) {
+    if (!this.canEdit()) return;
+    this.archiveTargetId.set(instanceId);
+  }
+
   deleteConfirmed() {
     const target = this.deleteTargetId();
     if (target) this.dialogService.deleteInstance(target);
     this.deleteTargetId.set(null);
+  }
+
+  archiveConfirmed() {
+    const target = this.archiveTargetId();
+    if (target) this.dialogService.archiveInstance(target);
+    this.archiveTargetId.set(null);
+  }
+
+  unarchiveInstance(instanceId: string) {
+    if (!this.canEdit()) return;
+    this.dialogService.unarchiveInstance(instanceId);
   }
 
   toggleResetMenu() {
@@ -1890,9 +1962,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   instanceHasSettings(appId: AppId) {
     return (
+      appId === 'todo' ||
       appId === 'clock' ||
       appId === 'calculator' ||
       appId === 'kanban' ||
+      appId === 'notes' ||
       appId === 'stickyNotes' ||
       appId === 'dataTable'
     );
@@ -1900,6 +1974,28 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleInstanceSettings(instanceId: string) {
     this.instanceSettings.toggle(instanceId);
+  }
+
+  @HostListener('document:pointerdown', ['$event'])
+  onDocumentPointerDown(event: PointerEvent) {
+    const target = event.target as HTMLElement | null;
+    const input = this.workspaceRenameInput()?.nativeElement ?? null;
+    if (
+      this.editingWorkspaceId() &&
+      input &&
+      target &&
+      input !== target &&
+      !input.contains(target)
+    ) {
+      const ws = this.dialogService
+        .getWorkspaces()
+        .find((item) => item.id === this.editingWorkspaceId());
+      if (ws) {
+        this.finishWorkspaceRename(ws);
+      } else {
+        this.cancelWorkspaceRename();
+      }
+    }
   }
 
   openMoveWorkspace(instanceId: string) {
@@ -2076,6 +2172,15 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!this.canEdit()) return;
     this.editingTileId.set(instance.id);
     this.editingTitle.set(this.instanceLabel(instance));
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        const input = document.querySelector(
+          `[data-tile-input="${instance.id}"]`,
+        ) as HTMLInputElement | null;
+        input?.focus();
+        input?.select();
+      }, 0);
+    }
   }
 
   finishRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
@@ -2195,7 +2300,8 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!actual) return;
     const prefs = this.auth.preferences();
     this.auth.savePreferences({ ...prefs, accessibilityMode: this.accessibilityPromptEnabled() });
-    this.auth.markAccessibilityPromptShown(actual.id);
+    const universeId = this.auth.getActiveUniverseId(actual.id) ?? null;
+    this.auth.markAccessibilityPromptShown(actual.id, universeId);
     this.accessibilityPromptOpen.set(false);
   }
 

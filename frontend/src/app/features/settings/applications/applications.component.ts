@@ -4,17 +4,19 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
+import { ExportGuardService } from '../../../core/export-guard.service';
+import { ImportGuardService } from '../../../core/import-guard.service';
 import { AppId } from '../../dependencies/app-types';
 import { APP_LIST } from '../../dependencies/app-registry';
-import { clearCalculatorState } from '../../applications/calculator/calculator.component';
-import { clearTimerState } from '../../applications/timer/timer.component';
-import { clearNavigatorState } from '../../applications/navigator/navigator.component';
-import { clearNotesState } from '../../applications/notes/notes.component';
-import { clearCalendarState } from '../../applications/calendar/calendar.component';
-import { clearClockState } from '../../applications/clock/clock.component';
-import { clearKanbanState } from '../../applications/kanban/kanban.component';
-import { clearStickyNoteState } from '../../applications/sticky-notes/sticky-notes.component';
-import { clearDataTableState } from '../../applications/data-table/data-table.component';
+import { clearCalculatorState } from '../../applications/default-applications/calculator/calculator.component';
+import { clearTimerState } from '../../applications/default-applications/timer/timer.component';
+import { clearNavigatorState } from '../../applications/default-applications/navigator/navigator.component';
+import { clearNotesState } from '../../applications/default-applications/notes/notes.component';
+import { clearCalendarState } from '../../applications/default-applications/calendar/calendar.component';
+import { clearClockState } from '../../applications/default-applications/clock/clock.component';
+import { clearKanbanState } from '../../applications/default-applications/kanban/kanban.component';
+import { clearStickyNoteState } from '../../applications/default-applications/sticky-notes/sticky-notes.component';
+import { clearDataTableState } from '../../applications/default-applications/data-table/data-table.component';
 import { SettingsDraftService } from '../settings-draft.service';
 
 const APPLICATIONS = APP_LIST;
@@ -80,8 +82,12 @@ const APPLICATIONS = APP_LIST;
             />
           </label>
         </div>
-        @if (importError()) {
-          <div style="color:#b00020;">{{ importError() ?? '' | translate }}</div>
+        @if (importStatus() === 'loading') {
+          <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+        } @else if (importStatus() === 'success') {
+          <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+        } @else if (importStatus() === 'error') {
+          <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
         }
       </div>
 
@@ -104,6 +110,32 @@ const APPLICATIONS = APP_LIST;
           (canceled)="resetAllOpen.set(false)"
         />
       }
+      @if (pendingImport()) {
+        <app-confirm-dialog
+          [title]="'dialogs.importTitle' | translate"
+          [message]="'dialogs.importConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmImport()"
+          (canceled)="cancelImport()"
+        />
+      }
+      @if (importLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.importLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="importLimitOpen.set(false)"
+        />
+      }
+      @if (exportLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.exportLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="exportLimitOpen.set(false)"
+        />
+      }
     </section>
   `,
 })
@@ -111,12 +143,22 @@ export class ApplicationsSettingsComponent {
   private draft = inject(SettingsDraftService);
   private dialogService = inject(DialogService);
   private auth = inject(AuthService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
 
   apps = APPLICATIONS;
   prefs = signal(this.draft.preferences());
   confirmAppId = signal<AppId | null>(null);
   resetAllOpen = signal(false);
-  importError = signal<string | null>(null);
+  pendingImport = signal<{
+    file: File;
+    format: 'json' | 'xml';
+    input: HTMLInputElement;
+  } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
   showUniverseNotice = computed(() => {
     const ownerId = this.auth.actualUser()?.id ?? null;
     if (!ownerId) return false;
@@ -178,6 +220,10 @@ export class ApplicationsSettingsComponent {
   }
 
   exportData(format: 'json' | 'xml') {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
     const userId = this.effectiveUserId();
     const payload = this.collectAppData(userId);
     const text = format === 'xml' ? this.toXml(payload) : JSON.stringify(payload, null, 2);
@@ -189,23 +235,64 @@ export class ApplicationsSettingsComponent {
     link.download = `operator-app-data.${format}`;
     link.click();
     URL.revokeObjectURL(link.href);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
   }
 
   onImportFile(event: Event, format: 'json' | 'xml') {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    this.importError.set(null);
+    const input = event.target as HTMLInputElement;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, format, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const text = String(reader.result || '');
-        const payload = format === 'xml' ? this.fromXml(text) : JSON.parse(text);
-        this.applyImportedData(payload);
+        const payload = pending.format === 'xml' ? this.fromXml(text) : JSON.parse(text || '{}');
+        const ok = this.applyImportedData(payload);
+        if (!ok) {
+          this.importStatus.set('error');
+          this.importMessage.set('dialogs.importFailed');
+        } else {
+          this.importStatus.set('success');
+          this.importMessage.set('dialogs.importSuccess');
+        }
       } catch {
-        this.importError.set('settings.importFailed');
+        this.importStatus.set('error');
+        this.importMessage.set('dialogs.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
       }
     };
-    reader.readAsText(file);
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('dialogs.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
   }
 
   private effectiveUserId() {
@@ -247,8 +334,7 @@ export class ApplicationsSettingsComponent {
     entries?: { key?: string; value?: string }[];
   }) {
     if (!payload?.entries || !Array.isArray(payload.entries)) {
-      this.importError.set('settings.importFailed');
-      return;
+      return false;
     }
     const userId = this.effectiveUserId();
     payload.entries.forEach((entry) => {
@@ -257,6 +343,7 @@ export class ApplicationsSettingsComponent {
       if (!this.isAllowedKey(key, userId)) return;
       window.localStorage.setItem(key, entry.value);
     });
+    return true;
   }
 
   private rewriteKey(key: string, sourceUserId: string | undefined, targetUserId: string) {

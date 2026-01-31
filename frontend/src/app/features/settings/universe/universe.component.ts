@@ -2,6 +2,8 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, UniverseInfo, UserPreferences } from '../../../core/auth.service';
+import { ImportGuardService } from '../../../core/import-guard.service';
+import { ExportGuardService } from '../../../core/export-guard.service';
 import { SettingsDraftService } from '../settings-draft.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
@@ -76,8 +78,12 @@ import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.
           <button (click)="confirmWipeAll.set(true)">
             {{ 'universe.wipeAll' | translate }}
           </button>
-          @if (importError()) {
-            <p style="color:#b00020; margin:0;">{{ importError() }}</p>
+          @if (importStatus() === 'loading') {
+            <p style="margin:0; opacity:0.7;">{{ 'dialogs.importing' | translate }}</p>
+          } @else if (importStatus() === 'success') {
+            <p style="margin:0; color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</p>
+          } @else if (importStatus() === 'error') {
+            <p style="margin:0; color:#b00020;">{{ importMessage() ?? '' | translate }}</p>
           }
         </div>
       </section>
@@ -107,6 +113,32 @@ import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.
           (canceled)="deleteTarget.set(null)"
         />
       }
+      @if (pendingImport()) {
+        <app-confirm-dialog
+          [title]="'dialogs.importTitle' | translate"
+          [message]="'dialogs.importConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmImport()"
+          (canceled)="cancelImport()"
+        />
+      }
+      @if (importLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.importLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="importLimitOpen.set(false)"
+        />
+      }
+      @if (exportLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.exportLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="exportLimitOpen.set(false)"
+        />
+      }
     </section>
   `,
 })
@@ -114,12 +146,22 @@ export class UniverseSettingsComponent {
   private auth = inject(AuthService);
   private draft = inject(SettingsDraftService);
   private translate = inject(TranslateService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
 
   prefs = signal<UserPreferences>(this.draft.preferences());
   confirmWipeAll = signal(false);
   newUniverseName = signal('');
   universeError = signal<string | null>(null);
-  importError = signal<string | null>(null);
+  pendingImport = signal<{
+    file: File;
+    format: 'json' | 'xml';
+    input: HTMLInputElement;
+  } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
   deleteTarget = signal<UniverseInfo | null>(null);
 
   universeColumns: TableColumn<UniverseInfo>[] = [
@@ -181,6 +223,10 @@ export class UniverseSettingsComponent {
   }
 
   exportAll(format: 'json' | 'xml') {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
     const ownerId = this.auth.actualUser()?.id;
     if (!ownerId || typeof window === 'undefined') return;
     const payload = this.auth.exportAllUniverses(ownerId);
@@ -193,28 +239,70 @@ export class UniverseSettingsComponent {
     link.download = `operator-app-universes.${format}`;
     link.click();
     URL.revokeObjectURL(link.href);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
   }
 
   onImport(event: Event, format: 'json' | 'xml') {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    this.importError.set(null);
+    const input = event.target as HTMLInputElement;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, format, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const text = String(reader.result || '');
-        const payload = format === 'xml' ? this.fromXml(text) : JSON.parse(text);
+        const payload = pending.format === 'xml' ? this.fromXml(text) : JSON.parse(text || '{}');
         const ownerId = this.auth.actualUser()?.id;
-        if (!ownerId) return;
-        const result = this.auth.importAllUniverses(ownerId, payload);
-        if (!result.ok) {
-          this.importError.set(this.translate.instant(result.message ?? 'settings.importFailed'));
+        if (!ownerId) {
+          this.importStatus.set('error');
+          this.importMessage.set('settings.importFailed');
+        } else {
+          const result = this.auth.importAllUniverses(ownerId, payload);
+          if (!result.ok) {
+            this.importStatus.set('error');
+            this.importMessage.set(result.message ?? 'settings.importFailed');
+          } else {
+            this.importStatus.set('success');
+            this.importMessage.set('dialogs.importSuccess');
+          }
         }
       } catch {
-        this.importError.set(this.translate.instant('settings.importFailed'));
+        this.importStatus.set('error');
+        this.importMessage.set('settings.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
       }
     };
-    reader.readAsText(file);
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('settings.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
   }
 
   wipeAllUniverses() {

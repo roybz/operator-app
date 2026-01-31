@@ -1,8 +1,8 @@
 import { Component, Input, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 
 type StickyMode = 'rich' | 'markdown';
 

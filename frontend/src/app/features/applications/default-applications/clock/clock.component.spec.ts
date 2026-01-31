@@ -5,8 +5,8 @@ import {
   TranslateModule,
   TranslateService,
 } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ClockComponent } from './clock.component';
 
 describe('ClockComponent', () => {

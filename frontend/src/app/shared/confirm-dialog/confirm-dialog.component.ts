@@ -32,11 +32,13 @@ import { TranslateModule } from '@ngx-translate/core';
           <h3 style="margin:0 0 12px;">{{ title }}</h3>
         }
         @if (message) {
-          <p style="margin:0;">{{ message }}</p>
+          <p style="margin:5px 0; line-height:24px;">{{ message }}</p>
         }
         <ng-content />
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-          <button (click)="canceled.emit()">{{ cancelLabel }}</button>
+          @if (showCancel) {
+            <button (click)="canceled.emit()">{{ cancelLabel }}</button>
+          }
           <button (click)="confirmed.emit()">{{ confirmLabel }}</button>
         </div>
       </div>
@@ -48,6 +50,7 @@ export class ConfirmDialogComponent {
   @Input() message = '';
   @Input() confirmLabel = 'Confirm';
   @Input() cancelLabel = 'Cancel';
+  @Input() showCancel = true;
 
   @Output() confirmed = new EventEmitter<void>();
   @Output() canceled = new EventEmitter<void>();

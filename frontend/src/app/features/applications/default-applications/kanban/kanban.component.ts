@@ -1,9 +1,11 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
-import { InstanceSettingsService } from '../../../core/instance-settings.service';
+import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { ImportGuardService } from '../../../../core/import-guard.service';
+import { ExportGuardService } from '../../../../core/export-guard.service';
 
 interface ChecklistItem {
   id: string;
@@ -89,6 +91,25 @@ export function cloneKanbanState(fromId: string, toId: string) {
               </div>
             }
             <button (click)="addBoard()">{{ 'kanban.addBoard' | translate }}</button>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button (click)="exportInstance()">{{ 'kanban.exportInstance' | translate }}</button>
+              <label style="display:inline-flex; align-items:center; gap:8px;">
+                <span>{{ 'kanban.importInstance' | translate }}</span>
+                <input type="file" accept=".json" (change)="queueImport($event)" />
+              </label>
+              <button (click)="confirmWipeInstance()">
+                {{ 'kanban.wipeInstance' | translate }}
+              </button>
+            </div>
+            @if (importStatus() === 'loading') {
+              <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+            } @else if (importStatus() === 'success') {
+              <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+            } @else if (importStatus() === 'error') {
+              <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+            }
           </div>
         </div>
       } @else {
@@ -280,6 +301,41 @@ export function cloneKanbanState(fromId: string, toId: string) {
         }
       </app-confirm-dialog>
     }
+    @if (confirmWipeOpen()) {
+      <app-confirm-dialog
+        [message]="'kanban.confirmWipeInstance' | translate"
+        [confirmLabel]="'kanban.wipeInstance' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="wipeInstance()"
+        (canceled)="confirmWipeOpen.set(false)"
+      />
+    }
+    @if (pendingImport()) {
+      <app-confirm-dialog
+        [title]="'dialogs.importTitle' | translate"
+        [message]="'dialogs.importConfirm' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmImport()"
+        (canceled)="cancelImport()"
+      />
+    }
+    @if (importLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.importLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="importLimitOpen.set(false)"
+      />
+    }
+    @if (exportLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.exportLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="exportLimitOpen.set(false)"
+      />
+    }
   `,
 })
 export class KanbanComponent implements OnInit {
@@ -288,6 +344,8 @@ export class KanbanComponent implements OnInit {
   private prefs = inject(AppPreferencesService);
   private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
   state = signal<KanbanState>({
     boards: [],
     activeBoardId: '',
@@ -302,6 +360,12 @@ export class KanbanComponent implements OnInit {
   editingColumnName = signal('');
   confirmColumnId = signal<string | null>(null);
   confirmMoveLeft = signal(false);
+  confirmWipeOpen = signal(false);
+  pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -677,6 +741,131 @@ export class KanbanComponent implements OnInit {
       selectedColumnId: selectedColumnId ?? this.state().selectedColumnId,
     });
     this.persistState();
+  }
+
+  exportInstance() {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
+    const data = JSON.stringify(this.state(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `kanban-${this.instanceId}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
+  }
+
+  queueImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}')) as KanbanState;
+        this.mergeImported(parsed);
+        this.importStatus.set('success');
+        this.importMessage.set('dialogs.importSuccess');
+      } catch {
+        this.importStatus.set('error');
+        this.importMessage.set('dialogs.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
+      }
+    };
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('dialogs.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
+  }
+
+  confirmWipeInstance() {
+    this.confirmWipeOpen.set(true);
+  }
+
+  wipeInstance() {
+    const defaultBoard = this.createDefaultBoard();
+    const next: KanbanState = {
+      boards: [defaultBoard],
+      activeBoardId: defaultBoard.id,
+      selectedCardId: null,
+      selectedColumnId: null,
+    };
+    this.state.set(next);
+    stateStore.set(this.instanceId, next);
+    this.persistState();
+    this.confirmWipeOpen.set(false);
+  }
+
+  private mergeImported(imported: KanbanState) {
+    if (!imported || !Array.isArray(imported.boards)) return;
+    const boards = imported.boards.map((board) => this.cloneBoard(board));
+    const nextBoards = [...this.state().boards, ...boards];
+    this.state.set({
+      ...this.state(),
+      boards: nextBoards,
+      activeBoardId: this.state().activeBoardId || nextBoards[0]?.id,
+    });
+    this.persistState();
+  }
+
+  private cloneBoard(board: KanbanBoard): KanbanBoard {
+    const cardMap = new Map<string, string>();
+    const cards: Record<string, KanbanCard> = {};
+    Object.values(board.cards ?? {}).forEach((card) => {
+      const nextId = uid('card');
+      cardMap.set(card.id, nextId);
+      cards[nextId] = {
+        ...card,
+        id: nextId,
+        checklist: (card.checklist ?? []).map((item) => ({ ...item, id: uid('chk') })),
+      };
+    });
+    const columns = (board.columns ?? []).map((col) => {
+      const nextId = uid('col');
+      return {
+        ...col,
+        id: nextId,
+        cardIds: (col.cardIds ?? []).map((id) => cardMap.get(id)).filter(Boolean) as string[],
+      };
+    });
+    return {
+      id: uid('board'),
+      name: board.name || this.translate.instant('kanban.defaultBoard'),
+      columns,
+      cards,
+    };
   }
 
   private defaultColumns() {

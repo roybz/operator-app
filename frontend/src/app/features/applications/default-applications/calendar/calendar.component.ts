@@ -1,7 +1,9 @@
 import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AppPreferencesService } from '../../dependencies/app-preferences.service';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { ImportGuardService } from '../../../../core/import-guard.service';
 
 interface CalendarEvent {
   id: string;
@@ -64,7 +66,7 @@ const defaultState = (): CalendarState => ({
 @Component({
   selector: 'app-calendar',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <div style="display:flex; gap:16px; height:100%;">
       <section style="flex:1; display:flex; flex-direction:column; gap:12px;">
@@ -248,11 +250,43 @@ const defaultState = (): CalendarState => ({
               <button style="margin-top:8px;" (click)="importEvents()">
                 {{ 'calendar.import' | translate }}
               </button>
+              @if (importStatus() === 'loading') {
+                <div style="margin-top:6px; opacity:0.7;">
+                  {{ 'dialogs.importing' | translate }}
+                </div>
+              } @else if (importStatus() === 'success') {
+                <div style="margin-top:6px; color:#1b5e20;">
+                  {{ 'dialogs.importSuccess' | translate }}
+                </div>
+              } @else if (importStatus() === 'error') {
+                <div style="margin-top:6px; color:#b00020;">
+                  {{ importMessage() ?? '' | translate }}
+                </div>
+              }
             </div>
           }
         </aside>
       }
     </div>
+
+    @if (confirmImportOpen()) {
+      <app-confirm-dialog
+        [title]="'dialogs.importTitle' | translate"
+        [message]="'dialogs.importConfirm' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmImport()"
+        (canceled)="confirmImportOpen.set(false)"
+      />
+    }
+    @if (importLimitOpen()) {
+      <app-confirm-dialog
+        [message]="'dialogs.importLimit' | translate"
+        [confirmLabel]="'dialogs.ok' | translate"
+        [showCancel]="false"
+        (confirmed)="importLimitOpen.set(false)"
+      />
+    }
   `,
 })
 export class CalendarComponent implements OnInit {
@@ -260,11 +294,16 @@ export class CalendarComponent implements OnInit {
 
   private translate = inject(TranslateService);
   private prefs = inject(AppPreferencesService);
+  private importGuard = inject(ImportGuardService);
   state = signal<CalendarState>(defaultState());
   newName = signal('');
   newUrl = signal('');
   newColor = signal('#60a5fa');
   importDraft = signal('');
+  confirmImportOpen = signal(false);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -487,21 +526,46 @@ export class CalendarComponent implements OnInit {
     if (!calendar) return;
     const raw = this.importDraft().trim();
     if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as { title: string; start: string; end?: string }[];
-      const events = Array.isArray(parsed)
-        ? parsed.map((event) => ({
-            id: this.uid('evt'),
-            title: event.title,
-            start: event.start,
-            end: event.end ?? event.start,
-          }))
-        : [];
-      this.updateCalendar(calendar.id, { events });
-      this.importDraft.set('');
-    } catch {
-      alert(this.translate.instant('calendar.importError'));
+    this.confirmImportOpen.set(true);
+  }
+
+  confirmImport() {
+    const calendar = this.selectedCalendar();
+    if (!calendar) {
+      this.confirmImportOpen.set(false);
+      return;
     }
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      this.confirmImportOpen.set(false);
+      return;
+    }
+    this.confirmImportOpen.set(false);
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    const raw = this.importDraft().trim();
+    setTimeout(() => {
+      try {
+        const parsed = JSON.parse(raw) as { title: string; start: string; end?: string }[];
+        const events = Array.isArray(parsed)
+          ? parsed.map((event) => ({
+              id: this.uid('evt'),
+              title: event.title,
+              start: event.start,
+              end: event.end ?? event.start,
+            }))
+          : [];
+        this.updateCalendar(calendar.id, { events });
+        this.importDraft.set('');
+        this.importStatus.set('success');
+        this.importMessage.set('dialogs.importSuccess');
+      } catch {
+        this.importStatus.set('error');
+        this.importMessage.set('calendar.importError');
+      } finally {
+        this.importGuard.finish();
+      }
+    }, 0);
   }
 
   private updateCalendar(id: string, updates: Partial<ExternalCalendar>) {
