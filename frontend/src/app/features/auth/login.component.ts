@@ -17,7 +17,10 @@ import packageJson from '../../../../package.json';
       <h1>
         {{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}
       </h1>
-      <div style="font-size: 12px; opacity: 0.7; margin-top: 4px;">v{{ appVersion }}</div>
+      <div style="font-size: 14px; margin-top: 2px;">
+        {{ 'auth.tagline' | translate }}
+      </div>
+      <div style="font-size: 12px; opacity: 0.7; margin-top: 10px;">v{{ appVersion }}</div>
 
       @if (universeLogin()) {
         <p style="margin: 8px 0; opacity:0.8;">
@@ -64,10 +67,6 @@ import packageJson from '../../../../package.json';
         </form>
 
         @if (allowUniverseGuest()) {
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
-            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-            {{ 'auth.resetGuest' | translate }}
-          </label>
           <input
             type="password"
             [value]="guestPassword()"
@@ -77,11 +76,17 @@ import packageJson from '../../../../package.json';
           />
           <button
             type="button"
-            style="margin-top: 12px; padding: 8px 12px;"
+            style="margin-top: 12px; padding: 8px 12px; font-size:16px;"
             (click)="continueAsUniverseGuest()"
           >
             {{ 'universe.continueGuest' | translate }}
           </button>
+          <label
+            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
+          >
+            <span>{{ 'auth.resetGuest' | translate }}</span>
+            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
+          </label>
         }
 
         @if (allowUniverseObserver()) {
@@ -110,17 +115,19 @@ import packageJson from '../../../../package.json';
         </button>
       } @else if (guestModeOnlyFlag) {
         @if (allowGuest()) {
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
-            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-            {{ 'auth.resetGuest' | translate }}
-          </label>
           <button
             type="button"
-            style="margin-top: 12px; padding: 8px 12px;"
+            style="margin-top: 40px; padding: 8px 12px; font-size:16px;"
             (click)="continueAsGuest()"
           >
             {{ 'auth.guest' | translate }}
           </button>
+          <label
+            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
+          >
+            <span>{{ 'auth.resetGuest' | translate }}</span>
+            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
+          </label>
         }
       } @else {
         <form (submit)="onSubmit($event)">
@@ -183,7 +190,7 @@ import packageJson from '../../../../package.json';
           href="https://github.com/roybz/operator-app"
           target="_blank"
           rel="noreferrer"
-          style="padding: 8px 12px; border:1px solid var(--color-border); border-radius:6px; text-decoration:none; display:inline-flex; align-items:center;"
+          style="padding: 8px 12px; border:1px solid var(--color-border); border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; font-size:15px;"
           (click)="openGithub($event)"
         >
           {{ 'auth.github' | translate }}
@@ -195,16 +202,24 @@ import packageJson from '../../../../package.json';
           [message]="'auth.resetGuestConfirm' | translate"
           [confirmLabel]="'auth.resetGuestConfirmButton' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="confirmGuestReset()"
-          (cancel)="confirmResetOpen.set(false)"
+          (confirmed)="confirmGuestReset()"
+          (canceled)="confirmResetOpen.set(false)"
         />
       }
 
       @if (licenseOpen()) {
         <div
           style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+          (pointerdown)="licenseOpen.set(false)"
+          role="button"
+          tabindex="0"
+          (keydown.enter)="licenseOpen.set(false)"
+          (keydown.space)="licenseOpen.set(false)"
         >
-          <div style="background:var(--color-surface); padding:20px; border-radius:12px;">
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:12px;"
+            (pointerdown)="$event.stopPropagation()"
+          >
             <app-license (closed)="licenseOpen.set(false)" />
           </div>
         </div>
@@ -230,7 +245,8 @@ export class LoginComponent {
   universeName = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return '';
-    return this.auth.getUniversePreferences(ownerId).universeName;
+    const universeId = this.auth.universeContext()?.universeId;
+    return this.auth.getUniversePreferences(ownerId, universeId).universeName;
   });
   universeOwnerName = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
@@ -239,13 +255,15 @@ export class LoginComponent {
   allowUniverseGuest = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return false;
-    const prefs = this.auth.getUniversePreferences(ownerId);
+    const universeId = this.auth.universeContext()?.universeId;
+    const prefs = this.auth.getUniversePreferences(ownerId, universeId);
     return prefs.multiUserEnabled && prefs.allowUniverseGuests;
   });
   allowUniverseObserver = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return false;
-    const prefs = this.auth.getUniversePreferences(ownerId);
+    const universeId = this.auth.universeContext()?.universeId;
+    const prefs = this.auth.getUniversePreferences(ownerId, universeId);
     return prefs.multiUserEnabled && prefs.allowUniverseObservers;
   });
   licenseOpen = signal(false);
@@ -258,7 +276,8 @@ export class LoginComponent {
     }
     const universeOwner = this.auth.universeContext()?.ownerId;
     if (universeOwner) {
-      const prefs = this.auth.getUniversePreferences(universeOwner);
+      const universeId = this.auth.universeContext()?.universeId;
+      const prefs = this.auth.getUniversePreferences(universeOwner, universeId);
       if (!prefs.multiUserEnabled) {
         this.router.navigateByUrl('/');
       }
@@ -282,7 +301,13 @@ export class LoginComponent {
     this.error.set(null);
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return;
-    const result = await this.auth.loginInvitee(ownerId, this.username(), this.password());
+    const universeId = this.auth.universeContext()?.universeId ?? null;
+    const result = await this.auth.loginInvitee(
+      ownerId,
+      universeId,
+      this.username(),
+      this.password(),
+    );
     if (!result.ok) {
       const message = result.message ?? 'auth.error.generic';
       this.error.set(this.translate.instant(message));
@@ -315,7 +340,8 @@ export class LoginComponent {
     }
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return;
-    const result = await this.auth.loginUniverseGuest(ownerId, this.guestPassword());
+    const universeId = this.auth.universeContext()?.universeId ?? null;
+    const result = await this.auth.loginUniverseGuest(ownerId, universeId, this.guestPassword());
     if (!result.ok) {
       const message = result.message ?? 'auth.error.generic';
       this.error.set(this.translate.instant(message));
@@ -327,7 +353,12 @@ export class LoginComponent {
   async continueAsUniverseObserver() {
     const ownerId = this.auth.universeContext()?.ownerId;
     if (!ownerId) return;
-    const result = await this.auth.loginUniverseObserver(ownerId, this.observerPassword());
+    const universeId = this.auth.universeContext()?.universeId ?? null;
+    const result = await this.auth.loginUniverseObserver(
+      ownerId,
+      universeId,
+      this.observerPassword(),
+    );
     if (!result.ok) {
       const message = result.message ?? 'auth.error.generic';
       this.error.set(this.translate.instant(message));

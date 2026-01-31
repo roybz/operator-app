@@ -53,6 +53,12 @@ export class DialogService {
       }
       this.load();
     });
+    effect(() => {
+      const session = this.auth.session();
+      if (!session.userId && !session.previewUserId) return;
+      const activeId = session.userId ? this.auth.getActiveUniverseId(session.userId) : null;
+      if (activeId) this.load();
+    });
   }
 
   getWorkspaces() {
@@ -427,7 +433,17 @@ export class DialogService {
   private load() {
     if (typeof window === 'undefined') return;
     const userKey = this.userStorageKey();
-    const raw = window.localStorage.getItem(userKey);
+    let raw = window.localStorage.getItem(userKey);
+    if (!raw) {
+      const legacyKey = this.legacyUserStorageKey();
+      if (legacyKey) {
+        const legacy = window.localStorage.getItem(legacyKey);
+        if (legacy) {
+          window.localStorage.setItem(userKey, legacy);
+          raw = legacy;
+        }
+      }
+    }
     if (!raw) {
       this.state.set(this.defaultState());
       this.persist();
@@ -451,14 +467,27 @@ export class DialogService {
   private userStorageKey() {
     const base =
       this.auth.isPreviewing() && !this.auth.previewPersist() ? PREVIEW_STATE_KEY : STATE_KEY;
-    const userId = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id ?? 'anon';
+    const userKey = this.auth.storageUserKey();
+    return `${base}:${userKey}`;
+  }
+
+  private legacyUserStorageKey() {
+    const base =
+      this.auth.isPreviewing() && !this.auth.previewPersist() ? PREVIEW_STATE_KEY : STATE_KEY;
+    const session = this.auth.session();
+    const userId = session.previewUserId ?? session.userId ?? null;
+    if (!userId) return null;
     return `${base}:${userId}`;
   }
 
   resetForUser(userId: string) {
     if (typeof window === 'undefined') return;
-    window.localStorage.removeItem(`${STATE_KEY}:${userId}`);
-    window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}`);
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(`${STATE_KEY}:${userId}`))
+      .forEach((key) => window.localStorage.removeItem(key));
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith(`${PREVIEW_STATE_KEY}:${userId}`))
+      .forEach((key) => window.localStorage.removeItem(key));
     const activeUser = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id;
     if (activeUser === userId) {
       this.state.set(this.defaultState());

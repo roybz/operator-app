@@ -41,6 +41,11 @@ export interface UniverseEditHolder {
   role: UserRole;
 }
 
+export interface UniverseInfo {
+  id: string;
+  name: string;
+}
+
 export interface SavedCredential {
   label: string;
   username?: string;
@@ -110,10 +115,13 @@ const PREFS_KEY = 'op_prefs';
 const PREVIEW_PREFS_KEY = 'op_preview_prefs';
 const ORG_SETTINGS_KEY = 'op_org_settings';
 const INVITEES_KEY = 'op_invitees';
+const UNIVERSES_KEY = 'op_universes';
+const ACTIVE_UNIVERSE_KEY = 'op_active_universe';
 const UNIVERSE_PRESENCE_KEY = 'op_universe_presence';
 const UNIVERSE_CHAT_KEY = 'op_universe_chat';
 const UNIVERSE_EDIT_KEY = 'op_universe_edit_holder';
 const UNIVERSE_GUEST_COUNTER_KEY = 'op_universe_guest_counter';
+const UNIVERSE_KICK_KEY = 'op_universe_kick';
 const GUEST_USER_ID = 'u_guest';
 const GUEST_USERNAME = 'guest';
 const DIALOG_STATE_KEY = 'op_dialog_state_v1';
@@ -158,6 +166,8 @@ const SUPPORTED_LANGUAGES = [
 export class AuthService {
   private readonly usersSignal = signal<UserRecord[]>([]);
   private readonly inviteesSignal = signal<Record<string, InviteeRecord[]>>({});
+  private readonly universesSignal = signal<Record<string, UniverseInfo[]>>({});
+  private readonly activeUniverseSignal = signal<Record<string, string>>({});
   private readonly sessionSignal = signal<SessionState>({
     userId: null,
     previewUserId: null,
@@ -178,6 +188,8 @@ export class AuthService {
 
   readonly users = this.usersSignal.asReadonly();
   readonly invitees = this.inviteesSignal.asReadonly();
+  readonly universes = this.universesSignal.asReadonly();
+  readonly activeUniverseIds = this.activeUniverseSignal.asReadonly();
   readonly session = this.sessionSignal.asReadonly();
   readonly ready = this.readySignal.asReadonly();
   readonly universeContext = this.universeContextSignal.asReadonly();
@@ -271,7 +283,7 @@ export class AuthService {
       userId: GUEST_USER_ID,
       previewUserId: null,
       previewPersist: false,
-      sessionRole: 'guest',
+      sessionRole: 'user',
       sessionUsername: GUEST_USERNAME,
       universeOwnerId: null,
       universeId: null,
@@ -479,15 +491,34 @@ export class AuthService {
   savePreferences(prefs: UserPreferences) {
     const effectiveId = this.effectiveUserId();
     if (!effectiveId) return;
+    const universeId = this.getActiveUniverseId(effectiveId) ?? prefs.universeId;
+    const key = this.universeKey(effectiveId, universeId || this.createUniverseId());
+    const safeName = prefs.universeName?.trim() || 'Universe';
+    const nextPrefs = {
+      ...prefs,
+      universeId: universeId ?? prefs.universeId,
+      universeName: safeName,
+    };
 
     if (this.isPreviewing() && !this.previewPersist()) {
-      const nextPreviewPrefs = { ...this.previewPrefsSignal(), [effectiveId]: prefs };
+      const nextPreviewPrefs = { ...this.previewPrefsSignal(), [key]: nextPrefs };
       this.previewPrefsSignal.set(nextPreviewPrefs);
       this.persistPreviewPrefs();
     } else {
-      const nextPrefs = { ...this.prefsSignal(), [effectiveId]: prefs };
-      this.prefsSignal.set(nextPrefs);
+      const nextAll = { ...this.prefsSignal(), [key]: nextPrefs };
+      this.prefsSignal.set(nextAll);
       this.persistPrefs();
+    }
+
+    if (universeId) {
+      const list = this.getUniversesForUser(effectiveId);
+      if (list.length) {
+        const nextList = list.map((u) => (u.id === universeId ? { ...u, name: safeName } : u));
+        if (JSON.stringify(nextList) !== JSON.stringify(list)) {
+          this.universesSignal.set({ ...this.universesSignal(), [effectiveId]: nextList });
+          this.persistUniverses();
+        }
+      }
     }
 
     this.applyLanguageFromPreferences();
@@ -497,11 +528,13 @@ export class AuthService {
     if (!userId) return this.defaultPreferences();
 
     if (this.isPreviewing() && !this.previewPersist()) {
-      const previewPrefs = this.previewPrefsSignal()[userId];
+      const universeId = this.getActiveUniverseId(userId) ?? this.defaultPreferences().universeId;
+      const previewPrefs = this.previewPrefsSignal()[this.universeKey(userId, universeId)];
       if (previewPrefs) return { ...this.defaultPreferences(), ...previewPrefs };
     }
 
-    const stored = this.prefsSignal()[userId];
+    const universeId = this.getActiveUniverseId(userId) ?? this.defaultPreferences().universeId;
+    const stored = this.prefsSignal()[this.universeKey(userId, universeId)];
     const merged = stored ? { ...this.defaultPreferences(), ...stored } : this.defaultPreferences();
     const legacyHide = (stored as { hideViewportControls?: boolean } | undefined)
       ?.hideViewportControls;
@@ -519,6 +552,334 @@ export class AuthService {
       this.sessionSignal().universeOwnerId ??
       this.sessionSignal().userId
     );
+  }
+
+  private universeKey(userId: string, universeId: string) {
+    return `${userId}:${universeId}`;
+  }
+
+  getUniversesForUser(userId: string) {
+    return this.universesSignal()[userId] ?? [];
+  }
+
+  getActiveUniverseId(userId: string) {
+    const session = this.sessionSignal();
+    if (session.universeOwnerId === userId && session.universeId) {
+      return session.universeId;
+    }
+    if (session.userId === userId && session.universeId) {
+      return session.universeId;
+    }
+    const active = this.activeUniverseSignal()[userId];
+    if (active) return active;
+    const first = this.getUniversesForUser(userId)[0];
+    return first?.id ?? null;
+  }
+
+  setActiveUniverseId(userId: string, universeId: string) {
+    const list = this.getUniversesForUser(userId);
+    if (!list.some((u) => u.id === universeId)) return;
+    const next = { ...this.activeUniverseSignal(), [userId]: universeId };
+    this.activeUniverseSignal.set(next);
+    this.persistActiveUniverses();
+    const session = this.sessionSignal();
+    if (session.userId === userId) {
+      this.sessionSignal.set({ ...session, universeId });
+      this.persistSession();
+    }
+  }
+
+  createUniverse(userId: string, name: string, activate = true) {
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, message: 'universe.nameRequired' };
+    const list = this.getUniversesForUser(userId);
+    if (list.length >= 8) return { ok: false, message: 'universe.maxReached' };
+    const id = this.createUniverseId();
+    const nextList = [...list, { id, name: trimmed }];
+    this.universesSignal.set({ ...this.universesSignal(), [userId]: nextList });
+    this.persistUniverses();
+    const prefs = {
+      ...this.defaultPreferences(),
+      universeId: id,
+      universeName: trimmed,
+    };
+    const key = this.universeKey(userId, id);
+    this.prefsSignal.set({ ...this.prefsSignal(), [key]: prefs });
+    this.persistPrefs();
+    if (activate) {
+      this.setActiveUniverseId(userId, id);
+    }
+    return { ok: true, id };
+  }
+
+  renameUniverse(userId: string, universeId: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    const list = this.getUniversesForUser(userId);
+    if (!list.length) return false;
+    const nextList = list.map((u) => (u.id === universeId ? { ...u, name: trimmed } : u));
+    this.universesSignal.set({ ...this.universesSignal(), [userId]: nextList });
+    this.persistUniverses();
+    const key = this.universeKey(userId, universeId);
+    const stored = this.prefsSignal()[key];
+    if (stored) {
+      this.prefsSignal.set({ ...this.prefsSignal(), [key]: { ...stored, universeName: trimmed } });
+      this.persistPrefs();
+    }
+    return true;
+  }
+
+  deleteUniverse(userId: string, universeId: string) {
+    const list = this.getUniversesForUser(userId);
+    if (list.length <= 1) return { ok: false, message: 'universe.minReached' };
+    if (!list.some((u) => u.id === universeId)) {
+      return { ok: false, message: 'universe.notFound' };
+    }
+    const nextList = list.filter((u) => u.id !== universeId);
+    const activeId = this.getActiveUniverseId(userId);
+    const nextActive = activeId === universeId ? (nextList[0]?.id ?? null) : activeId;
+
+    const nextPrefs = { ...this.prefsSignal() };
+    delete nextPrefs[this.universeKey(userId, universeId)];
+
+    if (typeof window !== 'undefined') {
+      Object.keys(window.localStorage)
+        .filter((key) => key.includes(`:${userId}:${universeId}:`))
+        .forEach((key) => window.localStorage.removeItem(key));
+      window.localStorage.removeItem(`${DIALOG_STATE_KEY}:${userId}:${universeId}`);
+      window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}:${universeId}`);
+      window.localStorage.removeItem(`${UNIVERSE_PRESENCE_KEY}:${universeId}`);
+      window.localStorage.removeItem(`${UNIVERSE_CHAT_KEY}:${universeId}`);
+      window.localStorage.removeItem(`${UNIVERSE_EDIT_KEY}:${universeId}`);
+      window.localStorage.removeItem(`${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`);
+      window.localStorage.removeItem(`${UNIVERSE_KICK_KEY}:${universeId}`);
+    }
+
+    this.universesSignal.set({ ...this.universesSignal(), [userId]: nextList });
+    if (nextActive) {
+      this.activeUniverseSignal.set({ ...this.activeUniverseSignal(), [userId]: nextActive });
+    }
+    this.prefsSignal.set(nextPrefs);
+    this.persistUniverses();
+    this.persistActiveUniverses();
+    this.persistPrefs();
+
+    const session = this.sessionSignal();
+    if (session.userId === userId && session.universeId === universeId) {
+      this.sessionSignal.set({ ...session, universeId: nextActive ?? null });
+      this.persistSession();
+      this.applyLanguageFromPreferences();
+    }
+
+    return { ok: true };
+  }
+
+  exportAllUniverses(userId: string) {
+    if (typeof window === 'undefined') {
+      return {
+        version: 1,
+        ownerId: userId,
+        universes: [],
+        activeUniverseId: null,
+        preferences: {},
+        entries: [],
+      };
+    }
+    const universes = this.getUniversesForUser(userId);
+    const activeUniverseId = this.getActiveUniverseId(userId);
+    const preferences: Record<string, UserPreferences> = {};
+    universes.forEach((u) => {
+      const key = this.universeKey(userId, u.id);
+      const stored = this.prefsSignal()[key];
+      preferences[u.id] = stored
+        ? { ...this.defaultPreferences(), ...stored }
+        : this.getUniversePreferences(userId, u.id);
+    });
+    const entries = Object.keys(window.localStorage)
+      .filter(
+        (key) =>
+          key.startsWith('op_app_state:') ||
+          key.startsWith('op_mock_todos:') ||
+          key.startsWith('op_dialog_state_v1:') ||
+          key.startsWith('op_preview_dialog_state_v1:'),
+      )
+      .filter((key) => key.includes(`:${userId}:`))
+      .map((key) => ({ key, value: window.localStorage.getItem(key) ?? '' }));
+    return { version: 1, ownerId: userId, universes, activeUniverseId, preferences, entries };
+  }
+
+  importAllUniverses(
+    userId: string,
+    payload: {
+      version?: number;
+      ownerId?: string;
+      universes?: UniverseInfo[];
+      activeUniverseId?: string | null;
+      preferences?: Record<string, UserPreferences>;
+      entries?: { key?: string; value?: string }[];
+    },
+  ) {
+    if (typeof window === 'undefined') return { ok: false, message: 'settings.importFailed' };
+    if (!payload?.universes || !Array.isArray(payload.universes) || !payload.universes.length) {
+      return { ok: false, message: 'settings.importFailed' };
+    }
+    if (payload.universes.length > 8) {
+      return { ok: false, message: 'universe.maxReached' };
+    }
+    const nextUniverses = payload.universes.map((u) => ({
+      id: u.id,
+      name: u.name?.trim() || 'Universe',
+    }));
+    const activeUniverseId =
+      payload.activeUniverseId && nextUniverses.some((u) => u.id === payload.activeUniverseId)
+        ? payload.activeUniverseId
+        : nextUniverses[0].id;
+
+    const nextPrefs = { ...this.prefsSignal() };
+    Object.keys(nextPrefs)
+      .filter((key) => key.startsWith(`${userId}:`))
+      .forEach((key) => delete nextPrefs[key]);
+    const prefsMap = payload.preferences ?? {};
+    nextUniverses.forEach((u) => {
+      const stored = prefsMap[u.id] ?? {};
+      nextPrefs[this.universeKey(userId, u.id)] = {
+        ...this.defaultPreferences(),
+        ...stored,
+        universeId: u.id,
+        universeName: u.name,
+      };
+    });
+
+    this.clearUniverseDataForUser(userId);
+    if (payload.entries && Array.isArray(payload.entries)) {
+      payload.entries.forEach((entry) => {
+        if (!entry?.key || typeof entry.value !== 'string') return;
+        const rewritten = this.rewriteUniverseKey(entry.key, payload.ownerId, userId);
+        if (!this.isAllowedUniverseDataKey(rewritten, userId)) return;
+        window.localStorage.setItem(rewritten, entry.value);
+      });
+    }
+
+    this.universesSignal.set({ ...this.universesSignal(), [userId]: nextUniverses });
+    this.activeUniverseSignal.set({ ...this.activeUniverseSignal(), [userId]: activeUniverseId });
+    this.prefsSignal.set(nextPrefs);
+    this.persistUniverses();
+    this.persistActiveUniverses();
+    this.persistPrefs();
+
+    const session = this.sessionSignal();
+    if (session.userId === userId) {
+      this.sessionSignal.set({ ...session, universeId: activeUniverseId });
+      this.persistSession();
+    }
+
+    this.applyLanguageFromPreferences();
+    return { ok: true };
+  }
+
+  wipeAllUniverses(userId: string) {
+    const nextId = this.createUniverseId();
+    const nextUniverses = [{ id: nextId, name: 'Universe' }];
+
+    const nextPrefs = { ...this.prefsSignal() };
+    Object.keys(nextPrefs)
+      .filter((key) => key.startsWith(`${userId}:`))
+      .forEach((key) => delete nextPrefs[key]);
+    nextPrefs[this.universeKey(userId, nextId)] = {
+      ...this.defaultPreferences(),
+      universeId: nextId,
+      universeName: 'Universe',
+    };
+
+    this.clearUniverseDataForUser(userId);
+
+    this.universesSignal.set({ ...this.universesSignal(), [userId]: nextUniverses });
+    this.activeUniverseSignal.set({ ...this.activeUniverseSignal(), [userId]: nextId });
+    this.prefsSignal.set(nextPrefs);
+    this.persistUniverses();
+    this.persistActiveUniverses();
+    this.persistPrefs();
+
+    const session = this.sessionSignal();
+    if (session.userId === userId) {
+      this.sessionSignal.set({ ...session, universeId: nextId });
+      this.persistSession();
+    }
+
+    this.applyLanguageFromPreferences();
+  }
+
+  storageUserKey() {
+    const session = this.sessionSignal();
+    const userId = session.previewUserId ?? session.universeOwnerId ?? session.userId ?? 'guest';
+    const universeId = this.getActiveUniverseId(userId) ?? 'default';
+    return this.universeKey(userId, universeId);
+  }
+
+  private clearUniverseDataForUser(userId: string) {
+    if (typeof window === 'undefined') return;
+    Object.keys(window.localStorage)
+      .filter(
+        (key) =>
+          key.startsWith('op_app_state:') ||
+          key.startsWith('op_mock_todos:') ||
+          key.startsWith('op_dialog_state_v1:') ||
+          key.startsWith('op_preview_dialog_state_v1:'),
+      )
+      .filter((key) => key.includes(`:${userId}:`))
+      .forEach((key) => window.localStorage.removeItem(key));
+
+    const universeIds = this.getUniversesForUser(userId).map((u) => u.id);
+    universeIds.forEach((id) => {
+      window.localStorage.removeItem(`${UNIVERSE_PRESENCE_KEY}:${id}`);
+      window.localStorage.removeItem(`${UNIVERSE_CHAT_KEY}:${id}`);
+      window.localStorage.removeItem(`${UNIVERSE_EDIT_KEY}:${id}`);
+      window.localStorage.removeItem(`${UNIVERSE_GUEST_COUNTER_KEY}:${id}`);
+      window.localStorage.removeItem(`${UNIVERSE_KICK_KEY}:${id}`);
+    });
+  }
+
+  private migrateLegacyUniverseStorage(userId: string, universeId: string) {
+    if (typeof window === 'undefined') return;
+    const legacyDialog = `${DIALOG_STATE_KEY}:${userId}`;
+    const legacyPreview = `${PREVIEW_STATE_KEY}:${userId}`;
+    const nextDialog = `${DIALOG_STATE_KEY}:${userId}:${universeId}`;
+    const nextPreview = `${PREVIEW_STATE_KEY}:${userId}:${universeId}`;
+    if (window.localStorage.getItem(legacyDialog) && !window.localStorage.getItem(nextDialog)) {
+      window.localStorage.setItem(nextDialog, window.localStorage.getItem(legacyDialog) ?? '');
+    }
+    if (window.localStorage.getItem(legacyPreview) && !window.localStorage.getItem(nextPreview)) {
+      window.localStorage.setItem(nextPreview, window.localStorage.getItem(legacyPreview) ?? '');
+    }
+
+    const prefixList = ['op_app_state:', 'op_mock_todos:'];
+    Object.keys(window.localStorage).forEach((key) => {
+      if (!prefixList.some((prefix) => key.startsWith(prefix))) return;
+      const needle = `:${userId}:`;
+      if (!key.includes(needle)) return;
+      if (key.includes(`:${userId}:${universeId}:`)) return;
+      const nextKey = key.replace(needle, `:${userId}:${universeId}:`);
+      if (window.localStorage.getItem(nextKey) !== null) return;
+      const value = window.localStorage.getItem(key);
+      if (value !== null) {
+        window.localStorage.setItem(nextKey, value);
+      }
+    });
+  }
+
+  private rewriteUniverseKey(key: string, sourceUserId: string | undefined, targetUserId: string) {
+    if (!sourceUserId) return key;
+    return key.replace(`:${sourceUserId}:`, `:${targetUserId}:`);
+  }
+
+  private isAllowedUniverseDataKey(key: string, userId: string) {
+    const allowed =
+      key.startsWith('op_app_state:') ||
+      key.startsWith('op_mock_todos:') ||
+      key.startsWith('op_dialog_state_v1:') ||
+      key.startsWith('op_preview_dialog_state_v1:');
+    if (!allowed) return false;
+    return key.includes(`:${userId}:`);
   }
 
   private loadFromStorage() {
@@ -614,55 +975,102 @@ export class AuthService {
     }
 
     const prefs = this.safeJson<StoredPreferences>(PREFS_KEY, {});
-    if (!prefs[GUEST_USER_ID]) {
-      prefs[GUEST_USER_ID] = this.defaultPreferences();
-    }
+    const universes = this.safeJson<Record<string, UniverseInfo[]>>(UNIVERSES_KEY, {});
+    const activeUniverses = this.safeJson<Record<string, string>>(ACTIVE_UNIVERSE_KEY, {});
     let prefsUpdated = false;
-    Object.keys(prefs).forEach((userId) => {
-      if (!prefs[userId]) {
-        prefs[userId] = this.defaultPreferences();
-        prefsUpdated = true;
-        return;
-      }
-      if (!prefs[userId].universeId) {
-        prefs[userId] = {
+    let universesUpdated = false;
+
+    const ensureUniversePrefs = (
+      userId: string,
+      universe: UniverseInfo,
+      base?: UserPreferences,
+    ) => {
+      const key = this.universeKey(userId, universe.id);
+      if (!prefs[key]) {
+        prefs[key] = {
           ...this.defaultPreferences(),
-          ...prefs[userId],
-          universeId: this.createUniverseId(),
+          ...base,
+          universeId: universe.id,
+          universeName: universe.name,
         };
         prefsUpdated = true;
       }
-      if (!prefs[userId].universeName) {
-        prefs[userId] = { ...prefs[userId], universeName: 'Universe' };
+      if (!prefs[key].universeId) {
+        prefs[key] = { ...prefs[key], universeId: universe.id };
         prefsUpdated = true;
       }
-      if (prefs[userId].multiUserEnabled === undefined) {
-        prefs[userId] = { ...prefs[userId], multiUserEnabled: true };
+      if (!prefs[key].universeName?.trim()) {
+        prefs[key] = { ...prefs[key], universeName: universe.name };
         prefsUpdated = true;
       }
-      if (prefs[userId].allowUniverseGuests === undefined) {
-        prefs[userId] = { ...prefs[userId], allowUniverseGuests: false };
+      if (prefs[key].multiUserEnabled === undefined) {
+        prefs[key] = { ...prefs[key], multiUserEnabled: true };
         prefsUpdated = true;
       }
-      if (prefs[userId].allowUniverseObservers === undefined) {
-        prefs[userId] = { ...prefs[userId], allowUniverseObservers: false };
+      if (prefs[key].allowUniverseGuests === undefined) {
+        prefs[key] = { ...prefs[key], allowUniverseGuests: false };
         prefsUpdated = true;
       }
-      if (prefs[userId].allowUniverseChat === undefined) {
-        prefs[userId] = { ...prefs[userId], allowUniverseChat: true };
+      if (prefs[key].allowUniverseObservers === undefined) {
+        prefs[key] = { ...prefs[key], allowUniverseObservers: false };
         prefsUpdated = true;
       }
-      if (prefs[userId].universeGuestPassword === undefined) {
-        prefs[userId] = { ...prefs[userId], universeGuestPassword: '' };
+      if (prefs[key].allowUniverseChat === undefined) {
+        prefs[key] = { ...prefs[key], allowUniverseChat: true };
         prefsUpdated = true;
       }
-      if (prefs[userId].universeObserverPassword === undefined) {
-        prefs[userId] = { ...prefs[userId], universeObserverPassword: '' };
+      if (prefs[key].universeGuestPassword === undefined) {
+        prefs[key] = { ...prefs[key], universeGuestPassword: '' };
         prefsUpdated = true;
+      }
+      if (prefs[key].universeObserverPassword === undefined) {
+        prefs[key] = { ...prefs[key], universeObserverPassword: '' };
+        prefsUpdated = true;
+      }
+    };
+
+    const userIds = normalizedUsers.map((u) => u.id);
+    userIds.forEach((userId) => {
+      const legacy = prefs[userId];
+      let list = universes[userId] ?? [];
+      if (!list.length) {
+        const universeId = legacy?.universeId ?? this.createUniverseId();
+        const universeName = legacy?.universeName?.trim() || 'Universe';
+        list = [{ id: universeId, name: universeName }];
+        universes[userId] = list;
+        universesUpdated = true;
+      }
+      list.forEach((u) => ensureUniversePrefs(userId, u, legacy));
+      if (legacy) {
+        delete prefs[userId];
+        prefsUpdated = true;
+      }
+      const active = activeUniverses[userId];
+      if (!active || !list.some((u) => u.id === active)) {
+        activeUniverses[userId] = list[0].id;
+        universesUpdated = true;
       }
     });
+
+    this.universesSignal.set(universes);
+    this.activeUniverseSignal.set(activeUniverses);
+    userIds.forEach((userId) => {
+      const universeId = activeUniverses[userId];
+      if (universeId) {
+        this.migrateLegacyUniverseStorage(userId, universeId);
+      }
+    });
+    const currentUserId = this.sessionSignal().userId;
+    if (currentUserId && !this.sessionSignal().universeId) {
+      const activeId = activeUniverses[currentUserId];
+      if (activeId) {
+        this.sessionSignal.set({ ...this.sessionSignal(), universeId: activeId });
+      }
+    }
     if (guestOnly) {
-      this.prefsSignal.set({ [GUEST_USER_ID]: prefs[GUEST_USER_ID] });
+      const guestUniverseId = activeUniverses[GUEST_USER_ID];
+      const key = guestUniverseId ? this.universeKey(GUEST_USER_ID, guestUniverseId) : null;
+      this.prefsSignal.set(key ? { [key]: prefs[key] } : {});
     } else {
       this.prefsSignal.set(prefs);
     }
@@ -676,7 +1084,10 @@ export class AuthService {
     this.persistUsers();
     this.persistSession();
     if (prefsUpdated) this.persistPrefs();
-    else this.persistPrefs();
+    if (universesUpdated) {
+      this.persistUniverses();
+      this.persistActiveUniverses();
+    }
     this.persistOrgSettings();
     this.applyLanguageFromPreferences();
 
@@ -692,6 +1103,14 @@ export class AuthService {
 
   private persistInvitees() {
     this.persist(INVITEES_KEY, this.inviteesSignal());
+  }
+
+  private persistUniverses() {
+    this.persist(UNIVERSES_KEY, this.universesSignal());
+  }
+
+  private persistActiveUniverses() {
+    this.persist(ACTIVE_UNIVERSE_KEY, this.activeUniverseSignal());
   }
 
   private persistSession() {
@@ -933,23 +1352,82 @@ export class AuthService {
   }
 
   private findOwnerByUniverseId(universeId: string) {
-    const entries = Object.entries(this.prefsSignal());
-    for (const [userId, prefs] of entries) {
-      if (prefs?.universeId === universeId) return userId;
+    const entries = Object.entries(this.universesSignal());
+    for (const [userId, list] of entries) {
+      if (list.some((u) => u.id === universeId)) return userId;
     }
     return null;
   }
 
-  getUniversePreferences(ownerId: string) {
-    return this.getPreferencesFor(ownerId);
+  getUniversePreferences(ownerId: string, universeId?: string) {
+    if (!universeId) return this.getPreferencesFor(ownerId);
+    const key = this.universeKey(ownerId, universeId);
+    const stored = this.prefsSignal()[key];
+    return stored ? { ...this.defaultPreferences(), ...stored } : this.defaultPreferences();
   }
 
   setUniverseId(ownerId: string, universeId: string) {
-    const prefs = this.prefsSignal()[ownerId];
-    if (!prefs) return;
-    const next = { ...this.prefsSignal(), [ownerId]: { ...prefs, universeId } };
-    this.prefsSignal.set(next);
-    this.persistPrefs();
+    const currentId = this.getActiveUniverseId(ownerId);
+    if (!currentId || currentId === universeId) return;
+    const list = this.getUniversesForUser(ownerId);
+    if (!list.length) return;
+    if (list.some((u) => u.id === universeId)) return;
+
+    const nextList = list.map((u) => (u.id === currentId ? { ...u, id: universeId } : u));
+    this.universesSignal.set({ ...this.universesSignal(), [ownerId]: nextList });
+    this.persistUniverses();
+
+    const oldKey = this.universeKey(ownerId, currentId);
+    const nextKey = this.universeKey(ownerId, universeId);
+    const prefs = { ...this.prefsSignal() };
+    if (prefs[oldKey]) {
+      prefs[nextKey] = { ...prefs[oldKey], universeId };
+      delete prefs[oldKey];
+      this.prefsSignal.set(prefs);
+      this.persistPrefs();
+    }
+
+    const activeMap = { ...this.activeUniverseSignal() };
+    if (activeMap[ownerId] === currentId) {
+      activeMap[ownerId] = universeId;
+      this.activeUniverseSignal.set(activeMap);
+      this.persistActiveUniverses();
+    }
+
+    const session = this.sessionSignal();
+    if (session.userId === ownerId && session.universeId === currentId) {
+      this.sessionSignal.set({ ...session, universeId });
+      this.persistSession();
+    }
+
+    if (typeof window !== 'undefined') {
+      const oldToken = `:${ownerId}:${currentId}`;
+      const newToken = `:${ownerId}:${universeId}`;
+      Object.keys(window.localStorage)
+        .filter((key) => key.includes(oldToken))
+        .forEach((key) => {
+          const value = window.localStorage.getItem(key);
+          const nextKeyName = key.replace(oldToken, newToken);
+          window.localStorage.removeItem(key);
+          if (value !== null) {
+            window.localStorage.setItem(nextKeyName, value);
+          }
+        });
+      const presenceKeys = [
+        `${UNIVERSE_PRESENCE_KEY}:${currentId}`,
+        `${UNIVERSE_CHAT_KEY}:${currentId}`,
+        `${UNIVERSE_EDIT_KEY}:${currentId}`,
+        `${UNIVERSE_GUEST_COUNTER_KEY}:${currentId}`,
+        `${UNIVERSE_KICK_KEY}:${currentId}`,
+      ];
+      presenceKeys.forEach((key) => {
+        const value = window.localStorage.getItem(key);
+        if (value === null) return;
+        window.localStorage.removeItem(key);
+        const nextKeyName = key.replace(`:${currentId}`, `:${universeId}`);
+        window.localStorage.setItem(nextKeyName, value);
+      });
+    }
   }
 
   getInviteesForOwner(ownerId: string) {
@@ -1011,7 +1489,12 @@ export class AuthService {
     this.persistInvitees();
   }
 
-  async loginInvitee(ownerId: string, username: string, password: string) {
+  async loginInvitee(
+    ownerId: string,
+    universeId: string | null,
+    username: string,
+    password: string,
+  ) {
     const trimmed = username.trim();
     if (this.isLoginLocked(trimmed)) {
       return { ok: false, message: 'auth.error.locked' };
@@ -1030,7 +1513,7 @@ export class AuthService {
       }
     }
     this.clearLoginFailures(trimmed);
-    const ownerPrefs = this.getPreferencesFor(ownerId);
+    const ownerPrefs = this.getUniversePreferences(ownerId, universeId ?? undefined);
     this.sessionSignal.set({
       userId: invitee.id,
       previewUserId: null,
@@ -1045,8 +1528,8 @@ export class AuthService {
     return { ok: true };
   }
 
-  async loginUniverseGuest(ownerId: string, password: string) {
-    const prefs = this.getPreferencesFor(ownerId);
+  async loginUniverseGuest(ownerId: string, universeId: string | null, password: string) {
+    const prefs = this.getUniversePreferences(ownerId, universeId ?? undefined);
     if (!prefs.allowUniverseGuests) return { ok: false, message: 'auth.error.guestOnly' };
     if (prefs.universeGuestPassword) {
       const hashed = await this.hashPassword(password);
@@ -1072,8 +1555,8 @@ export class AuthService {
     return { ok: true };
   }
 
-  async loginUniverseObserver(ownerId: string, password: string) {
-    const prefs = this.getPreferencesFor(ownerId);
+  async loginUniverseObserver(ownerId: string, universeId: string | null, password: string) {
+    const prefs = this.getUniversePreferences(ownerId, universeId ?? undefined);
     if (!prefs.allowUniverseObservers) return { ok: false, message: 'auth.error.guestOnly' };
     if (prefs.universeObserverPassword) {
       const hashed = await this.hashPassword(password);
@@ -1244,5 +1727,19 @@ export class AuthService {
 
   private universeGuestCounterKey(universeId: string) {
     return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
+  }
+
+  markUniverseKick(universeId: string) {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`${UNIVERSE_KICK_KEY}:${universeId}`, String(Date.now()));
+  }
+
+  consumeUniverseKick(universeId: string) {
+    if (typeof window === 'undefined') return false;
+    const key = `${UNIVERSE_KICK_KEY}:${universeId}`;
+    const exists = window.localStorage.getItem(key);
+    if (!exists) return false;
+    window.localStorage.removeItem(key);
+    return true;
   }
 }

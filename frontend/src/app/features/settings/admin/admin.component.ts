@@ -2,6 +2,7 @@ import { Component, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.component';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
 import { SettingsDraftService } from '../settings-draft.service';
@@ -11,7 +12,7 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
 @Component({
   selector: 'app-admin-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent, InfoTooltipComponent],
   template: `
     <section>
       <h3>{{ 'admin.title' | translate }}</h3>
@@ -40,10 +41,7 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
             (change)="onTestModeToggle($event)"
           />
           {{ 'admin.testMode' | translate }}
-          <span class="admin-info">
-            i
-            <span class="admin-info__tooltip">{{ 'admin.testModeInfo' | translate }}</span>
-          </span>
+          <app-info-tooltip [text]="'admin.testModeInfo' | translate" />
         </label>
 
         @if (auth.isAdmin() && previewCandidates().length) {
@@ -120,12 +118,7 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
             (change)="onAllowServerBackground($event)"
           />
           {{ 'admin.allowServerBackground' | translate }}
-          <span class="admin-info">
-            i
-            <span class="admin-info__tooltip">
-              {{ 'admin.allowServerBackgroundInfo' | translate }}
-            </span>
-          </span>
+          <app-info-tooltip [text]="'admin.allowServerBackgroundInfo' | translate" />
         </label>
 
         <label>
@@ -144,48 +137,13 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
           [message]="'admin.wipeGuestConfirm' | translate"
           [confirmLabel]="'dialogs.confirm' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="confirmWipeGuestAction()"
-          (cancel)="confirmWipeGuest.set(false)"
+          (confirmed)="confirmWipeGuestAction()"
+          (canceled)="confirmWipeGuest.set(false)"
         />
       }
     </section>
   `,
-  styles: [
-    `
-      .admin-info {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 18px;
-        height: 18px;
-        border-radius: 999px;
-        border: 1px solid var(--color-border);
-        font-size: 12px;
-        cursor: help;
-      }
-
-      .admin-info__tooltip {
-        position: absolute;
-        left: 22px;
-        top: -4px;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        padding: 6px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 120ms ease;
-        z-index: 3001;
-      }
-
-      .admin-info:hover .admin-info__tooltip {
-        opacity: 1;
-      }
-    `,
-  ],
+  styles: [],
 })
 export class AdminSettingsComponent {
   auth = inject(AuthService);

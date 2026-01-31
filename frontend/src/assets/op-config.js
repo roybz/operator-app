@@ -1,5 +1,5 @@
 window.__OP_CONFIG__ = {
   apiBaseUrl: '',
   mockMode: true,
-  guestModeOnly: false,
+  guestModeOnly: true,
 };

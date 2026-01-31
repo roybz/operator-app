@@ -109,8 +109,8 @@ import { DialogService } from '../../../core/dialog.service';
           [message]="'users.wipeConfirm' | translate"
           [confirmLabel]="'dialogs.confirm' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="confirmWipeUser()"
-          (cancel)="confirmWipeUserId.set(null)"
+          (confirmed)="confirmWipeUser()"
+          (canceled)="confirmWipeUserId.set(null)"
         />
       }
     </section>

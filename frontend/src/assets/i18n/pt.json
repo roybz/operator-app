@@ -71,7 +71,8 @@
     "lockoutWarning": "6 failed attempts will lock you out for 5 hours.",
     "roleGuest": "guest",
     "roleObserver": "observer",
-    "roleInvitee": "invitee"
+    "roleInvitee": "invitee",
+    "tagline": "Think ahead."
   },
   "calculator": {
     "closeSettings": "Close settings",
@@ -317,14 +318,17 @@
     "credentialsLink": "Credentials",
     "credentialsInfo": "This feature can only be enabled after a backend is connected.",
     "accountLink": "Account",
-    "universeLink": "Universe manager"
+    "universeLink": "Universe Management",
+    "multiUserLink": "Multi-User",
+    "universeScopeNotice": "This section only affects the current universe."
   },
   "table": {
     "actions": "Acoes",
     "next": "Proxima",
     "page": "Pagina {{current}} de {{total}}",
     "pageSize": "Linhas",
-    "prev": "Anterior"
+    "prev": "Anterior",
+    "searchPlaceholder": "Search..."
   },
   "timer": {
     "break": "Break",
@@ -450,7 +454,7 @@
       "boolean": "Checkbox"
     }
   },
-  "loading": "Loading",
+  "loading": "Loading…",
   "account": {
     "title": "Account",
     "updatePasswordTitle": "Update password?",
@@ -463,7 +467,7 @@
     "deleteConfirm": "Are you sure you want to delete your account?"
   },
   "universe": {
-    "title": "Universe manager",
+    "title": "Universe Management",
     "name": "Universe name",
     "multiUser": "Multi-user mode",
     "linkLabel": "Universe link",
@@ -496,6 +500,25 @@
     "createInvitee": "Create invitee",
     "saveInvitee": "Save invitee",
     "guestsCountOwned": "Your Guests: {{count}}",
-    "observersCountOwned": "Your Observers: {{count}}"
+    "observersCountOwned": "Your Observers: {{count}}",
+    "universesTitle": "Universes",
+    "newUniversePlaceholder": "New universe name",
+    "createUniverse": "Create universe",
+    "current": "Current",
+    "maxInfo": "Maximum 8 universes.",
+    "maxReached": "You can only create up to 8 universes.",
+    "exportAllJson": "Export all universes (JSON)",
+    "exportAllXml": "Export all universes (XML)",
+    "importAllJson": "Import all universes (JSON)",
+    "importAllXml": "Import all universes (XML)",
+    "wipeAll": "Wipe all universes",
+    "wipeAllConfirm": "Are you sure you want to wipe all universes and their data?",
+    "switchWarning": "Switching universes will sign out any invitees, guests, or observers currently connected. Continue?",
+    "switchConfirm": "Continue",
+    "nameRequired": "Universe name is required.",
+    "delete": "Delete universe",
+    "deleteConfirm": "Delete universe \"{{name}}\"? This cannot be undone.",
+    "minReached": "You must keep at least one universe.",
+    "notFound": "Universe not found."
   }
 }

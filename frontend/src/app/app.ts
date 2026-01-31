@@ -318,38 +318,80 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           <header
             style="background:var(--color-surface); border-bottom:1px solid var(--color-border); padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
           >
-            <div>
+            <div style="position:relative;">
               @if (siteLogoEmoji()) {
                 <span style="margin-right:6px;">{{ siteLogoEmoji() }}</span>
               }
-              <strong>{{ siteTitle() }}</strong>
-              @if (auth.currentUser()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
+              <div style="display:inline-flex; align-items:center; gap:24px;">
+                <strong>{{ siteTitle() }}</strong>
+                <div style="display:inline-flex; align-items:center; gap:9px;">
+                  @if (auth.currentUser()) {
+                    <span
+                      style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
+                    >
+                      {{ 'auth.loggedInAs' | translate: { user: loggedInAsLabel() } }}
+                    </span>
+                  }
+                  @if (isMockMode()) {
+                    <span
+                      style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
+                    >
+                      {{ 'mock.label' | translate }}
+                    </span>
+                  }
+                  @if (auth.isPreviewing()) {
+                    <span
+                      style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#e8f2ff; color:#1f5fa7; border:1px solid #cfe2ff; vertical-align:middle;"
+                    >
+                      {{ 'preview.label' | translate: { user: previewUserLabel() } }}
+                    </span>
+                  }
+                  @if (auth.previewPersist()) {
+                    <span
+                      style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
+                    >
+                      {{ 'preview.persist' | translate }}
+                    </span>
+                  }
+                </div>
+              </div>
+              @if (canSwitchUniverse()) {
+                <div
+                  style="margin-top:2px; font-size:12px; font-style:italic; position:relative;"
+                  [style.paddingLeft.px]="siteLogoEmoji() ? 22 : 0"
                 >
-                  {{ 'auth.loggedInAs' | translate: { user: loggedInAsLabel() } }}
-                </span>
-              }
-              @if (isMockMode()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                >
-                  {{ 'mock.label' | translate }}
-                </span>
-              }
-              @if (auth.isPreviewing()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#e8f2ff; color:#1f5fa7; border:1px solid #cfe2ff; vertical-align:middle;"
-                >
-                  {{ 'preview.label' | translate: { user: previewUserLabel() } }}
-                </span>
-              }
-              @if (auth.previewPersist()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                >
-                  {{ 'preview.persist' | translate }}
-                </span>
+                  {{ currentUniverseName() }}
+                  <button
+                    (click)="toggleUniverseMenu()"
+                    style="margin-left:6px; font-size:10px; padding:2px 6px;"
+                  >
+                    ▼
+                  </button>
+                  @if (universeMenuOpen()) {
+                    <div
+                      style="position:fixed; inset:0; background:var(--color-overlay); z-index:1400;"
+                      role="button"
+                      tabindex="0"
+                      (click)="universeMenuOpen.set(false)"
+                      (keydown.enter)="universeMenuOpen.set(false)"
+                      (keydown.space)="universeMenuOpen.set(false)"
+                    ></div>
+                    <div
+                      style="position:absolute; top:100%; left:0; margin-top:6px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:6px; min-width:180px; z-index:1401; box-shadow:0 12px 24px rgba(0,0,0,0.18);"
+                      (pointerdown)="$event.stopPropagation()"
+                    >
+                      @for (u of universesList(); track u.id) {
+                        <button
+                          (click)="switchUniverse(u.id)"
+                          [disabled]="u.id === auth.getActiveUniverseId(currentUserId() || '')"
+                          style="text-align:left; padding:6px 8px; border-radius:6px;"
+                        >
+                          {{ u.name }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
               }
             </div>
 
@@ -666,26 +708,38 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             }
           </div>
 
-        @if (settingsOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw);"
-          >
-            <div style="display:flex; justify-content:flex-end;">
-              <button (click)="requestCloseSettings()">✕</button>
-            </div>
-            <app-settings />
-          </div>
+          @if (settingsOpen()) {
+            <div
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              (pointerdown)="requestCloseSettings()"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="requestCloseSettings()"
+              (keydown.space)="requestCloseSettings()"
+            >
+              <div
+                style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw);"
+                (pointerdown)="$event.stopPropagation()"
+              >
+                <div style="display:flex; justify-content:flex-end;">
+                  <button (click)="requestCloseSettings()">✕</button>
+                </div>
+                <app-settings />
+              </div>
             </div>
           }
           @if (licenseOpen()) {
             <div
               style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              (pointerdown)="licenseOpen.set(false)"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="licenseOpen.set(false)"
+              (keydown.space)="licenseOpen.set(false)"
             >
               <div
                 style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
+                (pointerdown)="$event.stopPropagation()"
               >
                 <app-license (closed)="licenseOpen.set(false)" />
               </div>
@@ -694,9 +748,15 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (moveWorkspaceTargetId()) {
             <div
               style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
+              (pointerdown)="closeMoveWorkspace()"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="closeMoveWorkspace()"
+              (keydown.space)="closeMoveWorkspace()"
             >
               <div
                 style="background:var(--color-surface); padding:24px; border-radius:12px; width:min(640px, 92vw);"
+                (pointerdown)="$event.stopPropagation()"
               >
                 <h3 style="margin:0 0 16px;">
                   {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
@@ -725,6 +785,15 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 </div>
               </div>
             </div>
+          }
+          @if (universeSwitchConfirmOpen()) {
+            <app-confirm-dialog
+              [message]="'universe.switchWarning' | translate"
+              [confirmLabel]="'universe.switchConfirm' | translate"
+              [cancelLabel]="'dialogs.cancel' | translate"
+              (confirmed)="confirmUniverseMenuOpen()"
+              (canceled)="cancelUniverseMenuConfirm()"
+            />
           }
         </section>
       </main>
@@ -851,8 +920,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           [message]="'dialogs.confirmDelete' | translate"
           [confirmLabel]="'dialogs.confirm' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="deleteConfirmed()"
-          (cancel)="deleteTargetId.set(null)"
+          (confirmed)="deleteConfirmed()"
+          (canceled)="deleteTargetId.set(null)"
         />
       }
 
@@ -861,8 +930,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           [message]="'dialogs.cloneConfirm' | translate"
           [confirmLabel]="'dialogs.confirm' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="confirmClone()"
-          (cancel)="cancelClone()"
+          (confirmed)="confirmClone()"
+          (canceled)="cancelClone()"
         />
       }
 
@@ -871,8 +940,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           [message]="'settings.closeConfirm' | translate"
           [confirmLabel]="'settings.discard' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="confirmCloseSettings()"
-          (cancel)="cancelCloseSettings()"
+          (confirmed)="confirmCloseSettings()"
+          (canceled)="cancelCloseSettings()"
         />
       }
 
@@ -956,6 +1025,9 @@ export class AppComponent implements OnInit, OnDestroy {
   deleteTargetId = signal<string | null>(null);
   cloneTargetId = signal<string | null>(null);
   moveWorkspaceTargetId = signal<string | null>(null);
+  universeMenuOpen = signal(false);
+  universeSwitchConfirmOpen = signal(false);
+  universeMenuPendingOpen = signal(false);
   universeBarOpen = signal(true);
   universeChatOpen = signal(false);
   universeChatDraft = signal('');
@@ -1009,7 +1081,8 @@ export class AppComponent implements OnInit, OnDestroy {
       this.guestBlocked() ||
       this.loadingVisible() ||
       Boolean(this.cloneTargetId()) ||
-      Boolean(this.moveWorkspaceTargetId()),
+      Boolean(this.moveWorkspaceTargetId()) ||
+      this.universeSwitchConfirmOpen(),
   );
 
   moveWorkspaceInstance = computed(() => {
@@ -1070,6 +1143,18 @@ export class AppComponent implements OnInit, OnDestroy {
   universeOwnerId = computed(
     () => this.auth.session().universeOwnerId ?? this.auth.session().userId ?? null,
   );
+  currentUserId = computed(() => this.auth.actualUser()?.id ?? null);
+  universesList = computed(() =>
+    this.currentUserId() ? this.auth.getUniversesForUser(this.currentUserId()!) : [],
+  );
+  currentUniverseName = computed(() => {
+    const userId = this.currentUserId();
+    if (!userId) return '';
+    const active = this.auth.getActiveUniverseId(userId);
+    const found = this.universesList().find((u) => u.id === active);
+    return found?.name ?? '';
+  });
+  canSwitchUniverse = computed(() => this.isUniverseOwner() && this.universesList().length >= 2);
   universePrefs = computed(() => {
     const ownerId = this.universeOwnerId();
     return ownerId ? this.auth.getUniversePreferences(ownerId) : null;
@@ -1105,6 +1190,9 @@ export class AppComponent implements OnInit, OnDestroy {
   );
   observerCount = computed(
     () => this.universePresence().filter((entry) => entry.role === 'observer').length,
+  );
+  hasUniverseParticipants = computed(
+    () => this.inviteesOnline().length > 0 || this.guestCount() > 0 || this.observerCount() > 0,
   );
   isMainGuest = computed(() => this.auth.actualUser()?.id === 'u_guest');
   showUniverseBar = computed(() => this.auth.isLoggedIn() && this.multiUserEnabled());
@@ -1245,6 +1333,8 @@ export class AppComponent implements OnInit, OnDestroy {
       this.settingsOpen.set(false);
       this.settingsCloseConfirmOpen.set(false);
       this.workspaceMenuOpen.set(false);
+      this.universeMenuOpen.set(false);
+      this.universeSwitchConfirmOpen.set(false);
       this.deleteTargetId.set(null);
       this.cloneTargetId.set(null);
       if (userId) {
@@ -1284,6 +1374,12 @@ export class AppComponent implements OnInit, OnDestroy {
       }
       if (!prefs.allowUniverseChat) {
         this.universeChatOpen.set(false);
+      }
+      const universeId = this.universeId();
+      if (universeId && this.isLimitedRole()) {
+        if (this.auth.consumeUniverseKick(universeId)) {
+          this.forceLogoutToMain();
+        }
       }
     });
   }
@@ -1449,6 +1545,52 @@ export class AppComponent implements OnInit, OnDestroy {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     this.workspaceMenuOpen.set(!this.workspaceMenuOpen());
+  }
+
+  toggleUniverseMenu() {
+    if (!this.canSwitchUniverse()) return;
+    if (this.universeMenuOpen()) {
+      this.universeMenuOpen.set(false);
+      return;
+    }
+    if (this.hasUniverseParticipants()) {
+      this.universeMenuPendingOpen.set(true);
+      this.universeSwitchConfirmOpen.set(true);
+      return;
+    }
+    this.universeMenuOpen.set(true);
+  }
+
+  confirmUniverseMenuOpen() {
+    if (!this.universeMenuPendingOpen()) return;
+    this.universeSwitchConfirmOpen.set(false);
+    this.universeMenuPendingOpen.set(false);
+    this.universeMenuOpen.set(true);
+  }
+
+  cancelUniverseMenuConfirm() {
+    this.universeSwitchConfirmOpen.set(false);
+    this.universeMenuPendingOpen.set(false);
+  }
+
+  switchUniverse(universeId: string) {
+    if (!this.canSwitchUniverse()) return;
+    const userId = this.currentUserId();
+    if (!userId) return;
+    const activeId = this.auth.getActiveUniverseId(userId);
+    if (!activeId || activeId === universeId) {
+      this.universeMenuOpen.set(false);
+      return;
+    }
+    if (this.hasUniverseParticipants()) {
+      const currentUniverseId = this.universeId();
+      if (currentUniverseId) {
+        this.auth.markUniverseKick(currentUniverseId);
+      }
+    }
+    this.runLoadingTransition();
+    this.auth.setActiveUniverseId(userId, universeId);
+    this.universeMenuOpen.set(false);
   }
 
   setCanvasMode(event: Event) {
@@ -1907,6 +2049,20 @@ export class AppComponent implements OnInit, OnDestroy {
     };
     this.auth.setUniverseEditHolder(universeId, holder);
     this.universeEditHolder.set(holder);
+  }
+
+  private runLoadingTransition() {
+    if (typeof window === 'undefined') return;
+    this.loadingVisible.set(true);
+    this.loadingFading.set(false);
+    if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = window.setTimeout(() => {
+      this.loadingFading.set(true);
+      this.loadingTimeout = window.setTimeout(() => {
+        this.loadingVisible.set(false);
+        this.loadingFading.set(false);
+      }, 120);
+    }, 0);
   }
 
   forceLogoutToMain() {

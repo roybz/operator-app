@@ -1,13 +1,14 @@
 import { Component, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.component';
 import { SavedCredential, UserPreferences } from '../../../core/auth.service';
 import { SettingsDraftService } from '../settings-draft.service';
 
 @Component({
   selector: 'app-credentials-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, InfoTooltipComponent],
   template: `
     <section>
       <h3>{{ 'settings.credentialsLink' | translate }}</h3>
@@ -15,12 +16,7 @@ import { SettingsDraftService } from '../settings-draft.service';
       <section style="margin-top: 12px;">
         <h4 style="display:flex; align-items:center; gap:8px; margin:0 0 8px;">
           {{ 'preferences.credentialsTitle' | translate }}
-          <span class="credentials-info">
-            i
-            <span class="credentials-info__tooltip">
-              {{ 'settings.credentialsInfo' | translate }}
-            </span>
-          </span>
+          <app-info-tooltip [text]="'settings.credentialsInfo' | translate" />
         </h4>
 
         <fieldset disabled style="border:none; padding:0; margin:0; opacity:0.6;">
@@ -83,42 +79,7 @@ import { SettingsDraftService } from '../settings-draft.service';
       </section>
     </section>
   `,
-  styles: [
-    `
-      .credentials-info {
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 18px;
-        height: 18px;
-        border-radius: 999px;
-        border: 1px solid var(--color-border);
-        font-size: 12px;
-        cursor: help;
-      }
-
-      .credentials-info__tooltip {
-        position: absolute;
-        left: 22px;
-        top: -4px;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        padding: 6px 8px;
-        border-radius: 6px;
-        font-size: 11px;
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 120ms ease;
-        z-index: 3001;
-      }
-
-      .credentials-info:hover .credentials-info__tooltip {
-        opacity: 1;
-      }
-    `,
-  ],
+  styles: [],
 })
 export class CredentialsSettingsComponent {
   private draft = inject(SettingsDraftService);

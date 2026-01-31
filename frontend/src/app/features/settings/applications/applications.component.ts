@@ -1,4 +1,4 @@
-import { Component, inject, signal, effect } from '@angular/core';
+import { Component, inject, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
@@ -26,6 +26,13 @@ const APPLICATIONS = APP_LIST;
   template: `
     <section>
       <h3>{{ 'settings.applicationsTitle' | translate }}</h3>
+      @if (showUniverseNotice()) {
+        <div
+          style="margin: 8px 0 16px; padding:8px 10px; border:1px dashed var(--color-border); font-size:12px; opacity:0.75;"
+        >
+          {{ 'settings.universeScopeNotice' | translate }}
+        </div>
+      }
 
       <div style="display:grid; gap:12px; max-width: 520px;">
         @for (app of apps; track app.id) {
@@ -83,8 +90,8 @@ const APPLICATIONS = APP_LIST;
           [message]="'settings.wipeConfirm' | translate"
           [confirmLabel]="'settings.wipeConfirmButton' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="wipeConfirmed()"
-          (cancel)="confirmAppId.set(null)"
+          (confirmed)="wipeConfirmed()"
+          (canceled)="confirmAppId.set(null)"
         />
       }
 
@@ -93,8 +100,8 @@ const APPLICATIONS = APP_LIST;
           [message]="'settings.resetAllConfirm' | translate"
           [confirmLabel]="'settings.resetAllConfirmButton' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="resetAllConfirmed()"
-          (cancel)="resetAllOpen.set(false)"
+          (confirmed)="resetAllConfirmed()"
+          (canceled)="resetAllOpen.set(false)"
         />
       }
     </section>
@@ -110,6 +117,11 @@ export class ApplicationsSettingsComponent {
   confirmAppId = signal<AppId | null>(null);
   resetAllOpen = signal(false);
   importError = signal<string | null>(null);
+  showUniverseNotice = computed(() => {
+    const ownerId = this.auth.actualUser()?.id ?? null;
+    if (!ownerId) return false;
+    return this.auth.getUniversesForUser(ownerId).length > 1;
+  });
 
   constructor() {
     effect(() => {
@@ -197,7 +209,7 @@ export class ApplicationsSettingsComponent {
   }
 
   private effectiveUserId() {
-    return this.auth.session().previewUserId ?? this.auth.session().userId ?? 'guest';
+    return this.auth.storageUserKey();
   }
 
   private clearAppStorage(userId: string) {

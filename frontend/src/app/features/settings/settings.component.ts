@@ -11,6 +11,7 @@ import { AboutComponent } from '../about/about.component';
 import { CredentialsSettingsComponent } from './credentials/credentials.component';
 import { AccountSettingsComponent } from './account/account.component';
 import { UniverseSettingsComponent } from './universe/universe.component';
+import { MultiUserSettingsComponent } from './multi-user/multi-user.component';
 
 @Component({
   selector: 'app-settings',
@@ -25,6 +26,7 @@ import { UniverseSettingsComponent } from './universe/universe.component';
     CredentialsSettingsComponent,
     AccountSettingsComponent,
     UniverseSettingsComponent,
+    MultiUserSettingsComponent,
     AboutComponent,
   ],
   template: `
@@ -50,26 +52,51 @@ import { UniverseSettingsComponent } from './universe/universe.component';
         @if (auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
           <button (click)="selectTab('admin')">{{ 'settings.adminLink' | translate }}</button>
         }
-        @if (!auth.guestModeOnly() && !isGuestUser()) {
-          <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
-        }
+        <button
+          (click)="selectTab('users')"
+          [disabled]="auth.guestModeOnly() || isGuestUser()"
+          [style.opacity]="auth.guestModeOnly() || isGuestUser() ? 0.5 : 1"
+        >
+          {{ 'settings.usersLink' | translate }}
+        </button>
+        <button
+          (click)="selectTab('multiUser')"
+          [disabled]="isGuestUser()"
+          [style.opacity]="isGuestUser() ? 0.5 : 1"
+        >
+          {{ 'settings.multiUserLink' | translate }}
+        </button>
         <button (click)="selectTab('interface')">
           {{ 'settings.preferencesLink' | translate }}
         </button>
         <button (click)="selectTab('applications')">
           {{ 'settings.applicationsLink' | translate }}
         </button>
-        @if (!isGuestUser()) {
-          <button (click)="selectTab('credentials')">
-            {{ 'settings.credentialsLink' | translate }}
-          </button>
-          <span
-            aria-hidden="true"
-            style="align-self:center; width:1px; height:24px; background:var(--color-border);"
-          ></span>
-          <button (click)="selectTab('universe')">{{ 'settings.universeLink' | translate }}</button>
-          <button (click)="selectTab('account')">{{ 'settings.accountLink' | translate }}</button>
-        }
+        <button
+          (click)="selectTab('credentials')"
+          [disabled]="isGuestUser()"
+          [style.opacity]="isGuestUser() ? 0.5 : 1"
+        >
+          {{ 'settings.credentialsLink' | translate }}
+        </button>
+        <span
+          aria-hidden="true"
+          style="align-self:center; width:1px; height:24px; background:var(--color-border);"
+        ></span>
+        <button
+          (click)="selectTab('universe')"
+          [disabled]="isGuestUser()"
+          [style.opacity]="isGuestUser() ? 0.5 : 1"
+        >
+          {{ 'settings.universeLink' | translate }}
+        </button>
+        <button
+          (click)="selectTab('account')"
+          [disabled]="isGuestUser()"
+          [style.opacity]="isGuestUser() ? 0.5 : 1"
+        >
+          {{ 'settings.accountLink' | translate }}
+        </button>
       </nav>
 
       @if (tab() === 'admin' && auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
@@ -80,6 +107,9 @@ import { UniverseSettingsComponent } from './universe/universe.component';
       }
       @if (tab() === 'applications') {
         <app-applications-settings />
+      }
+      @if (tab() === 'multiUser' && !isGuestUser()) {
+        <app-multi-user-settings />
       }
       @if (tab() === 'users' && !auth.guestModeOnly() && !isGuestUser()) {
         <app-users-settings />
@@ -113,7 +143,14 @@ export class SettingsComponent {
   isGuestUser = signal(this.auth.actualUser()?.id === 'u_guest');
   aboutOpen = signal(false);
   tab = signal<
-    'users' | 'interface' | 'applications' | 'admin' | 'credentials' | 'account' | 'universe'
+    | 'users'
+    | 'interface'
+    | 'applications'
+    | 'admin'
+    | 'credentials'
+    | 'account'
+    | 'universe'
+    | 'multiUser'
   >(this.auth.isAdmin() && !this.isGuestUser() ? 'admin' : 'interface');
 
   constructor() {
@@ -135,7 +172,15 @@ export class SettingsComponent {
   }
 
   selectTab(
-    next: 'users' | 'interface' | 'applications' | 'admin' | 'credentials' | 'account' | 'universe',
+    next:
+      | 'users'
+      | 'interface'
+      | 'applications'
+      | 'admin'
+      | 'credentials'
+      | 'account'
+      | 'universe'
+      | 'multiUser',
   ) {
     if (this.isGuestUser() && next !== 'interface' && next !== 'applications') return;
     this.tab.set(next);

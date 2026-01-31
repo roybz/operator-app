@@ -1,167 +1,112 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AuthService, InviteeRecord, UserPreferences } from '../../../core/auth.service';
+import { AuthService, UniverseInfo, UserPreferences } from '../../../core/auth.service';
 import { SettingsDraftService } from '../settings-draft.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.component';
 
 @Component({
   selector: 'app-universe-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, SharedTableComponent, ConfirmDialogComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    SharedTableComponent,
+    ConfirmDialogComponent,
+    InfoTooltipComponent,
+  ],
   template: `
     <section>
       <h3>{{ 'universe.title' | translate }}</h3>
+
+      <section style="margin: 16px 0;">
+        <h4>{{ 'universe.universesTitle' | translate }}</h4>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input
+            type="text"
+            [value]="newUniverseName()"
+            (input)="newUniverseName.set($any($event.target).value)"
+            [placeholder]="'universe.newUniversePlaceholder' | translate"
+          />
+          <button (click)="createUniverse()">{{ 'universe.createUniverse' | translate }}</button>
+          <app-info-tooltip [text]="'universe.maxInfo' | translate" />
+        </div>
+        @if (universeError()) {
+          <p style="color:#b00020; margin:8px 0 0;">{{ universeError() }}</p>
+        }
+        <div style="margin-top:8px;">
+          <app-shared-table
+            [columns]="universeColumns"
+            [rows]="universes()"
+            [actionsTemplate]="actionsTpl"
+          />
+          <ng-template #actionsTpl let-row>
+            <button
+              (click)="requestDelete(row)"
+              [disabled]="universes().length <= 1"
+              [style.opacity]="universes().length <= 1 ? 0.5 : 1"
+              [style.cursor]="universes().length <= 1 ? 'not-allowed' : 'pointer'"
+            >
+              {{ 'universe.delete' | translate }}
+            </button>
+          </ng-template>
+        </div>
+
+        <div style="margin-top: 12px; display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button (click)="exportAll('json')">{{ 'universe.exportAllJson' | translate }}</button>
+            <button (click)="exportAll('xml')">{{ 'universe.exportAllXml' | translate }}</button>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <label style="display:flex; gap:8px; align-items:center;">
+              {{ 'universe.importAllJson' | translate }}
+              <input type="file" accept="application/json" (change)="onImport($event, 'json')" />
+            </label>
+            <label style="display:flex; gap:8px; align-items:center;">
+              {{ 'universe.importAllXml' | translate }}
+              <input
+                type="file"
+                accept="application/xml,text/xml"
+                (change)="onImport($event, 'xml')"
+              />
+            </label>
+          </div>
+          <button (click)="confirmWipeAll.set(true)">
+            {{ 'universe.wipeAll' | translate }}
+          </button>
+          @if (importError()) {
+            <p style="color:#b00020; margin:0;">{{ importError() }}</p>
+          }
+        </div>
+      </section>
 
       <div style="display:grid; gap:12px; max-width: 560px;">
         <label>
           {{ 'universe.name' | translate }}
           <input type="text" [value]="prefs().universeName" (input)="onNameInput($event)" />
         </label>
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().multiUserEnabled"
-            (change)="onMultiUserToggle($event)"
-          />
-          {{ 'universe.multiUser' | translate }}
-        </label>
-
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <span>{{ 'universe.linkLabel' | translate }}</span>
-          <code>{{ universeLink() }}</code>
-          <button (click)="openLinkConfirm()" [disabled]="!prefs().multiUserEnabled">
-            {{ 'universe.changeLink' | translate }}
-          </button>
-        </div>
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseGuests"
-            (change)="onGuestToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowGuests' | translate }}
-        </label>
-
-        @if (prefs().allowUniverseGuests) {
-          <label>
-            {{ 'universe.guestPassword' | translate }}
-            <input
-              type="password"
-              [value]="guestPassword()"
-              (input)="guestPassword.set($any($event.target).value)"
-            />
-            <button style="margin-left:8px;" (click)="applyGuestPassword()">
-              {{ 'universe.savePassword' | translate }}
-            </button>
-          </label>
-        }
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseObservers"
-            (change)="onObserverToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowObservers' | translate }}
-        </label>
-
-        @if (prefs().allowUniverseObservers) {
-          <label>
-            {{ 'universe.observerPassword' | translate }}
-            <input
-              type="password"
-              [value]="observerPassword()"
-              (input)="observerPassword.set($any($event.target).value)"
-            />
-            <button style="margin-left:8px;" (click)="applyObserverPassword()">
-              {{ 'universe.savePassword' | translate }}
-            </button>
-          </label>
-        }
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseChat"
-            (change)="onChatToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowChat' | translate }}
-        </label>
       </div>
 
-      <section style="margin-top: 24px;">
-        <h4>{{ 'universe.inviteesTitle' | translate }}</h4>
-
-        <div style="display:flex; gap:16px; flex-wrap:wrap;">
-          <div style="flex:1; min-width: 320px;">
-            <app-shared-table
-              [columns]="columns"
-              [rows]="invitees()"
-              [actionsTemplate]="actionsTpl"
-              [searchPlaceholder]="'users.search' | translate"
-              [emptyMessage]="'users.empty'"
-            />
-            <ng-template #actionsTpl let-row>
-              <button (click)="startEdit(row)">{{ 'users.edit' | translate }}</button>
-              <button (click)="remove(row)">{{ 'users.delete' | translate }}</button>
-            </ng-template>
-          </div>
-
-          <div style="flex:1; min-width: 280px;">
-            <h4 style="margin-top:0;">{{ formTitle() }}</h4>
-
-            <label for="invitee-username" style="display:block; margin: 8px 0 4px;">
-              {{ 'users.username' | translate }}
-            </label>
-            <input
-              id="invitee-username"
-              #inviteeUsernameInput
-              type="text"
-              [value]="username()"
-              (input)="username.set(inviteeUsernameInput.value)"
-              style="width:100%; padding:8px;"
-            />
-
-            <label for="invitee-password" style="display:block; margin: 8px 0 4px;">
-              {{ 'users.password' | translate }}
-            </label>
-            <input
-              id="invitee-password"
-              #inviteePasswordInput
-              type="password"
-              [value]="password()"
-              (input)="password.set(inviteePasswordInput.value)"
-              style="width:100%; padding:8px;"
-            />
-
-            @if (error()) {
-              <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
-            }
-
-            <div style="display:flex; gap:8px; margin-top: 12px;">
-              <button (click)="save()">{{ saveLabel() }}</button>
-              <button (click)="reset()">{{ 'users.reset' | translate }}</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-        @if (confirmLinkChange()) {
-          <app-confirm-dialog
-            [message]="'universe.changeLinkConfirm' | translate"
-            [confirmLabel]="'universe.updateLink' | translate"
-            [cancelLabel]="'dialogs.cancel' | translate"
-            (confirm)="changeLink()"
-            (cancel)="confirmLinkChange.set(false)"
-          />
-        }
+      @if (confirmWipeAll()) {
+        <app-confirm-dialog
+          [message]="'universe.wipeAllConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="wipeAllUniverses()"
+          (canceled)="confirmWipeAll.set(false)"
+        />
+      }
+      @if (deleteTarget()) {
+        <app-confirm-dialog
+          [message]="'universe.deleteConfirm' | translate: { name: deleteTarget()?.name ?? '' }"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="deleteUniverse()"
+          (canceled)="deleteTarget.set(null)"
+        />
+      }
     </section>
   `,
 })
@@ -169,20 +114,31 @@ export class UniverseSettingsComponent {
   private auth = inject(AuthService);
   private draft = inject(SettingsDraftService);
   private translate = inject(TranslateService);
-  prefs = signal<UserPreferences>(this.draft.preferences());
-  confirmLinkChange = signal(false);
-  guestPassword = signal('');
-  observerPassword = signal('');
 
-  columns: TableColumn<InviteeRecord>[] = [
-    { header: 'users.username', cell: (row) => row.username },
-    { header: 'users.role', cell: () => 'invitee' },
+  prefs = signal<UserPreferences>(this.draft.preferences());
+  confirmWipeAll = signal(false);
+  newUniverseName = signal('');
+  universeError = signal<string | null>(null);
+  importError = signal<string | null>(null);
+  deleteTarget = signal<UniverseInfo | null>(null);
+
+  universeColumns: TableColumn<UniverseInfo>[] = [
+    { header: 'universe.name', cell: (row) => row.name },
+    {
+      header: 'universe.current',
+      cell: (row) =>
+        row.id === this.activeUniverseId() ? this.translate.instant('universe.current') : '',
+    },
   ];
 
-  editingId = signal<string | null>(null);
-  username = signal('');
-  password = signal('');
-  error = signal<string | null>(null);
+  universes = computed(() => {
+    const ownerId = this.auth.actualUser()?.id ?? '';
+    return ownerId ? this.auth.getUniversesForUser(ownerId) : [];
+  });
+  activeUniverseId = computed(() => {
+    const ownerId = this.auth.actualUser()?.id ?? '';
+    return ownerId ? this.auth.getActiveUniverseId(ownerId) : null;
+  });
 
   constructor() {
     effect(() => {
@@ -190,118 +146,126 @@ export class UniverseSettingsComponent {
     });
   }
 
-  invitees() {
-    const ownerId = this.auth.actualUser()?.id ?? '';
-    return ownerId ? this.auth.getInviteesForOwner(ownerId) : [];
-  }
-
-  universeLink() {
-    if (typeof window === 'undefined') return '';
-    const base = window.location.origin;
-    return `${base}/${this.prefs().universeId}/`;
-  }
-
   onNameInput(event: Event) {
     const universeName = (event.target as HTMLInputElement).value.trim();
     this.draft.updatePreferences({ ...this.prefs(), universeName });
+    const ownerId = this.auth.actualUser()?.id;
+    if (ownerId) {
+      this.auth.renameUniverse(ownerId, this.prefs().universeId, universeName);
+    }
   }
 
-  onMultiUserToggle(event: Event) {
-    const multiUserEnabled = (event.target as HTMLInputElement).checked;
-    this.draft.updatePreferences({ ...this.prefs(), multiUserEnabled });
-  }
-
-  onGuestToggle(event: Event) {
-    const allowUniverseGuests = (event.target as HTMLInputElement).checked;
-    this.draft.updatePreferences({ ...this.prefs(), allowUniverseGuests });
-  }
-
-  onObserverToggle(event: Event) {
-    const allowUniverseObservers = (event.target as HTMLInputElement).checked;
-    this.draft.updatePreferences({ ...this.prefs(), allowUniverseObservers });
-  }
-
-  onChatToggle(event: Event) {
-    const allowUniverseChat = (event.target as HTMLInputElement).checked;
-    this.draft.updatePreferences({ ...this.prefs(), allowUniverseChat });
-  }
-
-  openLinkConfirm() {
-    this.confirmLinkChange.set(true);
-  }
-
-  changeLink() {
+  createUniverse() {
     const ownerId = this.auth.actualUser()?.id;
     if (!ownerId) return;
-    const nextId = Math.random().toString(36).slice(2, 10);
-    this.auth.setUniverseId(ownerId, nextId);
-    this.draft.updatePreferences({ ...this.prefs(), universeId: nextId });
-    this.confirmLinkChange.set(false);
-  }
-
-  async applyGuestPassword() {
-    const raw = this.guestPassword().trim();
-    const hashed = raw ? await this.auth.hashPassword(raw) : '';
-    this.draft.updatePreferences({ ...this.prefs(), universeGuestPassword: hashed });
-    this.guestPassword.set('');
-  }
-
-  async applyObserverPassword() {
-    const raw = this.observerPassword().trim();
-    const hashed = raw ? await this.auth.hashPassword(raw) : '';
-    this.draft.updatePreferences({ ...this.prefs(), universeObserverPassword: hashed });
-    this.observerPassword.set('');
-  }
-
-  formTitle() {
-    return this.editingId()
-      ? this.translate.instant('universe.editInviteeTitle')
-      : this.translate.instant('universe.createInviteeTitle');
-  }
-
-  saveLabel() {
-    return this.editingId()
-      ? this.translate.instant('universe.saveInvitee')
-      : this.translate.instant('universe.createInvitee');
-  }
-
-  startEdit(user: InviteeRecord) {
-    this.editingId.set(user.id);
-    this.username.set(user.username);
-    this.password.set('');
-    this.error.set(null);
-  }
-
-  reset() {
-    this.editingId.set(null);
-    this.username.set('');
-    this.password.set('');
-    this.error.set(null);
-  }
-
-  async save() {
-    this.error.set(null);
-    const ownerId = this.auth.actualUser()?.id;
-    if (!ownerId) return;
-    const payload = {
-      username: this.username(),
-      password: this.password(),
-    };
-
-    const result = this.editingId()
-      ? await this.auth.updateInvitee(ownerId, this.editingId()!, payload)
-      : await this.auth.createInvitee(ownerId, payload.username, payload.password);
-
+    const result = this.auth.createUniverse(ownerId, this.newUniverseName(), false);
     if (!result.ok) {
-      this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
+      this.universeError.set(this.translate.instant(result.message ?? 'universe.nameRequired'));
       return;
     }
-    this.reset();
+    this.universeError.set(null);
+    this.newUniverseName.set('');
   }
 
-  remove(user: InviteeRecord) {
+  requestDelete(row: UniverseInfo) {
+    if (this.universes().length <= 1) return;
+    this.deleteTarget.set(row);
+  }
+
+  deleteUniverse() {
+    const ownerId = this.auth.actualUser()?.id;
+    const target = this.deleteTarget();
+    if (!ownerId || !target) return;
+    this.auth.deleteUniverse(ownerId, target.id);
+    this.deleteTarget.set(null);
+  }
+
+  exportAll(format: 'json' | 'xml') {
+    const ownerId = this.auth.actualUser()?.id;
+    if (!ownerId || typeof window === 'undefined') return;
+    const payload = this.auth.exportAllUniverses(ownerId);
+    const text = format === 'xml' ? this.toXml(payload) : JSON.stringify(payload, null, 2);
+    const blob = new Blob([text], {
+      type: format === 'xml' ? 'application/xml' : 'application/json',
+    });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `operator-app-universes.${format}`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  onImport(event: Event, format: 'json' | 'xml') {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    this.importError.set(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || '');
+        const payload = format === 'xml' ? this.fromXml(text) : JSON.parse(text);
+        const ownerId = this.auth.actualUser()?.id;
+        if (!ownerId) return;
+        const result = this.auth.importAllUniverses(ownerId, payload);
+        if (!result.ok) {
+          this.importError.set(this.translate.instant(result.message ?? 'settings.importFailed'));
+        }
+      } catch {
+        this.importError.set(this.translate.instant('settings.importFailed'));
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  wipeAllUniverses() {
     const ownerId = this.auth.actualUser()?.id;
     if (!ownerId) return;
-    this.auth.deleteInvitee(ownerId, user.id);
+    this.auth.wipeAllUniverses(ownerId);
+    this.confirmWipeAll.set(false);
+  }
+
+  private toXml(payload: unknown) {
+    const doc = document.implementation.createDocument('', '', null);
+    const root = doc.createElement('universes');
+    doc.appendChild(root);
+    root.appendChild(this.jsonToXml(doc, 'payload', payload));
+    return new XMLSerializer().serializeToString(doc);
+  }
+
+  private fromXml(xml: string) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'application/xml');
+    const payloadNode = doc.querySelector('payload');
+    if (!payloadNode) return {};
+    return this.xmlToJson(payloadNode);
+  }
+
+  private jsonToXml(doc: Document, name: string, value: unknown): Element {
+    const node = doc.createElement(name);
+    if (Array.isArray(value)) {
+      value.forEach((item) => node.appendChild(this.jsonToXml(doc, 'item', item)));
+      return node;
+    }
+    if (value && typeof value === 'object') {
+      Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+        node.appendChild(this.jsonToXml(doc, key, val));
+      });
+      return node;
+    }
+    node.textContent = value == null ? '' : String(value);
+    return node;
+  }
+
+  private xmlToJson(node: Element): unknown {
+    const children = Array.from(node.children);
+    if (!children.length) return node.textContent ?? '';
+    if (children.every((child) => child.tagName === 'item')) {
+      return children.map((child) => this.xmlToJson(child));
+    }
+    const obj: Record<string, unknown> = {};
+    children.forEach((child) => {
+      obj[child.tagName] = this.xmlToJson(child);
+    });
+    return obj;
   }
 }

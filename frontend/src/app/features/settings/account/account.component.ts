@@ -48,8 +48,8 @@ import { AuthService } from '../../../core/auth.service';
           [message]="'account.deleteConfirm' | translate"
           [confirmLabel]="'dialogs.confirm' | translate"
           [cancelLabel]="'dialogs.cancel' | translate"
-          (confirm)="deleteAccount()"
-          (cancel)="deleteConfirmOpen.set(false)"
+          (confirmed)="deleteAccount()"
+          (canceled)="deleteConfirmOpen.set(false)"
         >
           @if (error()) {
             <p style="color:#b00020; margin-top:8px;">{{ error() }}</p>
@@ -61,7 +61,9 @@ import { AuthService } from '../../../core/auth.service';
         <div
           style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3200;"
         >
-          <div style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;">
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+          >
             <p>{{ successMessage() }}</p>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
               <button (click)="successMessage.set(null)">OK</button>

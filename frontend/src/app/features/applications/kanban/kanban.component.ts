@@ -263,8 +263,8 @@ export function cloneKanbanState(fromId: string, toId: string) {
         [message]="'kanban.confirmRemoveColumn' | translate"
         [confirmLabel]="'dialogs.confirm' | translate"
         [cancelLabel]="'dialogs.cancel' | translate"
-        (confirm)="confirmRemoveColumn()"
-        (cancel)="confirmColumnId.set(null)"
+        (confirmed)="confirmRemoveColumn()"
+        (canceled)="confirmColumnId.set(null)"
       >
         @if (columnHasLeft(confirmColumnId()!)) {
           <label style="display:flex; gap:8px; align-items:center; margin-top:8px;">

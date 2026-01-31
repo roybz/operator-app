@@ -111,8 +111,8 @@ const uid = (prefix: string) =>
               [message]="'dataTable.deleteConfirm' | translate"
               [confirmLabel]="'dialogs.confirm' | translate"
               [cancelLabel]="'dialogs.cancel' | translate"
-              (confirm)="confirmDeleteTable()"
-              (cancel)="pendingDeleteId.set(null)"
+              (confirmed)="confirmDeleteTable()"
+              (canceled)="pendingDeleteId.set(null)"
             />
           }
         </div>

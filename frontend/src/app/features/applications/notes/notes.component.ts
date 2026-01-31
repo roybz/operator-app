@@ -334,8 +334,8 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         [message]="'notes.confirmDelete' | translate"
         [confirmLabel]="'dialogs.confirm' | translate"
         [cancelLabel]="'dialogs.cancel' | translate"
-        (confirm)="deleteSelected()"
-        (cancel)="bulkDeleteOpen.set(false)"
+        (confirmed)="deleteSelected()"
+        (canceled)="bulkDeleteOpen.set(false)"
       />
     }
   `,
