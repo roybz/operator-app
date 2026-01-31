@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../core/instance-settings.service';
 
@@ -65,7 +66,7 @@ export function cloneKanbanState(fromId: string, toId: string) {
 @Component({
   selector: 'app-kanban',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
       @if (settingsOpen()) {
@@ -258,29 +259,26 @@ export function cloneKanbanState(fromId: string, toId: string) {
     </div>
 
     @if (confirmColumnId()) {
-      <div
-        style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
+      <app-confirm-dialog
+        [message]="'kanban.confirmRemoveColumn' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirm)="confirmRemoveColumn()"
+        (cancel)="confirmColumnId.set(null)"
       >
-        <div style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;">
-          <p>{{ 'kanban.confirmRemoveColumn' | translate }}</p>
-          @if (columnHasLeft(confirmColumnId()!)) {
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input
-                type="checkbox"
-                [checked]="confirmMoveLeft()"
-                (change)="confirmMoveLeft.set($any($event.target).checked)"
-              />
-              {{ 'kanban.moveItemsLeft' | translate }}
-            </label>
-          } @else {
-            <div style="opacity:0.7;">{{ 'kanban.deleteItems' | translate }}</div>
-          }
-          <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-            <button (click)="confirmColumnId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
-            <button (click)="confirmRemoveColumn()">{{ 'dialogs.confirm' | translate }}</button>
-          </div>
-        </div>
-      </div>
+        @if (columnHasLeft(confirmColumnId()!)) {
+          <label style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+            <input
+              type="checkbox"
+              [checked]="confirmMoveLeft()"
+              (change)="confirmMoveLeft.set($any($event.target).checked)"
+            />
+            {{ 'kanban.moveItemsLeft' | translate }}
+          </label>
+        } @else {
+          <div style="opacity:0.7; margin-top:8px;">{{ 'kanban.deleteItems' | translate }}</div>
+        }
+      </app-confirm-dialog>
     }
   `,
 })

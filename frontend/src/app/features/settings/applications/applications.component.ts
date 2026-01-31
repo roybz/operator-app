@@ -1,6 +1,7 @@
 import { Component, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
 import { AppId } from '../../dependencies/app-types';
@@ -21,7 +22,7 @@ const APPLICATIONS = APP_LIST;
 @Component({
   selector: 'app-applications-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <section>
       <h3>{{ 'settings.applicationsTitle' | translate }}</h3>
@@ -78,39 +79,23 @@ const APPLICATIONS = APP_LIST;
       </div>
 
       @if (confirmAppId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-          >
-            <p>{{ 'settings.wipeConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="confirmAppId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="wipeConfirmed()">
-                {{ 'settings.wipeConfirmButton' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.wipeConfirm' | translate"
+          [confirmLabel]="'settings.wipeConfirmButton' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="wipeConfirmed()"
+          (cancel)="confirmAppId.set(null)"
+        />
       }
 
       @if (resetAllOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
-            <p>{{ 'settings.resetAllConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="resetAllOpen.set(false)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="resetAllConfirmed()">
-                {{ 'settings.resetAllConfirmButton' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.resetAllConfirm' | translate"
+          [confirmLabel]="'settings.resetAllConfirmButton' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="resetAllConfirmed()"
+          (cancel)="resetAllOpen.set(false)"
+        />
       }
     </section>
   `,

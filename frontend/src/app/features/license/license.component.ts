@@ -24,6 +24,15 @@ import { TranslateModule } from '@ngx-translate/core';
 
       <h3 style="margin:16px 0 8px;">{{ 'license.privacyTitle' | translate }}</h3>
       <p style="white-space:pre-line;">{{ 'license.privacyBody' | translate }}</p>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <a href="https://github.com/roybz/operator-app" target="_blank" rel="noopener noreferrer">
+          {{ 'about.github' | translate }}
+        </a>
+        <a href="https://www.linkedin.com/in/roynouneh/" target="_blank" rel="noopener noreferrer">
+          {{ 'about.linkedin' | translate }}
+        </a>
+      </div>
     </section>
   `,
 })

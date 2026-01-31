@@ -13,11 +13,17 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AuthService } from './core/auth.service';
+import {
+  AuthService,
+  UniverseChatMessage,
+  UniverseEditHolder,
+  UniversePresenceEntry,
+  UserRole,
+} from './core/auth.service';
 import { DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
 import { AppListComponent, AppGroup } from './shared/app-list/app-list.component';
-import { OverlayComponent } from './shared/overlay/overlay.component';
+import { ConfirmDialogComponent } from './shared/confirm-dialog/confirm-dialog.component';
 import { TodoPageComponent } from './features/applications/todo/todo.component';
 import { CalculatorComponent } from './features/applications/calculator/calculator.component';
 import { TimerComponent } from './features/applications/timer/timer.component';
@@ -81,7 +87,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     TranslateModule,
     DialogComponent,
     AppListComponent,
-    OverlayComponent,
+    ConfirmDialogComponent,
     TodoPageComponent,
     CalculatorComponent,
     TimerComponent,
@@ -146,6 +152,71 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
 
       .workspace-drop-line.right {
         right: -6px;
+      }
+
+      .universe-bar {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-surface);
+        z-index: 1200;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+      }
+
+      .universe-chip {
+        padding: 6px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        background: var(--color-bg);
+        font-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .universe-chip--active {
+        box-shadow: 0 0 8px rgba(0, 194, 209, 0.6);
+      }
+
+      .universe-fade {
+        opacity: 0.7;
+      }
+
+      .universe-chat {
+        position: fixed;
+        right: 16px;
+        width: min(420px, 92vw);
+        max-height: 525px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+        display: flex;
+        flex-direction: column;
+        z-index: 2000;
+        font-size: 0.9em;
+      }
+
+      .universe-chat__messages {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .universe-chat__input {
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 8px;
+        min-height: 64px;
+        resize: vertical;
       }
     `,
   ],
@@ -236,7 +307,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               }
               <button
                 (click)="dialogService.addWorkspace()"
-                [disabled]="dialogService.getWorkspaces().length >= 8"
+                [disabled]="dialogService.getWorkspaces().length >= 8 || !canEdit()"
                 style="padding:8px 12px;"
               >
                 +
@@ -256,7 +327,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 <span
                   style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
                 >
-                  {{ 'auth.loggedInAs' | translate: { user: auth.currentUser()?.username ?? '' } }}
+                  {{ 'auth.loggedInAs' | translate: { user: loggedInAsLabel() } }}
                 </span>
               }
               @if (isMockMode()) {
@@ -319,8 +390,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               <button
                 (click)="toggleDialogsHidden()"
                 style="margin-bottom: 8px;"
-                [disabled]="settingsOpen()"
-                [style.opacity]="settingsOpen() ? 0.5 : 1"
+                [disabled]="settingsOpen() || !canEdit()"
+                [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
               >
                 {{
                   dialogsHidden()
@@ -331,8 +402,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               <div style="margin-bottom: 12px;">
                 <button
                   (click)="toggleResetMenu()"
-                  [disabled]="settingsOpen()"
-                  [style.opacity]="settingsOpen() ? 0.5 : 1"
+                  [disabled]="settingsOpen() || !canEdit()"
+                  [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
                 >
                   {{ 'dialogs.reset' | translate }}
                 </button>
@@ -340,15 +411,15 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
                     <button
                       (click)="resetDialogs('left')"
-                      [disabled]="settingsOpen()"
-                      [style.opacity]="settingsOpen() ? 0.5 : 1"
+                      [disabled]="settingsOpen() || !canEdit()"
+                      [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
                     >
                       {{ 'dialogs.resetLeft' | translate }}
                     </button>
                     <button
                       (click)="resetDialogs('middle')"
-                      [disabled]="settingsOpen()"
-                      [style.opacity]="settingsOpen() ? 0.5 : 1"
+                      [disabled]="settingsOpen() || !canEdit()"
+                      [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
                     >
                       {{ 'dialogs.resetMiddle' | translate }}
                     </button>
@@ -359,7 +430,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 [apps]="visibleAppGroups()"
                 [instancesByApp]="instancesByApp()"
                 [deleteTargetActive]="!!deleteTargetId()"
-                [actionsDisabled]="settingsOpen()"
+                [actionsDisabled]="settingsOpen() || !canEdit()"
                 (openApp)="openApp($event)"
                 (restore)="restoreInstance($event)"
                 (duplicate)="duplicateInstance($event)"
@@ -406,7 +477,10 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               }
               @if (showZoomControls()) {
                 <div
-                  style="display:flex; align-items:center; gap:8px; border-top:1px solid var(--color-border); padding-top:8px; margin-top:8px;"
+                  style="display:flex; align-items:center; gap:8px;"
+                  [style.borderTop]="showCanvasDivider() ? '1px solid var(--color-border)' : 'none'"
+                  [style.paddingTop]="showCanvasDivider() ? '8px' : '0'"
+                  [style.marginTop]="showCanvasDivider() ? '8px' : '0'"
                 >
                   <button
                     (click)="resetZoom()"
@@ -431,7 +505,14 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   </button>
                 </div>
               }
-              <button (click)="toggleSettings()">{{ 'nav.settings' | translate }}</button>
+              <button
+                (click)="toggleSettings()"
+                [disabled]="!canOpenSettings()"
+                [style.opacity]="!canOpenSettings() ? 0.5 : 1"
+                [style.cursor]="!canOpenSettings() ? 'not-allowed' : 'pointer'"
+              >
+                {{ 'nav.settings' | translate }}
+              </button>
               <button (click)="openLicense()">{{ 'nav.license' | translate }}</button>
               <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
             </div>
@@ -467,8 +548,8 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               class="floating-control"
               style="left:92px;"
               [style.top.px]="floatingSidebarToggleTop()"
-              [disabled]="settingsOpen()"
-              [style.opacity]="settingsOpen() ? 0.5 : 1"
+              [disabled]="settingsOpen() || !canEdit()"
+              [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
             >
               {{
                 dialogsHidden() ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate)
@@ -532,7 +613,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 <app-dialog
                   [instance]="instance"
                   [bounds]="canvasBounds()"
-                  [disabled]="isOverlayActive()"
+                  [disabled]="isOverlayActive() || !canEdit()"
                   [title]="instanceLabel(instance)"
                   [icon]="instanceIcon(instance.appId)"
                   [trashDisabled]="!!instance.deleteLocked"
@@ -585,10 +666,19 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             }
           </div>
 
-          @if (settingsOpen()) {
-            <app-overlay (closed)="requestCloseSettings()">
-              <app-settings />
-            </app-overlay>
+        @if (settingsOpen()) {
+        <div
+          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+        >
+          <div
+            style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw);"
+          >
+            <div style="display:flex; justify-content:flex-end;">
+              <button (click)="requestCloseSettings()">✕</button>
+            </div>
+            <app-settings />
+          </div>
+            </div>
           }
           @if (licenseOpen()) {
             <div
@@ -639,52 +729,151 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         </section>
       </main>
 
-      @if (deleteTargetId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+      @if (showUniverseBar()) {
+        @if (universeBarOpen()) {
+          <div class="universe-bar" [style.left.px]="universeBarLeft()">
+            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+              @if (inviteesOnline().length) {
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  @for (invitee of inviteesOnline(); track invitee.id) {
+                    <div
+                      class="universe-chip"
+                      [class.universe-chip--active]="universeEditHolder()?.id === invitee.id"
+                    >
+                      <span>{{ invitee.username }}</span>
+                      @if (isUniverseOwner()) {
+                        <button
+                          (click)="grantEdit(invitee)"
+                          title="{{ 'universe.grantEdit' | translate }}"
+                        >
+                          ✏️
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div style="flex:1; text-align:center; font-size:12px; opacity:0.7;">
+                  {{ 'universe.noInvitees' | translate }}
+                </div>
+              }
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div class="universe-chip">
+                {{
+                  (isMainGuest() ? 'universe.guestsCountOwned' : 'universe.guestsCount')
+                    | translate: { count: guestCount() }
+                }}
+              </div>
+              <div class="universe-chip">
+                {{
+                  (isMainGuest() ? 'universe.observersCountOwned' : 'universe.observersCount')
+                    | translate: { count: observerCount() }
+                }}
+              </div>
+              @if (universeEditHolder()) {
+                <div class="universe-chip universe-chip--active">
+                  {{ 'universe.editingAs' | translate: { name: universeEditHolder()?.username } }}
+                </div>
+              }
+              @if (isUniverseOwner() && universeEditHolder()?.id !== auth.session().userId) {
+                <button (click)="takeBackEditPermissions()">
+                  {{ 'universe.takeBackEdit' | translate }}
+                </button>
+              }
+              @if (allowUniverseChat()) {
+                <button (click)="toggleUniverseChat()">
+                  {{ 'universe.openChat' | translate }}
+                  @if (universeChatUnread() > 0) {
+                    <span>({{ universeChatUnread() }})</span>
+                  }
+                </button>
+              }
+              <button (click)="toggleUniverseBar()">
+                {{ 'universe.collapseBar' | translate }}
+              </button>
+            </div>
+          </div>
+        } @else {
+          <button
+            class="floating-control"
+            style="right:12px; bottom:12px;"
+            (click)="toggleUniverseBar()"
           >
-            <p>{{ 'dialogs.confirmDelete' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="deleteTargetId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="deleteConfirmed()">{{ 'dialogs.confirm' | translate }}</button>
+            {{ 'universe.expandBar' | translate }}
+          </button>
+        }
+      }
+
+      @if (universeChatOpen() && !settingsOpen()) {
+        <div class="universe-chat" [style.bottom.px]="universeBarOpen() ? 64 : 16">
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; padding:12px 12px 0;"
+          >
+            <h4 style="margin:0;">{{ 'universe.chatTitle' | translate }}</h4>
+            <button (click)="universeChatOpen.set(false)">✕</button>
+          </div>
+          <div
+            class="universe-chat__messages"
+            #universeChatScroll
+            (scroll)="onUniverseChatScroll($event)"
+          >
+            @for (msg of universeChatMessages(); track msg.id) {
+              <div style="border:1px solid var(--color-border); border-radius:8px; padding:8px;">
+                <div style="font-size:12px; opacity:0.7; margin-bottom:4px;">
+                  {{ msg.author }}
+                </div>
+                <div style="white-space:pre-wrap;">{{ msg.content }}</div>
+              </div>
+            }
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+            <textarea
+              class="universe-chat__input"
+              [value]="universeChatDraft()"
+              (input)="universeChatDraft.set($any($event.target)?.value || '')"
+              [placeholder]="'universe.chatPlaceholder' | translate"
+            ></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+              @if (isUniverseOwner()) {
+                <button (click)="clearUniverseChat()">
+                  {{ 'universe.chatClear' | translate }}
+                </button>
+              }
+              <button (click)="sendUniverseChat()">{{ 'universe.chatSend' | translate }}</button>
             </div>
           </div>
         </div>
+      }
+
+      @if (deleteTargetId()) {
+        <app-confirm-dialog
+          [message]="'dialogs.confirmDelete' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="deleteConfirmed()"
+          (cancel)="deleteTargetId.set(null)"
+        />
       }
 
       @if (cloneTargetId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1050;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
-            <p>{{ 'dialogs.cloneConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="cancelClone()">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="confirmClone()">{{ 'dialogs.confirm' | translate }}</button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'dialogs.cloneConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="confirmClone()"
+          (cancel)="cancelClone()"
+        />
       }
 
       @if (settingsCloseConfirmOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3100;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:340px;"
-          >
-            <p>{{ 'settings.closeConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="cancelCloseSettings()">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="confirmCloseSettings()">{{ 'settings.discard' | translate }}</button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.closeConfirm' | translate"
+          [confirmLabel]="'settings.discard' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="confirmCloseSettings()"
+          (cancel)="cancelCloseSettings()"
+        />
       }
 
       @if (guestBlocked()) {
@@ -745,6 +934,7 @@ export class AppComponent implements OnInit, OnDestroy {
   workspaceDragId = signal<string | null>(null);
   private readonly translate = inject(TranslateService);
   private timeInterval?: number;
+  private universeInterval?: number;
   private loadingTimeout?: number;
   private loginLoadingTimeout?: number;
   private now = signal(new Date());
@@ -766,6 +956,15 @@ export class AppComponent implements OnInit, OnDestroy {
   deleteTargetId = signal<string | null>(null);
   cloneTargetId = signal<string | null>(null);
   moveWorkspaceTargetId = signal<string | null>(null);
+  universeBarOpen = signal(true);
+  universeChatOpen = signal(false);
+  universeChatDraft = signal('');
+  universePresence = signal<UniversePresenceEntry[]>([]);
+  universeChatMessages = signal<UniverseChatMessage[]>([]);
+  universeEditHolder = signal<UniverseEditHolder | null>(null);
+  universeChatUnread = signal(0);
+  universeChatLastCount = signal(0);
+  universeChatSticky = signal(true);
   accessibilityPromptOpen = signal(false);
   accessibilityPromptEnabled = signal(true);
   loadingVisible = signal(true);
@@ -790,6 +989,7 @@ export class AppComponent implements OnInit, OnDestroy {
   canvasDraftWidth = signal(1920);
   canvasDraftHeight = signal(1080);
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
+  universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
 
   activeDialogs = computed(() => this.dialogService.getActiveDialogs());
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
@@ -854,6 +1054,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const org = this.auth.orgSettings();
     return !org.disableZoomControls && !prefs.hideZoomControls;
   });
+  showCanvasDivider = computed(() => this.showViewportSizingControls() && this.showZoomControls());
   isCanvasLocked = computed(() => this.auth.preferences().lockCanvasSize ?? false);
   canvasDraftDirty = computed(
     () =>
@@ -866,7 +1067,55 @@ export class AppComponent implements OnInit, OnDestroy {
     () => !this.auth.orgSettings().allowGuestLogin && this.auth.actualUser()?.id === 'u_guest',
   );
 
+  universeOwnerId = computed(
+    () => this.auth.session().universeOwnerId ?? this.auth.session().userId ?? null,
+  );
+  universePrefs = computed(() => {
+    const ownerId = this.universeOwnerId();
+    return ownerId ? this.auth.getUniversePreferences(ownerId) : null;
+  });
+  universeId = computed(() => this.universePrefs()?.universeId ?? null);
+  multiUserEnabled = computed(() => Boolean(this.universePrefs()?.multiUserEnabled));
+  allowUniverseChat = computed(() => Boolean(this.universePrefs()?.allowUniverseChat));
+  isUniverseOwner = computed(() => {
+    const ownerId = this.universeOwnerId();
+    return Boolean(ownerId && ownerId === this.auth.session().userId);
+  });
+  sessionRole = computed<UserRole>(() => {
+    return (
+      this.auth.session().sessionRole ??
+      this.auth.actualUser()?.role ??
+      this.auth.currentUser()?.role ??
+      'user'
+    );
+  });
+  isLimitedRole = computed(() => ['guest', 'observer', 'invitee'].includes(this.sessionRole()));
+  canOpenSettings = computed(() => !this.isLimitedRole());
+  canEdit = computed(() => {
+    if (!this.multiUserEnabled()) return true;
+    const holder = this.universeEditHolder();
+    if (!holder) return this.isUniverseOwner();
+    return holder.id === this.auth.session().userId;
+  });
+  inviteesOnline = computed(() =>
+    this.universePresence().filter((entry) => entry.role === 'invitee'),
+  );
+  guestCount = computed(
+    () => this.universePresence().filter((entry) => entry.role === 'guest').length,
+  );
+  observerCount = computed(
+    () => this.universePresence().filter((entry) => entry.role === 'observer').length,
+  );
+  isMainGuest = computed(() => this.auth.actualUser()?.id === 'u_guest');
+  showUniverseBar = computed(() => this.auth.isLoggedIn() && this.multiUserEnabled());
   previewUserLabel = computed(() => this.auth.currentUser()?.username ?? '');
+  loggedInAsLabel = computed(() => {
+    const role = this.sessionRole();
+    if (role === 'guest') return this.translate.instant('auth.roleGuest');
+    if (role === 'observer') return this.translate.instant('auth.roleObserver');
+    if (role === 'invitee') return this.translate.instant('auth.roleInvitee');
+    return this.auth.currentUser()?.username ?? '';
+  });
   siteTitle = computed(() => this.auth.orgSettings().siteTitle || 'Operator App');
   siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
@@ -1003,6 +1252,40 @@ export class AppComponent implements OnInit, OnDestroy {
         this.editingWorkspaceName.set('');
       }
     });
+
+    effect(() => {
+      if (typeof window === 'undefined') return;
+      const universeId = this.universeId();
+      const enabled = this.multiUserEnabled();
+      if (!this.auth.isLoggedIn() || !universeId || !enabled) {
+        if (this.universeInterval) {
+          window.clearInterval(this.universeInterval);
+          this.universeInterval = undefined;
+        }
+        this.universePresence.set([]);
+        this.universeChatMessages.set([]);
+        this.universeEditHolder.set(null);
+        return;
+      }
+      this.syncUniverseState();
+      if (!this.universeInterval) {
+        this.universeInterval = window.setInterval(() => {
+          this.syncUniverseState();
+        }, 3000);
+      }
+    });
+
+    effect(() => {
+      if (!this.auth.isLoggedIn()) return;
+      const prefs = this.universePrefs();
+      if (!prefs) return;
+      if (!prefs.multiUserEnabled && this.isLimitedRole()) {
+        this.forceLogoutToMain();
+      }
+      if (!prefs.allowUniverseChat) {
+        this.universeChatOpen.set(false);
+      }
+    });
   }
 
   ngOnInit() {
@@ -1022,6 +1305,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.timeInterval) window.clearInterval(this.timeInterval);
+    if (this.universeInterval) window.clearInterval(this.universeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (typeof window !== 'undefined') {
@@ -1185,6 +1469,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   startWorkspaceRename(ws: { id: string; name: string }) {
+    if (!this.canEdit()) return;
     this.editingWorkspaceId.set(ws.id);
     this.editingWorkspaceName.set(ws.name);
     setTimeout(() => {
@@ -1207,11 +1492,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   closeWorkspace(ws: { id: string }) {
+    if (!this.canEdit()) return;
     if (this.dialogService.getWorkspaces().length <= 1) return;
     this.dialogService.closeWorkspace(ws.id);
   }
 
   onWorkspacePointerDown = (id: string, event: PointerEvent) => {
+    if (!this.canEdit()) return;
     if (event.button !== 0) return;
     if (event.detail > 1) return;
     if (this.editingWorkspaceId() === id) {
@@ -1249,6 +1536,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openSettings() {
+    if (!this.canOpenSettings()) return;
     if (typeof document !== 'undefined') {
       const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
       viewport?.scrollTo({ top: 0, left: 0 });
@@ -1259,6 +1547,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   toggleSettings() {
+    if (!this.canOpenSettings()) return;
     if (this.settingsOpen()) {
       this.requestCloseSettings();
     } else {
@@ -1297,6 +1586,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openApp(appId: AppId) {
+    if (!this.canEdit()) return;
     this.updateCanvasBounds();
     const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
     const viewportBounds = this.viewportBounds();
@@ -1317,11 +1607,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   restoreInstance(instanceId: string) {
+    if (!this.canEdit()) return;
     this.dialogService.restoreInstance(instanceId);
     this.dialogService.bringToFront(instanceId);
   }
 
   duplicateInstance(instanceId: string) {
+    if (!this.canEdit()) return;
     this.cloneTargetId.set(instanceId);
   }
 
@@ -1379,20 +1671,24 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   toggleDeleteLock(instanceId: string) {
+    if (!this.canEdit()) return;
     if (this.deleteTargetId()) return;
     this.dialogService.toggleDeleteLock(instanceId);
   }
 
   stashInstance(instanceId: string) {
+    if (!this.canEdit()) return;
     this.dialogService.stashInstance(instanceId, this.canvasBounds());
   }
 
   restoreFromStash(instance: { id: string }) {
+    if (!this.canEdit()) return;
     this.dialogService.unstashInstance(instance.id);
     this.dialogService.bringToFront(instance.id);
   }
 
   toggleDialogsHidden() {
+    if (!this.canEdit()) return;
     this.dialogService.toggleWorkspaceHidden(this.dialogService.getActiveWorkspaceId());
   }
 
@@ -1405,14 +1701,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   minimizeInstance(instanceId: string) {
+    if (!this.canEdit()) return;
     this.dialogService.minimizeInstance(instanceId);
   }
 
   toggleMaximize(instanceId: string) {
+    if (!this.canEdit()) return;
     this.dialogService.toggleMaximize(instanceId, this.viewportBounds());
   }
 
   confirmDelete(instanceId: string) {
+    if (!this.canEdit()) return;
     this.deleteTargetId.set(instanceId);
   }
 
@@ -1423,10 +1722,12 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   toggleResetMenu() {
+    if (!this.canEdit()) return;
     this.resetMenuOpen.set(!this.resetMenuOpen());
   }
 
   resetDialogs(mode: 'left' | 'middle') {
+    if (!this.canEdit()) return;
     this.dialogService.resetPositions(mode, this.canvasBounds());
     this.resetMenuOpen.set(false);
   }
@@ -1460,6 +1761,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openMoveWorkspace(instanceId: string) {
+    if (!this.canEdit()) return;
     if (this.dialogService.getWorkspaces().length <= 1) return;
     this.moveWorkspaceTargetId.set(instanceId);
   }
@@ -1475,12 +1777,153 @@ export class AppComponent implements OnInit, OnDestroy {
     this.moveWorkspaceTargetId.set(null);
   }
 
+  private syncUniverseState() {
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const session = this.auth.session();
+    if (!session.userId) return;
+    const username =
+      this.auth.actualUser()?.username ??
+      session.sessionUsername ??
+      this.translate.instant('auth.title');
+    const entry: UniversePresenceEntry = {
+      id: session.userId,
+      username,
+      role: this.sessionRole(),
+      ownerId: this.universeOwnerId() ?? '',
+      lastSeen: Date.now(),
+    };
+    this.auth.touchUniversePresence(universeId, entry);
+    this.universePresence.set(this.auth.getUniversePresence(universeId));
+    let holder = this.auth.getUniverseEditHolder(universeId);
+    if (!holder && this.isUniverseOwner()) {
+      const ownerName = this.auth.actualUser()?.username ?? 'Owner';
+      holder = { id: session.userId, username: ownerName, role: this.sessionRole() };
+      this.auth.setUniverseEditHolder(universeId, holder);
+    }
+    this.universeEditHolder.set(holder);
+    if (this.allowUniverseChat()) {
+      const messages = this.auth.getUniverseChat(universeId);
+      const prevCount = this.universeChatLastCount();
+      this.universeChatMessages.set(messages);
+      if (this.universeChatOpen()) {
+        this.universeChatUnread.set(0);
+        this.scrollUniverseChatToBottom();
+      } else if (messages.length > prevCount) {
+        this.universeChatUnread.set(this.universeChatUnread() + (messages.length - prevCount));
+      }
+      this.universeChatLastCount.set(messages.length);
+    } else {
+      this.universeChatMessages.set([]);
+      this.universeChatUnread.set(0);
+      this.universeChatLastCount.set(0);
+    }
+  }
+
+  toggleUniverseBar() {
+    this.universeBarOpen.set(!this.universeBarOpen());
+  }
+
+  universeBarLeft() {
+    return this.navOpen ? RESERVED_SIDEBAR_WIDTH : 0;
+  }
+
+  toggleUniverseChat() {
+    if (!this.allowUniverseChat()) return;
+    this.universeChatOpen.set(!this.universeChatOpen());
+    if (this.universeChatOpen()) {
+      this.universeChatUnread.set(0);
+      this.universeChatLastCount.set(this.universeChatMessages().length);
+      this.syncUniverseState();
+      this.scrollUniverseChatToBottom();
+    }
+  }
+
+  sendUniverseChat() {
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const content = this.universeChatDraft().trim();
+    if (!content) return;
+    const author =
+      this.auth.actualUser()?.username ?? this.auth.session().sessionUsername ?? 'User';
+    const message: UniverseChatMessage = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      author,
+      role: this.sessionRole(),
+      content,
+      createdAt: Date.now(),
+    };
+    const list = this.auth.appendUniverseChat(universeId, message);
+    this.universeChatMessages.set(list);
+    this.universeChatDraft.set('');
+    this.scrollUniverseChatToBottom();
+  }
+
+  onUniverseChatScroll(event: Event) {
+    const target = event.target as HTMLElement;
+    const atBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 6;
+    this.universeChatSticky.set(atBottom);
+  }
+
+  private scrollUniverseChatToBottom() {
+    if (!this.universeChatSticky()) return;
+    setTimeout(() => {
+      const el = this.universeChatScroll()?.nativeElement;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    }, 0);
+  }
+
+  clearUniverseChat() {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    this.auth.clearUniverseChat(universeId);
+    this.universeChatMessages.set([]);
+  }
+
+  grantEdit(invitee: UniversePresenceEntry) {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const holder: UniverseEditHolder = {
+      id: invitee.id,
+      username: invitee.username,
+      role: invitee.role,
+    };
+    this.auth.setUniverseEditHolder(universeId, holder);
+    this.universeEditHolder.set(holder);
+  }
+
+  takeBackEditPermissions() {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const ownerName = this.auth.actualUser()?.username ?? 'Owner';
+    const holder: UniverseEditHolder = {
+      id: this.auth.session().userId ?? '',
+      username: ownerName,
+      role: this.sessionRole(),
+    };
+    this.auth.setUniverseEditHolder(universeId, holder);
+    this.universeEditHolder.set(holder);
+  }
+
+  forceLogoutToMain() {
+    this.auth.logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  }
+
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
+    if (!this.canEdit()) return;
     this.editingTileId.set(instance.id);
     this.editingTitle.set(this.instanceLabel(instance));
   }
 
   finishRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
+    if (!this.canEdit()) return;
     const next = this.editingTitle().trim();
     if (next) {
       this.dialogService.setTitleOverride(instance.id, next);
@@ -1492,6 +1935,7 @@ export class AppComponent implements OnInit, OnDestroy {
     instance: { id: string; tileRect?: { x: number; y: number } },
     event: PointerEvent,
   ) {
+    if (!this.canEdit()) return;
     if (!instance.tileRect) return;
     if (event.detail > 1) return;
     const target = event.target as HTMLElement | null;

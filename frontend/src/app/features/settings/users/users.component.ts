@@ -1,39 +1,21 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService, UserRecord, UserRole } from '../../../core/auth.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
+import { DialogService } from '../../../core/dialog.service';
 
 @Component({
   selector: 'app-users-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, SharedTableComponent],
+  imports: [CommonModule, TranslateModule, SharedTableComponent, ConfirmDialogComponent],
   template: `
     <section>
       <h3>{{ 'users.title' | translate }}</h3>
 
       @if (!isAdminUser()) {
         <p>{{ 'users.adminOnly' | translate }}</p>
-      }
-
-      @if (auth.currentUser() && auth.currentUser()?.id !== 'u_guest') {
-        <section style="margin-bottom: 24px; padding: 12px; border: 1px solid var(--color-border);">
-          <h4 style="margin-top:0;">{{ 'users.selfTitle' | translate }}</h4>
-          <label for="self-password" style="display:block; margin: 8px 0 4px;">
-            {{ 'users.password' | translate }}
-          </label>
-          <input
-            id="self-password"
-            #selfPasswordInput
-            type="password"
-            [value]="selfPassword()"
-            (input)="selfPassword.set(selfPasswordInput.value)"
-            style="width:100%; padding:8px;"
-          />
-          <div style="display:flex; gap:8px; margin-top: 12px;">
-            <button (click)="updateSelfPassword()">{{ 'users.updatePassword' | translate }}</button>
-          </div>
-        </section>
       }
 
       @if (isAdminUser()) {
@@ -49,6 +31,7 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
             <ng-template #actionsTpl let-row>
               <button (click)="startEdit(row)">{{ 'users.edit' | translate }}</button>
               <button (click)="remove(row)">{{ 'users.delete' | translate }}</button>
+              <button (click)="wipeUser(row)">{{ 'users.wipe' | translate }}</button>
             </ng-template>
           </div>
 
@@ -77,7 +60,7 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
               [value]="password()"
               (input)="password.set(passwordInput.value)"
               style="width:100%; padding:8px;"
-              [disabled]="editingUserIsGuest()"
+              [disabled]="passwordDisabled()"
             />
 
             <label for="user-role" style="display:block; margin: 8px 0 4px;">
@@ -120,6 +103,16 @@ import { SharedTableComponent, TableColumn } from '../../../shared/table/table.c
           </div>
         </div>
       }
+
+      @if (confirmWipeUserId()) {
+        <app-confirm-dialog
+          [message]="'users.wipeConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirm)="confirmWipeUser()"
+          (cancel)="confirmWipeUserId.set(null)"
+        />
+      }
     </section>
   `,
 })
@@ -134,9 +127,10 @@ export class UsersSettingsComponent {
   password = signal('');
   role = signal<UserRole>('user');
   error = signal<string | null>(null);
-  selfPassword = signal('');
   successMessage = signal<string | null>(null);
+  confirmWipeUserId = signal<string | null>(null);
   readonly auth = inject(AuthService);
+  private dialogService = inject(DialogService);
   private translate = inject(TranslateService);
 
   isAdminUser() {
@@ -180,8 +174,10 @@ export class UsersSettingsComponent {
     };
 
     if (!this.editingId() && !payload.password.trim()) {
-      this.error.set(this.translate.instant('users.error.passwordRequired'));
-      return;
+      if (payload.role !== 'guest' && payload.role !== 'observer') {
+        this.error.set(this.translate.instant('users.error.passwordRequired'));
+        return;
+      }
     }
 
     const result = this.editingId()
@@ -204,30 +200,16 @@ export class UsersSettingsComponent {
   }
 
   onRoleChange(value: string) {
-    this.role.set(value === 'admin' ? 'admin' : 'user');
+    const allowed: UserRole[] = ['admin', 'user'];
+    this.role.set(allowed.includes(value as UserRole) ? (value as UserRole) : 'user');
   }
 
   editingUserIsGuest() {
     return this.editingId() === 'u_guest';
   }
 
-  async updateSelfPassword() {
-    const current = this.auth.currentUser();
-    if (!current) return;
-    const nextPassword = this.selfPassword().trim();
-    if (!nextPassword) return;
-    const result = await this.auth.updateUser(current.id, {
-      username: current.username,
-      password: nextPassword,
-      role: current.role,
-    });
-    if (!result.ok) {
-      this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
-      return;
-    }
-    this.successMessage.set(this.translate.instant('users.passwordUpdated'));
-    this.selfPassword.set('');
-    this.auth.logout();
+  passwordDisabled() {
+    return this.editingUserIsGuest();
   }
 
   remove(user: UserRecord) {
@@ -235,5 +217,21 @@ export class UsersSettingsComponent {
     if (!result.ok) {
       this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
     }
+  }
+
+  wipeUser(user: UserRecord) {
+    this.confirmWipeUserId.set(user.id);
+  }
+
+  confirmWipeUser() {
+    const userId = this.confirmWipeUserId();
+    if (!userId) return;
+    this.confirmWipeUserId.set(null);
+    const result = this.auth.wipeUserData(userId);
+    if (!result.ok) {
+      this.error.set(this.translate.instant(result.message ?? 'users.error.generic'));
+      return;
+    }
+    this.dialogService.resetForUser(userId);
   }
 }

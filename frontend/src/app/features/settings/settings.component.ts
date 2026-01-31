@@ -8,6 +8,9 @@ import { ApplicationsSettingsComponent } from './applications/applications.compo
 import { AdminSettingsComponent } from './admin/admin.component';
 import { SettingsDraftService } from './settings-draft.service';
 import { AboutComponent } from '../about/about.component';
+import { CredentialsSettingsComponent } from './credentials/credentials.component';
+import { AccountSettingsComponent } from './account/account.component';
+import { UniverseSettingsComponent } from './universe/universe.component';
 
 @Component({
   selector: 'app-settings',
@@ -19,6 +22,9 @@ import { AboutComponent } from '../about/about.component';
     PreferencesSettingsComponent,
     ApplicationsSettingsComponent,
     AdminSettingsComponent,
+    CredentialsSettingsComponent,
+    AccountSettingsComponent,
+    UniverseSettingsComponent,
     AboutComponent,
   ],
   template: `
@@ -40,67 +46,52 @@ import { AboutComponent } from '../about/about.component';
 
       <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
-      <nav style="margin: 16px 0; display:flex; gap:12px;">
-        @if (auth.isAdmin() && !auth.guestModeOnly()) {
+      <nav style="margin: 16px 0; display:flex; gap:12px; flex-wrap:wrap;">
+        @if (auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
           <button (click)="selectTab('admin')">{{ 'settings.adminLink' | translate }}</button>
         }
-        <button (click)="selectTab('preferences')">
+        @if (!auth.guestModeOnly() && !isGuestUser()) {
+          <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
+        }
+        <button (click)="selectTab('interface')">
           {{ 'settings.preferencesLink' | translate }}
         </button>
         <button (click)="selectTab('applications')">
           {{ 'settings.applicationsLink' | translate }}
         </button>
-        @if (!auth.guestModeOnly()) {
-          <button (click)="selectTab('users')">{{ 'settings.usersLink' | translate }}</button>
+        @if (!isGuestUser()) {
+          <button (click)="selectTab('credentials')">
+            {{ 'settings.credentialsLink' | translate }}
+          </button>
+          <span
+            aria-hidden="true"
+            style="align-self:center; width:1px; height:24px; background:var(--color-border);"
+          ></span>
+          <button (click)="selectTab('universe')">{{ 'settings.universeLink' | translate }}</button>
+          <button (click)="selectTab('account')">{{ 'settings.accountLink' | translate }}</button>
         }
       </nav>
 
-      @if (auth.isAdmin() && previewCandidates().length) {
-        <section style="margin-bottom: 16px; padding: 12px; border: 1px solid var(--color-border);">
-          <h3 style="margin: 0 0 8px;">{{ 'settings.previewTitle' | translate }}</h3>
-          <label for="preview-user" style="display:block; margin-bottom: 6px;">
-            {{ 'settings.previewAs' | translate }}
-          </label>
-          <select
-            id="preview-user"
-            [value]="auth.session().previewUserId ?? ''"
-            (change)="onPreviewChange($event)"
-            style="padding:8px;"
-          >
-            <option value="" [selected]="!auth.session().previewUserId">
-              {{ 'settings.previewNone' | translate }}
-            </option>
-            @for (user of previewCandidates(); track user.id) {
-              <option [value]="user.id" [selected]="auth.session().previewUserId === user.id">
-                {{ user.username }}
-              </option>
-            }
-          </select>
-
-          @if (auth.isPreviewing()) {
-            <label style="display:flex; gap:8px; align-items:center; margin-top: 10px;">
-              <input
-                type="checkbox"
-                [checked]="auth.previewPersist()"
-                (change)="onPersistChange($event)"
-              />
-              {{ 'settings.previewPersist' | translate }}
-            </label>
-          }
-        </section>
-      }
-
-      @if (tab() === 'admin' && auth.isAdmin() && !auth.guestModeOnly()) {
+      @if (tab() === 'admin' && auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
         <app-admin-settings />
       }
-      @if (tab() === 'preferences') {
+      @if (tab() === 'interface') {
         <app-preferences-settings />
       }
       @if (tab() === 'applications') {
         <app-applications-settings />
       }
-      @if (tab() === 'users' && !auth.guestModeOnly()) {
+      @if (tab() === 'users' && !auth.guestModeOnly() && !isGuestUser()) {
         <app-users-settings />
+      }
+      @if (tab() === 'credentials' && !isGuestUser()) {
+        <app-credentials-settings />
+      }
+      @if (tab() === 'account' && !isGuestUser()) {
+        <app-account-settings />
+      }
+      @if (tab() === 'universe' && !isGuestUser()) {
+        <app-universe-settings />
       }
 
       <div style="margin-top: 24px; border-top:1px solid var(--color-border); padding-top:12px;">
@@ -119,10 +110,11 @@ import { AboutComponent } from '../about/about.component';
 export class SettingsComponent {
   readonly auth = inject(AuthService);
   readonly draft = inject(SettingsDraftService);
+  isGuestUser = signal(this.auth.actualUser()?.id === 'u_guest');
   aboutOpen = signal(false);
-  tab = signal<'users' | 'preferences' | 'applications' | 'admin'>(
-    this.auth.isAdmin() ? 'admin' : 'preferences',
-  );
+  tab = signal<
+    'users' | 'interface' | 'applications' | 'admin' | 'credentials' | 'account' | 'universe'
+  >(this.auth.isAdmin() && !this.isGuestUser() ? 'admin' : 'interface');
 
   constructor() {
     this.draft.start();
@@ -130,21 +122,6 @@ export class SettingsComponent {
 
   users() {
     return this.auth.users();
-  }
-
-  previewCandidates() {
-    const actual = this.auth.actualUser()?.id;
-    return this.auth.users().filter((user) => user.id !== actual);
-  }
-
-  onPreviewChange(event: Event) {
-    const value = (event.target as HTMLSelectElement).value;
-    this.auth.setPreviewUser(value || null);
-  }
-
-  onPersistChange(event: Event) {
-    const checked = (event.target as HTMLInputElement).checked;
-    this.auth.setPreviewPersist(checked);
   }
 
   apply() {
@@ -157,7 +134,10 @@ export class SettingsComponent {
     this.draft.cancel();
   }
 
-  selectTab(next: 'users' | 'preferences' | 'applications' | 'admin') {
+  selectTab(
+    next: 'users' | 'interface' | 'applications' | 'admin' | 'credentials' | 'account' | 'universe',
+  ) {
+    if (this.isGuestUser() && next !== 'interface' && next !== 'applications') return;
     this.tab.set(next);
     this.aboutOpen.set(false);
   }

@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../core/instance-settings.service';
 
@@ -78,7 +79,7 @@ const uid = (prefix: string) =>
 @Component({
   selector: 'app-data-table',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
       @if (settingsOpen()) {
@@ -106,23 +107,13 @@ const uid = (prefix: string) =>
             <button (click)="addTable()">{{ 'dataTable.addTable' | translate }}</button>
           </div>
           @if (pendingDeleteId()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2200;"
-            >
-              <div
-                style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-              >
-                <p>{{ 'dataTable.deleteConfirm' | translate }}</p>
-                <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-                  <button (click)="pendingDeleteId.set(null)">
-                    {{ 'dialogs.cancel' | translate }}
-                  </button>
-                  <button (click)="confirmDeleteTable()">
-                    {{ 'dialogs.confirm' | translate }}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <app-confirm-dialog
+              [message]="'dataTable.deleteConfirm' | translate"
+              [confirmLabel]="'dialogs.confirm' | translate"
+              [cancelLabel]="'dialogs.cancel' | translate"
+              (confirm)="confirmDeleteTable()"
+              (cancel)="pendingDeleteId.set(null)"
+            />
           }
         </div>
       } @else {

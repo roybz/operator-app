@@ -14,7 +14,7 @@
   },
   "admin": {
     "allowGuestLogin": "Allow guest login",
-    "allowServerBackground": "Allow server-stored backgrounds when available",
+    "allowServerBackground": "Allow server-stored backgrounds",
     "applyViewportAll": "Change all users viewport size",
     "defaultViewport": "Default user viewport size",
     "disableViewportSizing": "Disable viewport sizing app-wide",
@@ -26,7 +26,8 @@
     "testModeInfo": "Test mode can only be disabled after a backend is connected.",
     "title": "Admin",
     "wipeGuest": "Wipe all guest accounts",
-    "wipeGuestConfirm": "Wipe all guest account data now?"
+    "wipeGuestConfirm": "Wipe all guest account data now?",
+    "allowServerBackgroundInfo": "This feature can only be enabled after a backend is connected."
   },
   "app": {
     "title": "Operator App"
@@ -66,7 +67,11 @@
     "signIn": "ورود",
     "title": "Operator App",
     "username": "نام كاربري",
-    "github": "GitHub"
+    "github": "GitHub",
+    "lockoutWarning": "6 failed attempts will lock you out for 5 hours.",
+    "roleGuest": "guest",
+    "roleObserver": "observer",
+    "roleInvitee": "invitee"
   },
   "calculator": {
     "closeSettings": "Close settings",
@@ -264,7 +269,7 @@
     "timeFormat12": "12 ساعته",
     "timeFormat24": "24 ساعته",
     "timeZone": "منطقه زماني ترجيحي",
-    "title": "ترجيحات",
+    "title": "Interface",
     "colorTheme": "Color theme",
     "themeStandard": "Standard",
     "themeNotepad": "Notepad Yellow (Beta)",
@@ -295,7 +300,7 @@
     "importFailed": "Import failed.",
     "navigatorBeta": "Navigator (Beta) (Broken, test at your own will)",
     "notesBeta": "Notes (Beta)",
-    "preferencesLink": "ترجيحات",
+    "preferencesLink": "Interface",
     "previewAs": "پيش‌نمايش به عنوان",
     "previewNone": "بدون پيش‌نمايش",
     "previewPersist": "ذخيره تغييرات هنگام پيش‌نمايش",
@@ -308,7 +313,11 @@
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
     "wipeConfirmButton": "Wipe",
-    "enableAppLabel": "Enable?"
+    "enableAppLabel": "Enable?",
+    "credentialsLink": "Credentials",
+    "credentialsInfo": "This feature can only be enabled after a backend is connected.",
+    "accountLink": "Account",
+    "universeLink": "Universe manager"
   },
   "table": {
     "actions": "اقدامات",
@@ -370,7 +379,8 @@
       "passwordRequired": "Password is required.",
       "usernameRequired": "نام كاربري لازم است.",
       "usernameTaken": "اين نام كاربري قبلاً استفاده شده است.",
-      "guestOnly": "Guest mode only. User management is disabled."
+      "guestOnly": "Guest mode only. User management is disabled.",
+      "adminOnly": "Only admins can do that."
     },
     "password": "گذرواژه",
     "passwordUpdated": "Password updated successfully.",
@@ -383,7 +393,12 @@
     "selfTitle": "My account",
     "title": "كاربران",
     "updatePassword": "Update password",
-    "username": "نام كاربري"
+    "username": "نام كاربري",
+    "roleGuest": "Guest",
+    "roleObserver": "Observer",
+    "roleInvitee": "Invitee",
+    "wipe": "Wipe data",
+    "wipeConfirm": "Wipe all data for this user?"
   },
   "workspaces": {
     "button": "فضاهاي كاري"
@@ -434,5 +449,53 @@
       "url": "URL",
       "boolean": "Checkbox"
     }
+  },
+  "loading": "Loading",
+  "account": {
+    "title": "Account",
+    "updatePasswordTitle": "Update password?",
+    "password": "Password",
+    "updatePassword": "Update password",
+    "passwordDisabled": "Password updates are disabled for this role.",
+    "deleteTitle": "Delete account",
+    "deleteHint": "This permanently deletes your account and all its data.",
+    "deleteButton": "Delete my account",
+    "deleteConfirm": "Are you sure you want to delete your account?"
+  },
+  "universe": {
+    "title": "Universe manager",
+    "name": "Universe name",
+    "multiUser": "Multi-user mode",
+    "linkLabel": "Universe link",
+    "changeLink": "Change link",
+    "changeLinkConfirm": "Changing the link cannot be undone. Previously shared links will stop working.",
+    "allowGuests": "Allow guests",
+    "allowObservers": "Allow observers",
+    "guestPassword": "Guest password",
+    "observerPassword": "Observer password",
+    "savePassword": "Save password",
+    "inviteesTitle": "Invitees",
+    "returnToMainLogin": "Return to main app login",
+    "allowChat": "Enable universe session chat",
+    "noInvitees": "No Invitee accounts have currently been created.",
+    "guestsCount": "Guests: {{count}}",
+    "observersCount": "Observers: {{count}}",
+    "editingAs": "Editing: {{name}}",
+    "takeBackEdit": "Take back edit permissions",
+    "openChat": "Open universe session chat",
+    "collapseBar": "Collapse",
+    "expandBar": "Expand",
+    "chatTitle": "Universe session chat",
+    "chatPlaceholder": "Write a message...",
+    "chatSend": "Send",
+    "chatClear": "Clear chat",
+    "grantEdit": "Give edit permissions",
+    "updateLink": "Update link",
+    "createInviteeTitle": "Create invitee",
+    "editInviteeTitle": "Edit invitee",
+    "createInvitee": "Create invitee",
+    "saveInvitee": "Save invitee",
+    "guestsCountOwned": "Your Guests: {{count}}",
+    "observersCountOwned": "Your Observers: {{count}}"
   }
 }

@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AppPreferencesService } from '../../dependencies/app-preferences.service';
 
 type NodeType = 'folder' | 'note';
@@ -90,7 +91,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
 @Component({
   selector: 'app-notes',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <div style="display:flex; gap:12px; height:100%;">
       <aside
@@ -329,17 +330,13 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
     </ng-template>
 
     @if (bulkDeleteOpen()) {
-      <div
-        style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
-      >
-        <div style="background:var(--color-surface); padding:20px; border-radius:8px; width:340px;">
-          <p>{{ 'notes.confirmDelete' | translate }}</p>
-          <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-            <button (click)="bulkDeleteOpen.set(false)">{{ 'dialogs.cancel' | translate }}</button>
-            <button (click)="deleteSelected()">{{ 'dialogs.confirm' | translate }}</button>
-          </div>
-        </div>
-      </div>
+      <app-confirm-dialog
+        [message]="'notes.confirmDelete' | translate"
+        [confirmLabel]="'dialogs.confirm' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirm)="deleteSelected()"
+        (cancel)="bulkDeleteOpen.set(false)"
+      />
     }
   `,
 })

@@ -2,12 +2,42 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import packageJson from '../../../package.json';
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
 export interface UserRecord {
   id: string;
   username: string;
   password?: string;
+  role: UserRole;
+}
+
+export interface InviteeRecord {
+  id: string;
+  username: string;
+  password?: string;
+  role: 'invitee';
+  ownerId: string;
+}
+
+export interface UniversePresenceEntry {
+  id: string;
+  username: string;
+  role: UserRole;
+  ownerId: string;
+  lastSeen: number;
+}
+
+export interface UniverseChatMessage {
+  id: string;
+  author: string;
+  role: UserRole;
+  content: string;
+  createdAt: number;
+}
+
+export interface UniverseEditHolder {
+  id: string;
+  username: string;
   role: UserRole;
 }
 
@@ -39,6 +69,14 @@ export interface UserPreferences {
   disabledApps: string[];
   showGrid: boolean;
   gridSize: number;
+  universeId: string;
+  universeName: string;
+  multiUserEnabled: boolean;
+  allowUniverseGuests: boolean;
+  allowUniverseObservers: boolean;
+  allowUniverseChat: boolean;
+  universeGuestPassword: string;
+  universeObserverPassword: string;
 }
 
 export interface OrgSettings {
@@ -57,6 +95,10 @@ interface SessionState {
   userId: string | null;
   previewUserId: string | null;
   previewPersist: boolean;
+  sessionRole?: UserRole | null;
+  sessionUsername?: string | null;
+  universeOwnerId?: string | null;
+  universeId?: string | null;
 }
 
 type StoredPreferences = Record<string, UserPreferences>;
@@ -67,6 +109,11 @@ const SESSION_KEY = 'op_session';
 const PREFS_KEY = 'op_prefs';
 const PREVIEW_PREFS_KEY = 'op_preview_prefs';
 const ORG_SETTINGS_KEY = 'op_org_settings';
+const INVITEES_KEY = 'op_invitees';
+const UNIVERSE_PRESENCE_KEY = 'op_universe_presence';
+const UNIVERSE_CHAT_KEY = 'op_universe_chat';
+const UNIVERSE_EDIT_KEY = 'op_universe_edit_holder';
+const UNIVERSE_GUEST_COUNTER_KEY = 'op_universe_guest_counter';
 const GUEST_USER_ID = 'u_guest';
 const GUEST_USERNAME = 'guest';
 const DIALOG_STATE_KEY = 'op_dialog_state_v1';
@@ -110,20 +157,30 @@ const SUPPORTED_LANGUAGES = [
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly usersSignal = signal<UserRecord[]>([]);
+  private readonly inviteesSignal = signal<Record<string, InviteeRecord[]>>({});
   private readonly sessionSignal = signal<SessionState>({
     userId: null,
     previewUserId: null,
     previewPersist: false,
+    sessionRole: null,
+    sessionUsername: null,
+    universeOwnerId: null,
+    universeId: null,
   });
   private readonly prefsSignal = signal<StoredPreferences>({});
   private readonly previewPrefsSignal = signal<StoredPreviewPreferences>({});
   private readonly orgSettingsSignal = signal<OrgSettings>(this.defaultOrgSettings());
   private readonly readySignal = signal(false);
   private loginSecurity: Record<string, { count: number; lockedUntil: number }> = {};
+  private readonly universeContextSignal = signal<{ ownerId: string; universeId: string } | null>(
+    null,
+  );
 
   readonly users = this.usersSignal.asReadonly();
+  readonly invitees = this.inviteesSignal.asReadonly();
   readonly session = this.sessionSignal.asReadonly();
   readonly ready = this.readySignal.asReadonly();
+  readonly universeContext = this.universeContextSignal.asReadonly();
 
   readonly isLoggedIn = computed(() => Boolean(this.sessionSignal().userId));
   readonly currentUser = computed(() => {
@@ -132,7 +189,18 @@ export class AuthService {
   });
   readonly actualUser = computed(() => {
     const id = this.sessionSignal().userId;
-    return this.usersSignal().find((user) => user.id === id) ?? null;
+    const existing = this.usersSignal().find((user) => user.id === id) ?? null;
+    if (existing) return existing;
+    const session = this.sessionSignal();
+    if (session.userId && session.sessionRole && session.sessionUsername) {
+      return {
+        id: session.userId,
+        username: session.sessionUsername,
+        password: '',
+        role: session.sessionRole,
+      } as UserRecord;
+    }
+    return null;
   });
   readonly isAdmin = computed(() => this.actualUser()?.role === 'admin');
   readonly isPreviewing = computed(() => Boolean(this.sessionSignal().previewUserId));
@@ -144,6 +212,7 @@ export class AuthService {
 
   constructor() {
     this.loadFromStorage();
+    this.updateUniverseContextFromLocation();
     this.readySignal.set(true);
   }
 
@@ -181,7 +250,15 @@ export class AuthService {
     }
 
     this.clearLoginFailures(trimmed);
-    this.sessionSignal.set({ userId: user.id, previewUserId: null, previewPersist: false });
+    this.sessionSignal.set({
+      userId: user.id,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: user.role,
+      sessionUsername: user.username,
+      universeOwnerId: null,
+      universeId: null,
+    });
     this.persistSession();
     this.applyLanguageFromPreferences();
     return { ok: true };
@@ -190,7 +267,15 @@ export class AuthService {
   loginAsGuest() {
     if (!this.orgSettingsSignal().allowGuestLogin && !this.guestModeOnly()) return;
     this.ensureGuestUser();
-    this.sessionSignal.set({ userId: GUEST_USER_ID, previewUserId: null, previewPersist: false });
+    this.sessionSignal.set({
+      userId: GUEST_USER_ID,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: 'guest',
+      sessionUsername: GUEST_USERNAME,
+      universeOwnerId: null,
+      universeId: null,
+    });
     this.persistSession();
     this.applyLanguageFromPreferences();
   }
@@ -214,7 +299,20 @@ export class AuthService {
   }
 
   logout() {
-    this.sessionSignal.set({ userId: null, previewUserId: null, previewPersist: false });
+    const session = this.sessionSignal();
+    const universeId = session.universeId ?? null;
+    if (universeId && session.userId) {
+      this.removeUniversePresence(universeId, session.userId);
+    }
+    this.sessionSignal.set({
+      userId: null,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: null,
+      sessionUsername: null,
+      universeOwnerId: null,
+      universeId: null,
+    });
     this.persistSession();
   }
 
@@ -227,19 +325,25 @@ export class AuthService {
     }
     const username = input.username.trim();
     if (!username) return { ok: false, message: 'users.error.usernameRequired' };
+    const normalizedRole = input.role;
     if (!input.password || !input.password.trim()) {
-      return { ok: false, message: 'users.error.passwordRequired' };
+      if (normalizedRole !== 'guest' && normalizedRole !== 'observer') {
+        return { ok: false, message: 'users.error.passwordRequired' };
+      }
     }
     if (this.usersSignal().some((u) => u.username === username)) {
       return { ok: false, message: 'users.error.usernameTaken' };
     }
 
-    const password = await this.hashPassword(input.password);
+    const password =
+      normalizedRole === 'guest' || normalizedRole === 'observer'
+        ? ''
+        : await this.hashPassword(input.password);
     const user: UserRecord = {
       id: this.uid('u'),
       username,
       password,
-      role: input.role,
+      role: normalizedRole,
     };
 
     const next = [...this.usersSignal(), user];
@@ -268,14 +372,22 @@ export class AuthService {
     }
 
     let nextPassword: string | undefined;
-    if (updates.password && updates.password.trim()) {
+    const normalizedRole = updates.role;
+    if (normalizedRole === 'guest' || normalizedRole === 'observer') {
+      nextPassword = '';
+    } else if (updates.password && updates.password.trim()) {
       nextPassword = await this.hashPassword(updates.password);
     }
 
     const next = this.usersSignal().map((user) => {
       if (user.id !== userId) return user;
-      const password = user.id === GUEST_USER_ID ? '' : (nextPassword ?? user.password ?? '');
-      return { ...user, username, password, role: updates.role };
+      const password =
+        normalizedRole === 'guest' || normalizedRole === 'observer'
+          ? ''
+          : user.id === GUEST_USER_ID
+            ? ''
+            : (nextPassword ?? user.password ?? '');
+      return { ...user, username, password, role: normalizedRole };
     });
     this.usersSignal.set(next);
     this.persistUsers();
@@ -315,6 +427,28 @@ export class AuthService {
     if (session.previewUserId === userId) {
       this.setPreviewUser(null);
     }
+
+    return { ok: true };
+  }
+
+  wipeUserData(userId: string): { ok: boolean; message?: string } {
+    if (!this.isAdmin()) return { ok: false, message: 'users.error.adminOnly' };
+    this.clearMockTodosForUser(userId);
+    this.clearAppStateForUser(userId);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(`${DIALOG_STATE_KEY}:${userId}`);
+      window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}`);
+    }
+
+    const remainingPrefs = { ...this.prefsSignal() };
+    delete remainingPrefs[userId];
+    this.prefsSignal.set(remainingPrefs);
+    this.persistPrefs();
+
+    const remainingPreviewPrefs = { ...this.previewPrefsSignal() };
+    delete remainingPreviewPrefs[userId];
+    this.previewPrefsSignal.set(remainingPreviewPrefs);
+    this.persistPreviewPrefs();
 
     return { ok: true };
   }
@@ -380,7 +514,11 @@ export class AuthService {
 
   private effectiveUserId(): string | null {
     if (this.guestModeOnly()) return GUEST_USER_ID;
-    return this.sessionSignal().previewUserId ?? this.sessionSignal().userId;
+    return (
+      this.sessionSignal().previewUserId ??
+      this.sessionSignal().universeOwnerId ??
+      this.sessionSignal().userId
+    );
   }
 
   private loadFromStorage() {
@@ -392,14 +530,21 @@ export class AuthService {
     if (!hasGuest) {
       users.push(this.guestUser());
     }
+    const hasAdmin = users.some((user) => user.username === 'admin');
+    if (!hasAdmin) {
+      users.push(this.defaultAdmin());
+    }
     const normalized = users.map((user) => {
       if (user.username === 'admin') {
         return { ...user, password: DEFAULT_ADMIN_HASH };
       }
+      if (user.id === GUEST_USER_ID) {
+        return { ...user, role: 'user' };
+      }
       return user;
     });
     const guestOnly = this.guestModeOnly();
-    const normalizedUsers = guestOnly ? [this.guestUser()] : normalized;
+    const normalizedUsers = (guestOnly ? [this.guestUser()] : normalized) as UserRecord[];
     this.usersSignal.set(normalizedUsers);
 
     const orgSettings = this.safeJson<OrgSettings>(ORG_SETTINGS_KEY, this.defaultOrgSettings());
@@ -421,8 +566,18 @@ export class AuthService {
       userId: null,
       previewUserId: null,
       previewPersist: false,
+      sessionRole: null,
+      sessionUsername: null,
+      universeOwnerId: null,
+      universeId: null,
     });
-    const validUserId = normalizedUsers.find((user) => user.id === session.userId)?.id ?? null;
+    const isUniverseSession =
+      session.sessionRole === 'invitee' ||
+      session.sessionRole === 'guest' ||
+      session.sessionRole === 'observer';
+    const validUserId =
+      normalizedUsers.find((user) => user.id === session.userId)?.id ??
+      (isUniverseSession ? session.userId : null);
     const validPreviewId =
       session.previewUserId && normalizedUsers.some((user) => user.id === session.previewUserId)
         ? session.previewUserId
@@ -433,10 +588,17 @@ export class AuthService {
         userId: validUserId,
         previewUserId: validPreviewId,
         previewPersist: session.previewPersist && Boolean(validPreviewId),
+        sessionRole: session.sessionRole ?? null,
+        sessionUsername: session.sessionUsername ?? null,
+        universeOwnerId: session.universeOwnerId ?? null,
+        universeId: session.universeId ?? null,
       });
     }
 
-    const actualRole = normalizedUsers.find((user) => user.id === validUserId)?.role ?? 'user';
+    const actualRole =
+      normalizedUsers.find((user) => user.id === validUserId)?.role ??
+      session.sessionRole ??
+      'user';
     if (actualRole !== 'admin') {
       this.sessionSignal.set({ userId: validUserId, previewUserId: null, previewPersist: false });
     }
@@ -455,6 +617,50 @@ export class AuthService {
     if (!prefs[GUEST_USER_ID]) {
       prefs[GUEST_USER_ID] = this.defaultPreferences();
     }
+    let prefsUpdated = false;
+    Object.keys(prefs).forEach((userId) => {
+      if (!prefs[userId]) {
+        prefs[userId] = this.defaultPreferences();
+        prefsUpdated = true;
+        return;
+      }
+      if (!prefs[userId].universeId) {
+        prefs[userId] = {
+          ...this.defaultPreferences(),
+          ...prefs[userId],
+          universeId: this.createUniverseId(),
+        };
+        prefsUpdated = true;
+      }
+      if (!prefs[userId].universeName) {
+        prefs[userId] = { ...prefs[userId], universeName: 'Universe' };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].multiUserEnabled === undefined) {
+        prefs[userId] = { ...prefs[userId], multiUserEnabled: true };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].allowUniverseGuests === undefined) {
+        prefs[userId] = { ...prefs[userId], allowUniverseGuests: false };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].allowUniverseObservers === undefined) {
+        prefs[userId] = { ...prefs[userId], allowUniverseObservers: false };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].allowUniverseChat === undefined) {
+        prefs[userId] = { ...prefs[userId], allowUniverseChat: true };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].universeGuestPassword === undefined) {
+        prefs[userId] = { ...prefs[userId], universeGuestPassword: '' };
+        prefsUpdated = true;
+      }
+      if (prefs[userId].universeObserverPassword === undefined) {
+        prefs[userId] = { ...prefs[userId], universeObserverPassword: '' };
+        prefsUpdated = true;
+      }
+    });
     if (guestOnly) {
       this.prefsSignal.set({ [GUEST_USER_ID]: prefs[GUEST_USER_ID] });
     } else {
@@ -464,9 +670,13 @@ export class AuthService {
     const previewPrefs = this.safeJson<StoredPreviewPreferences>(PREVIEW_PREFS_KEY, {});
     this.previewPrefsSignal.set(guestOnly ? {} : previewPrefs);
 
+    const invitees = this.safeJson<Record<string, InviteeRecord[]>>(INVITEES_KEY, {});
+    this.inviteesSignal.set(invitees);
+
     this.persistUsers();
     this.persistSession();
-    this.persistPrefs();
+    if (prefsUpdated) this.persistPrefs();
+    else this.persistPrefs();
     this.persistOrgSettings();
     this.applyLanguageFromPreferences();
 
@@ -478,6 +688,10 @@ export class AuthService {
 
   private persistUsers() {
     this.persist(USERS_KEY, this.usersSignal());
+  }
+
+  private persistInvitees() {
+    this.persist(INVITEES_KEY, this.inviteesSignal());
   }
 
   private persistSession() {
@@ -564,6 +778,14 @@ export class AuthService {
       disabledApps: ['navigator'],
       showGrid: true,
       gridSize: 50,
+      universeId: this.createUniverseId(),
+      universeName: 'Universe',
+      multiUserEnabled: true,
+      allowUniverseGuests: false,
+      allowUniverseObservers: false,
+      allowUniverseChat: true,
+      universeGuestPassword: '',
+      universeObserverPassword: '',
     };
   }
 
@@ -615,7 +837,11 @@ export class AuthService {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
-  private async hashPassword(raw: string) {
+  private createUniverseId() {
+    return Math.random().toString(36).slice(2, 10);
+  }
+
+  async hashPassword(raw: string) {
     const encoder = new TextEncoder();
     const data = encoder.encode(raw);
     const digest = await crypto.subtle.digest('SHA-256', data);
@@ -690,6 +916,188 @@ export class AuthService {
       .forEach((key) => window.localStorage.removeItem(key));
   }
 
+  updateUniverseContextFromLocation() {
+    if (typeof window === 'undefined') return;
+    const raw = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    if (!raw || raw === 'login') {
+      this.universeContextSignal.set(null);
+      return;
+    }
+    const universeId = raw.split('/')[0];
+    const ownerId = this.findOwnerByUniverseId(universeId);
+    if (!ownerId) {
+      this.universeContextSignal.set(null);
+      return;
+    }
+    this.universeContextSignal.set({ ownerId, universeId });
+  }
+
+  private findOwnerByUniverseId(universeId: string) {
+    const entries = Object.entries(this.prefsSignal());
+    for (const [userId, prefs] of entries) {
+      if (prefs?.universeId === universeId) return userId;
+    }
+    return null;
+  }
+
+  getUniversePreferences(ownerId: string) {
+    return this.getPreferencesFor(ownerId);
+  }
+
+  setUniverseId(ownerId: string, universeId: string) {
+    const prefs = this.prefsSignal()[ownerId];
+    if (!prefs) return;
+    const next = { ...this.prefsSignal(), [ownerId]: { ...prefs, universeId } };
+    this.prefsSignal.set(next);
+    this.persistPrefs();
+  }
+
+  getInviteesForOwner(ownerId: string) {
+    return this.inviteesSignal()[ownerId] ?? [];
+  }
+
+  async createInvitee(ownerId: string, username: string, password: string) {
+    const trimmed = username.trim();
+    if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
+    if (!password || !password.trim()) {
+      return { ok: false, message: 'users.error.passwordRequired' };
+    }
+    const existing = this.getInviteesForOwner(ownerId).some((u) => u.username === trimmed);
+    if (existing) return { ok: false, message: 'users.error.usernameTaken' };
+    const hashed = await this.hashPassword(password);
+    const invitee: InviteeRecord = {
+      id: this.uid('inv'),
+      ownerId,
+      username: trimmed,
+      password: hashed,
+      role: 'invitee',
+    };
+    const next = {
+      ...this.inviteesSignal(),
+      [ownerId]: [...this.getInviteesForOwner(ownerId), invitee],
+    };
+    this.inviteesSignal.set(next);
+    this.persistInvitees();
+    return { ok: true };
+  }
+
+  async updateInvitee(
+    ownerId: string,
+    inviteeId: string,
+    updates: { username: string; password?: string },
+  ) {
+    const trimmed = updates.username.trim();
+    if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
+    const list = this.getInviteesForOwner(ownerId);
+    if (list.some((u) => u.username === trimmed && u.id !== inviteeId)) {
+      return { ok: false, message: 'users.error.usernameTaken' };
+    }
+    let nextPassword: string | undefined;
+    if (updates.password && updates.password.trim()) {
+      nextPassword = await this.hashPassword(updates.password);
+    }
+    const nextList = list.map((u) =>
+      u.id === inviteeId ? { ...u, username: trimmed, password: nextPassword ?? u.password } : u,
+    );
+    this.inviteesSignal.set({ ...this.inviteesSignal(), [ownerId]: nextList });
+    this.persistInvitees();
+    return { ok: true };
+  }
+
+  deleteInvitee(ownerId: string, inviteeId: string) {
+    const list = this.getInviteesForOwner(ownerId);
+    const nextList = list.filter((u) => u.id !== inviteeId);
+    this.inviteesSignal.set({ ...this.inviteesSignal(), [ownerId]: nextList });
+    this.persistInvitees();
+  }
+
+  async loginInvitee(ownerId: string, username: string, password: string) {
+    const trimmed = username.trim();
+    if (this.isLoginLocked(trimmed)) {
+      return { ok: false, message: 'auth.error.locked' };
+    }
+    const invitee = this.getInviteesForOwner(ownerId).find((u) => u.username === trimmed);
+    if (!invitee) {
+      this.recordLoginFailure(trimmed);
+      return { ok: false, message: 'auth.error.notFound' };
+    }
+    const expected = invitee.password ?? '';
+    if (expected) {
+      const hashed = await this.hashPassword(password);
+      if (expected !== hashed) {
+        this.recordLoginFailure(trimmed);
+        return { ok: false, message: 'auth.error.invalid' };
+      }
+    }
+    this.clearLoginFailures(trimmed);
+    const ownerPrefs = this.getPreferencesFor(ownerId);
+    this.sessionSignal.set({
+      userId: invitee.id,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: 'invitee',
+      sessionUsername: invitee.username,
+      universeOwnerId: ownerId,
+      universeId: ownerPrefs.universeId,
+    });
+    this.persistSession();
+    this.applyLanguageFromPreferences();
+    return { ok: true };
+  }
+
+  async loginUniverseGuest(ownerId: string, password: string) {
+    const prefs = this.getPreferencesFor(ownerId);
+    if (!prefs.allowUniverseGuests) return { ok: false, message: 'auth.error.guestOnly' };
+    if (prefs.universeGuestPassword) {
+      const hashed = await this.hashPassword(password);
+      if (hashed !== prefs.universeGuestPassword) {
+        this.recordLoginFailure('universe_guest');
+        return { ok: false, message: 'auth.error.invalid' };
+      }
+    }
+    this.clearLoginFailures('universe_guest');
+    const guestNumber = this.nextUniverseGuestNumber(prefs.universeId);
+    const guestId = this.uid('ug');
+    this.sessionSignal.set({
+      userId: guestId,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: 'guest',
+      sessionUsername: `Guest (${guestNumber})`,
+      universeOwnerId: ownerId,
+      universeId: prefs.universeId,
+    });
+    this.persistSession();
+    this.applyLanguageFromPreferences();
+    return { ok: true };
+  }
+
+  async loginUniverseObserver(ownerId: string, password: string) {
+    const prefs = this.getPreferencesFor(ownerId);
+    if (!prefs.allowUniverseObservers) return { ok: false, message: 'auth.error.guestOnly' };
+    if (prefs.universeObserverPassword) {
+      const hashed = await this.hashPassword(password);
+      if (hashed !== prefs.universeObserverPassword) {
+        this.recordLoginFailure('universe_observer');
+        return { ok: false, message: 'auth.error.invalid' };
+      }
+    }
+    this.clearLoginFailures('universe_observer');
+    const observerId = this.uid('uo');
+    this.sessionSignal.set({
+      userId: observerId,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: 'observer',
+      sessionUsername: 'Observer',
+      universeOwnerId: ownerId,
+      universeId: prefs.universeId,
+    });
+    this.persistSession();
+    this.applyLanguageFromPreferences();
+    return { ok: true };
+  }
+
   saveOrgSettings(next: OrgSettings) {
     if (!this.isAdmin()) return;
     this.orgSettingsSignal.set(next);
@@ -727,5 +1135,114 @@ export class AuthService {
   hasSeenAccessibilityPrompt(userId: string) {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(`op_accessibility_prompted_${userId}`) === 'true';
+  }
+
+  getUniversePresence(universeId: string) {
+    return this.cleanupUniversePresence(universeId);
+  }
+
+  touchUniversePresence(universeId: string, entry: UniversePresenceEntry) {
+    const list = this.cleanupUniversePresence(universeId);
+    const now = Date.now();
+    const next = list.filter((item) => item.id !== entry.id);
+    next.push({ ...entry, lastSeen: now });
+    this.persist(this.universePresenceKey(universeId), next);
+    return next;
+  }
+
+  removeUniversePresence(universeId: string, userId: string) {
+    const list = this.cleanupUniversePresence(universeId).filter((item) => item.id !== userId);
+    if (list.length === 0) {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(this.universePresenceKey(universeId));
+      }
+    } else {
+      this.persist(this.universePresenceKey(universeId), list);
+    }
+    this.clearUniverseSessionIfNeeded(universeId, list);
+  }
+
+  getUniverseChat(universeId: string) {
+    return this.safeJson<UniverseChatMessage[]>(this.universeChatKey(universeId), []);
+  }
+
+  appendUniverseChat(universeId: string, message: UniverseChatMessage) {
+    const list = this.getUniverseChat(universeId);
+    const next = [...list, message].slice(-200);
+    this.persist(this.universeChatKey(universeId), next);
+    return next;
+  }
+
+  clearUniverseChat(universeId: string) {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem(this.universeChatKey(universeId));
+  }
+
+  getUniverseEditHolder(universeId: string) {
+    return this.safeJson<UniverseEditHolder | null>(this.universeEditKey(universeId), null);
+  }
+
+  setUniverseEditHolder(universeId: string, holder: UniverseEditHolder | null) {
+    if (typeof window === 'undefined') return;
+    if (!holder) {
+      window.localStorage.removeItem(this.universeEditKey(universeId));
+      return;
+    }
+    this.persist(this.universeEditKey(universeId), holder);
+  }
+
+  nextUniverseGuestNumber(universeId: string) {
+    const presence = this.cleanupUniversePresence(universeId);
+    const hasGuests = presence.some((entry) => entry.role === 'guest');
+    if (!hasGuests && typeof window !== 'undefined') {
+      window.localStorage.removeItem(this.universeGuestCounterKey(universeId));
+    }
+    const raw = this.safeJson<number>(this.universeGuestCounterKey(universeId), 0);
+    const next = raw + 1;
+    this.persist(this.universeGuestCounterKey(universeId), next);
+    return next;
+  }
+
+  private clearUniverseSessionIfNeeded(universeId: string, presence?: UniversePresenceEntry[]) {
+    const list = presence ?? this.cleanupUniversePresence(universeId);
+    const active = list.filter((entry) => entry.role !== 'observer');
+    if (active.length === 0) {
+      this.clearUniverseChat(universeId);
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(this.universeGuestCounterKey(universeId));
+        window.localStorage.removeItem(this.universeEditKey(universeId));
+      }
+    }
+  }
+
+  private cleanupUniversePresence(universeId: string) {
+    const list = this.safeJson<UniversePresenceEntry[]>(this.universePresenceKey(universeId), []);
+    const now = Date.now();
+    const next = list.filter((entry) => now - entry.lastSeen < 15_000);
+    if (next.length !== list.length) {
+      if (next.length === 0 && typeof window !== 'undefined') {
+        window.localStorage.removeItem(this.universePresenceKey(universeId));
+      } else {
+        this.persist(this.universePresenceKey(universeId), next);
+      }
+    }
+    this.clearUniverseSessionIfNeeded(universeId, next);
+    return next;
+  }
+
+  private universePresenceKey(universeId: string) {
+    return `${UNIVERSE_PRESENCE_KEY}:${universeId}`;
+  }
+
+  private universeChatKey(universeId: string) {
+    return `${UNIVERSE_CHAT_KEY}:${universeId}`;
+  }
+
+  private universeEditKey(universeId: string) {
+    return `${UNIVERSE_EDIT_KEY}:${universeId}`;
+  }
+
+  private universeGuestCounterKey(universeId: string) {
+    return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
   }
 }
