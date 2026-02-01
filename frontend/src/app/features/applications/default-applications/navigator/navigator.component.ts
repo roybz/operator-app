@@ -62,9 +62,32 @@ const formatTitle = (url: string) => {
   selector: 'app-navigator',
   standalone: true,
   imports: [CommonModule],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .navigator-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .navigator-shell {
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) .navigator-toolbar {
+        flex-wrap: wrap;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:8px; height:100%;">
-      <div style="display:flex; gap:8px; align-items:center;">
+    <div class="navigator-shell">
+      <div class="navigator-toolbar" style="display:flex; gap:8px; align-items:center;">
         <button (click)="goBack()" [disabled]="navigationDisabled">←</button>
         <button (click)="goForward()" [disabled]="navigationDisabled">→</button>
         <button (click)="refresh()" [disabled]="navigationDisabled">⟳</button>

@@ -23,6 +23,7 @@ import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confir
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <main
+      class="todo-shell"
       style="max-width: 760px; margin: 24px auto; display:flex; flex-direction:column; gap:12px;"
     >
       @if (settingsOpen()) {
@@ -133,7 +134,7 @@ import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confir
           </label>
         }
 
-        <section style="display:flex; gap:8px; margin: 4px 0 0;">
+        <section class="todo-entry" style="display:flex; gap:8px; margin: 4px 0 0;">
           <input
             #txt
             [placeholder]="'todo.placeholder' | translate"
@@ -369,6 +370,30 @@ import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confir
   `,
   styles: [
     `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .todo-shell {
+        max-width: none;
+        margin: 12px;
+      }
+
+      :host-context(.phone-mode) table {
+        display: block;
+        overflow-x: auto;
+      }
+
+      :host-context(.phone-mode) .todo-entry {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      :host-context(.phone-mode) .todo-entry button {
+        width: 100%;
+      }
+
       .todo__clear {
         opacity: 0.6;
         transition: opacity 120ms ease;

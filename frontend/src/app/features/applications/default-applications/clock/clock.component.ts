@@ -64,8 +64,32 @@ const uid = (prefix: string) =>
   selector: 'app-clock',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .clock-shell {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .clock-shell {
+        padding: 12px;
+        gap: 12px;
+      }
+
+      :host-context(.phone-mode) .clock-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    `,
+  ],
   template: `
-    <div style="height:100%; display:flex; flex-direction:column;">
+    <div class="clock-shell" style="height:100%; display:flex; flex-direction:column;">
       @if (settingsOpen()) {
         <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -86,7 +110,7 @@ const uid = (prefix: string) =>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="font-weight:600;">{{ 'clock.clocksTitle' | translate }}</div>
             @for (clock of state().clocks; track clock.id) {
-              <div style="display:flex; gap:8px; align-items:center;">
+              <div class="clock-row" style="display:flex; gap:8px; align-items:center;">
                 <select
                   [value]="clock.timeZone"
                   (change)="updateClockZone(clock.id, $event)"

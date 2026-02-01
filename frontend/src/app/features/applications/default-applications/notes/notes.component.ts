@@ -34,6 +34,7 @@ interface NotesState {
   view: NotesView;
   listCollapsed: boolean;
   sidebarOpen: boolean;
+  phoneSidebarInit?: boolean;
 }
 
 const stateStore = new Map<string, NotesState>();
@@ -95,8 +96,73 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
   selector: 'app-notes',
   standalone: true,
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .notes-shell {
+        display: flex;
+        gap: 12px;
+        height: 100%;
+        position: relative;
+      }
+
+      :host-context(.phone-mode) .notes-shell {
+        flex-direction: column;
+        gap: 10px;
+        padding: 8px;
+      }
+
+      :host-context(.phone-mode) .notes-shell > aside {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-height: none;
+        background: var(--color-surface);
+        z-index: 2;
+        border-right: none;
+        padding-right: 0;
+      }
+
+      :host-context(.phone-mode) .notes-shell > aside[data-collapsed='true'] {
+        width: 0 !important;
+        min-width: 0 !important;
+        padding: 0;
+        border: none;
+        pointer-events: none;
+        display: none;
+      }
+
+      :host-context(.phone-mode) .notes-shell > aside[data-collapsed='false'] {
+        box-shadow: 6px 0 16px rgba(0, 0, 0, 0.2);
+      }
+
+      .notes-sidebar-toggle {
+        position: absolute;
+        left: -5px;
+        top: 20px;
+        z-index: 3;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        border-radius: 8px;
+        opacity: 0.7;
+        font-size: 30px;
+        width: 36px;
+        height: 36px;
+      }
+
+      :host-context(.phone-mode) .notes-editor-actions button {
+        font-size: 11px;
+        padding: 4px 8px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; gap:12px; height:100%; position:relative;">
+    <div class="notes-shell">
       @if (settingsOpen()) {
         <div
           style="position:absolute; inset:0; background:var(--color-surface); padding:16px; z-index:2; display:flex; flex-direction:column; gap:12px;"
@@ -124,10 +190,33 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
           }
         </div>
       }
+      @if (isPhoneMode()) {
+        <button class="notes-sidebar-toggle" (click)="toggleSidebar()">
+          {{ state().sidebarOpen ? '⟨' : '⟩' }}
+        </button>
+      }
       <aside
-        [style.width]="state().sidebarOpen ? '240px' : '40px'"
-        [style.minWidth]="state().sidebarOpen ? '200px' : '40px'"
-        style="border-right:1px solid var(--color-border); padding-right:8px; overflow:auto; transition:width 160ms ease; display:flex; flex-direction:column;"
+        [attr.data-collapsed]="state().sidebarOpen ? 'false' : 'true'"
+        [style.width]="
+          isPhoneMode()
+            ? state().sidebarOpen
+              ? '100%'
+              : '0'
+            : state().sidebarOpen
+              ? '240px'
+              : '40px'
+        "
+        [style.minWidth]="
+          isPhoneMode()
+            ? state().sidebarOpen
+              ? '100%'
+              : '0'
+            : state().sidebarOpen
+              ? '200px'
+              : '40px'
+        "
+        [style.display]="isPhoneMode() && !state().sidebarOpen ? 'none' : 'flex'"
+        style="border-right:1px solid var(--color-border); padding-right:8px; padding-left:13px; overflow:auto; transition:width 160ms ease; display:flex; flex-direction:column;"
       >
         @if (state().sidebarOpen) {
           <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
@@ -165,10 +254,14 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
                 {{ 'notes.archive' | translate }}
               </button>
             </div>
-            <button (click)="toggleSidebar()">⟨</button>
+            @if (!isPhoneMode()) {
+              <button (click)="toggleSidebar()">⟨</button>
+            }
           </div>
         } @else {
-          <button (click)="toggleSidebar()">⟩</button>
+          @if (!isPhoneMode()) {
+            <button (click)="toggleSidebar()">⟩</button>
+          }
         }
 
         @if (state().sidebarOpen) {
@@ -230,7 +323,10 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         }
       </aside>
 
-      <section style="flex:1; display:flex; flex-direction:column; gap:12px;">
+      <section
+        style="flex:1; display:flex; flex-direction:column; gap:12px;"
+        [style.display]="isPhoneMode() && state().sidebarOpen ? 'none' : 'flex'"
+      >
         @if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             @if (editingNodeId() === selectedNode()?.id) {
@@ -251,37 +347,40 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               </h3>
             }
           </div>
-          <div style="display:flex; gap:8px;">
-            <button (click)="toggleEditor()">
+          <div
+            class="notes-editor-actions"
+            style="display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:8px;"
+          >
+            <button style="width:100%;" (click)="toggleEditor()">
               {{
                 selectedNode()?.editorVisible
                   ? ('notes.collapseEditor' | translate)
                   : ('notes.expandEditor' | translate)
               }}
             </button>
-            <button (click)="toggleEditorMode()">
+            <button style="width:100%;" (click)="toggleEditorMode()">
               {{
                 selectedNode()?.editorMode === 'markdown'
                   ? ('notes.switchToRich' | translate)
                   : ('notes.switchToMarkdown' | translate)
               }}
             </button>
-            <button (click)="toggleVisualMode()">
+            <button style="width:100%;" (click)="toggleVisualMode()">
               {{
                 selectedNode()?.editorMode === 'visual'
                   ? ('notes.switchToEditing' | translate)
                   : ('notes.switchToVisual' | translate)
               }}
             </button>
-            <button (click)="toggleLock()">
+            <button style="width:100%;" (click)="toggleLock()">
               {{
                 selectedNode()?.locked ? ('notes.unlock' | translate) : ('notes.lock' | translate)
               }}
             </button>
-            <button (click)="duplicateNode(selectedNode()?.id)">
+            <button style="width:100%;" (click)="duplicateNode(selectedNode()?.id)">
               {{ 'notes.duplicate' | translate }}
             </button>
-            <button (click)="deleteNode(selectedNode()?.id)">
+            <button style="width:100%;" (click)="deleteNode(selectedNode()?.id)">
               {{ 'notes.delete' | translate }}
             </button>
           </div>
@@ -443,6 +542,7 @@ export class NotesComponent implements OnInit {
   exportLimitOpen = signal(false);
   richFocused = signal(false);
   richSnapshot = signal('');
+  isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
@@ -454,8 +554,15 @@ export class NotesComponent implements OnInit {
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as NotesState;
-          this.state.set(parsed);
-          stateStore.set(this.instanceId, parsed);
+          const next = {
+            ...parsed,
+            sidebarOpen:
+              this.isPhoneMode() && !parsed.phoneSidebarInit ? false : parsed.sidebarOpen,
+            phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+          };
+          this.state.set(next);
+          stateStore.set(this.instanceId, next);
+          this.persistState();
           this.syncRichSnapshot();
           return;
         } catch {
@@ -465,7 +572,16 @@ export class NotesComponent implements OnInit {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set(this.cloneState(stored));
+      const nextStored = this.cloneState(stored);
+      const next = {
+        ...nextStored,
+        sidebarOpen:
+          this.isPhoneMode() && !nextStored.phoneSidebarInit ? false : nextStored.sidebarOpen,
+        phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
+      };
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      this.persistState();
       this.syncRichSnapshot();
       return;
     }
@@ -474,7 +590,13 @@ export class NotesComponent implements OnInit {
     const firstNote = createNote('New note', firstFolder.id);
     firstFolder.children = [firstNote];
     root.children = [firstFolder];
-    const next = { ...this.state(), root, selectedId: firstNote.id };
+    const next: NotesState = {
+      ...this.state(),
+      root,
+      selectedId: firstNote.id,
+      sidebarOpen: this.isPhoneMode() ? false : true,
+      phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+    };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
     this.persistState();

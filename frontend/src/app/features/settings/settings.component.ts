@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, Input, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
@@ -29,22 +29,36 @@ import { MultiUserSettingsComponent } from './multi-user/multi-user.component';
     MultiUserSettingsComponent,
     AboutComponent,
   ],
+  styles: [
+    `
+      :host {
+        display: block;
+        margin-top: 20px;
+      }
+
+      :host-context(.phone-mode) .settings-about {
+        margin-bottom: 22px;
+      }
+    `,
+  ],
   template: `
     <section>
-      <div
-        style="position:sticky; top:0; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:2;"
-      >
-        <button
-          (click)="apply()"
-          [disabled]="!draft.dirty()"
-          [style.opacity]="draft.dirty() ? 1 : 0.6"
+      @if (showControls) {
+        <div
+          style="position:sticky; top:0; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:2;"
         >
-          {{ 'settings.apply' | translate }}
-        </button>
-        @if (draft.dirty()) {
-          <button (click)="cancel()">{{ 'settings.cancelChanges' | translate }}</button>
-        }
-      </div>
+          <button
+            (click)="apply()"
+            [disabled]="!draft.dirty()"
+            [style.opacity]="draft.dirty() ? 1 : 0.6"
+          >
+            {{ 'settings.apply' | translate }}
+          </button>
+          @if (draft.dirty()) {
+            <button (click)="cancel()">{{ 'settings.cancelChanges' | translate }}</button>
+          }
+        </div>
+      }
 
       <h2 style="margin:0 0 8px;">{{ 'settings.title' | translate }}</h2>
 
@@ -124,7 +138,10 @@ import { MultiUserSettingsComponent } from './multi-user/multi-user.component';
         <app-universe-settings />
       }
 
-      <div style="margin-top: 24px; border-top:1px solid var(--color-border); padding-top:12px;">
+      <div
+        class="settings-about"
+        style="margin-top: 24px; border-top:1px solid var(--color-border); padding-top:12px;"
+      >
         <button (click)="aboutOpen.set(!aboutOpen())">{{ 'nav.about' | translate }}</button>
         <div
           [style.maxHeight]="aboutOpen() ? '240px' : '0'"
@@ -140,6 +157,7 @@ import { MultiUserSettingsComponent } from './multi-user/multi-user.component';
 export class SettingsComponent {
   readonly auth = inject(AuthService);
   readonly draft = inject(SettingsDraftService);
+  @Input() showControls = true;
   isGuestUser = signal(this.auth.actualUser()?.id === 'u_guest');
   aboutOpen = signal(false);
   tab = signal<

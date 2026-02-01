@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService } from '../../core/auth.service';
 import { DialogService } from '../../core/dialog.service';
@@ -17,7 +17,7 @@ import packageJson from '../../../../package.json';
       <h1>
         {{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}
       </h1>
-      <div style="font-size: 14px; margin-top: 2px;">
+      <div style="font-size: 14px; margin-top: -14px;">
         {{ 'auth.tagline' | translate }}
       </div>
       <div style="font-size: 12px; opacity: 0.7; margin-top: 10px;">v{{ appVersion }}</div>
@@ -81,10 +81,14 @@ import packageJson from '../../../../package.json';
           >
             {{ 'universe.continueGuest' | translate }}
           </button>
+          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
+            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
+            <span>{{ 'phone.modeLabel' | translate }}</span>
+          </label>
           <label
             style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
           >
-            <span>{{ 'auth.resetGuest' | translate }}</span>
+            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
           </label>
         }
@@ -117,15 +121,19 @@ import packageJson from '../../../../package.json';
         @if (allowGuest()) {
           <button
             type="button"
-            style="margin-top: 40px; padding: 8px 12px; font-size:16px;"
+            style="margin-top: 58px; padding: 8px 12px; font-size:16px;"
             (click)="continueAsGuest()"
           >
             {{ 'auth.guest' | translate }}
           </button>
+          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
+            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
+            <span>{{ 'phone.modeLabel' | translate }}</span>
+          </label>
           <label
             style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
           >
-            <span>{{ 'auth.resetGuest' | translate }}</span>
+            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
           </label>
         }
@@ -168,9 +176,13 @@ import packageJson from '../../../../package.json';
         </form>
 
         @if (allowGuest()) {
+          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
+            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
+            <span>{{ 'phone.modeLabel' | translate }}</span>
+          </label>
           <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-            {{ 'auth.resetGuest' | translate }}
+            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
           </label>
           <button
             type="button"
@@ -180,6 +192,12 @@ import packageJson from '../../../../package.json';
             {{ 'auth.guest' | translate }}
           </button>
         }
+      }
+
+      @if (loggedOutMessage()) {
+        <div style="margin-top: 8px; color: var(--color-accent); font-size:13px;">
+          {{ loggedOutMessage() }}
+        </div>
       }
 
       <div style="display:flex; gap:8px; margin-top: 16px; flex-wrap:wrap;">
@@ -226,11 +244,25 @@ import packageJson from '../../../../package.json';
       }
     </main>
   `,
+  styles: [
+    `
+      :host {
+        display: block;
+      }
+      @media (max-width: 1024px) {
+        :host {
+          display: block;
+          padding-left: 44px;
+        }
+      }
+    `,
+  ],
 })
 export class LoginComponent {
   private auth = inject(AuthService);
   private dialogService = inject(DialogService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private translate = inject(TranslateService);
   username = signal('');
   password = signal('');
@@ -239,6 +271,7 @@ export class LoginComponent {
   observerPassword = signal('');
   resetGuest = signal(false);
   confirmResetOpen = signal(false);
+  phoneMode = signal(false);
   guestModeOnlyFlag = packageJson.guestModeOnly === true;
   allowGuest = computed(() => this.guestModeOnlyFlag || this.auth.orgSettings().allowGuestLogin);
   universeLogin = computed(() => Boolean(this.auth.universeContext()));
@@ -268,10 +301,21 @@ export class LoginComponent {
   });
   licenseOpen = signal(false);
   appVersion = packageJson.version ?? '0.0.0';
+  loggedOutMessage = signal('');
 
   constructor() {
     this.auth.updateUniverseContextFromLocation();
-    if (this.auth.isLoggedIn() && !this.universeLogin()) {
+    const storedPhone = this.auth.getLoginPhoneModePreference();
+    this.phoneMode.set(storedPhone ?? this.auth.getDefaultPhoneMode());
+    const loggedOut = this.route.snapshot.queryParamMap.get('loggedOut');
+    if (loggedOut) {
+      this.auth.logout();
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('op_session');
+      }
+      this.loggedOutMessage.set(this.translate.instant('auth.loggedOut'));
+    }
+    if (this.auth.isLoggedIn() && !this.universeLogin() && !loggedOut) {
       this.router.navigateByUrl('/');
     }
     const universeOwner = this.auth.universeContext()?.ownerId;
@@ -282,6 +326,16 @@ export class LoginComponent {
         this.router.navigateByUrl('/');
       }
     }
+    this.route.queryParamMap.subscribe((params) => {
+      const loggedOutParam = params.get('loggedOut');
+      if (loggedOutParam) {
+        this.auth.logout();
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('op_session');
+        }
+      }
+      this.loggedOutMessage.set(loggedOutParam ? this.translate.instant('auth.loggedOut') : '');
+    });
   }
 
   async onSubmit(event: Event) {
@@ -293,6 +347,7 @@ export class LoginComponent {
       this.error.set(this.translate.instant(message));
       return;
     }
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
@@ -313,6 +368,7 @@ export class LoginComponent {
       this.error.set(this.translate.instant(message));
       return;
     }
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
@@ -322,6 +378,7 @@ export class LoginComponent {
       return;
     }
     this.auth.loginAsGuest();
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
@@ -330,6 +387,7 @@ export class LoginComponent {
     this.auth.resetGuestAccount();
     this.dialogService.resetForUser('u_guest');
     this.auth.loginAsGuest();
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
@@ -347,6 +405,7 @@ export class LoginComponent {
       this.error.set(this.translate.instant(message));
       return;
     }
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
@@ -364,11 +423,18 @@ export class LoginComponent {
       this.error.set(this.translate.instant(message));
       return;
     }
+    this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
   }
 
   toggleResetGuest(event: Event) {
     this.resetGuest.set((event.target as HTMLInputElement).checked);
+  }
+
+  togglePhoneMode(event: Event) {
+    const enabled = (event.target as HTMLInputElement).checked;
+    this.phoneMode.set(enabled);
+    this.auth.setLoginPhoneModePreference(enabled);
   }
 
   openGithub(event: MouseEvent) {

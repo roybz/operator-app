@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -27,6 +27,7 @@ interface CalendarState {
   calendars: ExternalCalendar[];
   showSettings: boolean;
   selectedCalendarId: string | null;
+  phoneSidebarInit?: boolean;
 }
 
 const stateStore = new Map<string, CalendarState>();
@@ -67,10 +68,75 @@ const defaultState = (): CalendarState => ({
   selector: 'app-calendar',
   standalone: true,
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .calendar-shell {
+        display: flex;
+        gap: 16px;
+        height: 100%;
+        position: relative;
+      }
+
+      :host-context(.phone-mode) .calendar-shell {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) .calendar-shell > aside {
+        max-height: none;
+        overflow: auto;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        background: var(--color-surface);
+        z-index: 2;
+        border-left: none;
+        padding: 16px 16px 16px 17px !important;
+        box-shadow: -6px 0 16px rgba(0, 0, 0, 0.2);
+      }
+
+      .calendar-sidebar-toggle {
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        z-index: 1;
+        opacity: 0.7;
+        font-size: 30px;
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        border-radius: 8px;
+        width: 36px;
+        height: 36px;
+      }
+
+      :host-context(.phone-mode) .calendar-shell > section {
+        min-height: 0;
+        overflow: auto;
+      }
+
+      :host-context(.phone-mode) .calendar-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; gap:16px; height:100%;">
+    <div class="calendar-shell">
+      @if (isPhoneMode() && !state().showSettings) {
+        <button class="calendar-sidebar-toggle" (click)="toggleSettings()">⟨</button>
+      }
       <section style="flex:1; display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div
+          class="calendar-toolbar"
+          style="display:flex; align-items:center; justify-content:space-between;"
+        >
           <div style="display:flex; align-items:center; gap:8px;">
             <button (click)="shiftPeriod(-1)">←</button>
             <strong>{{ periodLabel() }}</strong>
@@ -87,13 +153,15 @@ const defaultState = (): CalendarState => ({
               {{ 'calendar.viewDay' | translate }}
             </button>
           </div>
-          <button (click)="toggleSettings()">
-            {{
-              state().showSettings
-                ? ('calendar.hideSettings' | translate)
-                : ('calendar.showSettings' | translate)
-            }}
-          </button>
+          @if (!isPhoneMode()) {
+            <button (click)="toggleSettings()">
+              {{
+                state().showSettings
+                  ? ('calendar.hideSettings' | translate)
+                  : ('calendar.showSettings' | translate)
+              }}
+            </button>
+          }
         </div>
 
         @if (state().viewMode === 'month') {
@@ -177,8 +245,22 @@ const defaultState = (): CalendarState => ({
 
       @if (state().showSettings) {
         <aside
-          style="width:280px; border-left:1px solid var(--color-border); padding-left:12px; overflow:auto;"
+          [style.position]="isPhoneMode() ? 'absolute' : 'static'"
+          [style.top]="isPhoneMode() ? '0' : null"
+          [style.bottom]="isPhoneMode() ? '0' : null"
+          [style.right]="isPhoneMode() ? '0' : null"
+          [style.left]="isPhoneMode() ? 'auto' : null"
+          [style.width]="isPhoneMode() ? '85%' : '280px'"
+          [style.maxWidth]="isPhoneMode() ? '340px' : null"
+          [style.borderLeft]="isPhoneMode() ? 'none' : '1px solid var(--color-border)'"
+          [style.paddingLeft]="isPhoneMode() ? '17px' : '12px'"
+          [style.background]="isPhoneMode() ? 'var(--color-surface)' : null"
+          [style.boxShadow]="isPhoneMode() ? '-6px 0 16px rgba(0, 0, 0, 0.2)' : 'none'"
+          style="overflow:auto;"
         >
+          @if (isPhoneMode()) {
+            <button class="calendar-sidebar-toggle" (click)="toggleSettings()">⟩</button>
+          }
           <h4 style="margin-top:0;">{{ 'calendar.integrations' | translate }}</h4>
 
           <div style="display:grid; gap:10px;">
@@ -295,6 +377,7 @@ export class CalendarComponent implements OnInit {
   private translate = inject(TranslateService);
   private prefs = inject(AppPreferencesService);
   private importGuard = inject(ImportGuardService);
+  isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
   state = signal<CalendarState>(defaultState());
   newName = signal('');
   newUrl = signal('');
@@ -312,8 +395,15 @@ export class CalendarComponent implements OnInit {
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as CalendarState;
-          this.state.set(parsed);
-          stateStore.set(this.instanceId, parsed);
+          const next = {
+            ...parsed,
+            showSettings:
+              this.isPhoneMode() && !parsed.phoneSidebarInit ? false : parsed.showSettings,
+            phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+          };
+          this.state.set(next);
+          stateStore.set(this.instanceId, next);
+          this.persistState();
           return;
         } catch {
           // ignore malformed stored data
@@ -322,16 +412,31 @@ export class CalendarComponent implements OnInit {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({
+      const nextStored = {
         ...stored,
         calendars: stored.calendars.map((cal) => ({
           ...cal,
           events: cal.events.map((event) => ({ ...event })),
         })),
-      });
+      };
+      const next = {
+        ...nextStored,
+        showSettings:
+          this.isPhoneMode() && !nextStored.phoneSidebarInit ? false : nextStored.showSettings,
+        phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
+      };
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      this.persistState();
       return;
     }
-    stateStore.set(this.instanceId, this.state());
+    const next: CalendarState = {
+      ...this.state(),
+      showSettings: this.isPhoneMode() ? false : this.state().showSettings,
+      phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+    };
+    this.state.set(next);
+    stateStore.set(this.instanceId, next);
     this.persistState();
   }
 

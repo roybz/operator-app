@@ -62,8 +62,9 @@ export interface UserPreferences {
   timeFormat: '12h' | '24h';
   stickyNoteDefaultMode: 'rich' | 'markdown';
   themeMode: 'system' | 'light' | 'dark' | 'timeZone';
-  colorTheme: 'standard' | 'notepad' | 'ice';
+  colorTheme: 'standard' | 'notepad' | 'ice' | 'lava' | 'green';
   accessibilityMode: boolean;
+  phoneMode: boolean;
   credentials: SavedCredential[];
   maxPersistedApps: number;
   canvasWidth: number;
@@ -84,6 +85,7 @@ export interface UserPreferences {
   allowUniverseChat: boolean;
   universeGuestPassword: string;
   universeObserverPassword: string;
+  universeOpened: boolean;
 }
 
 export interface OrgSettings {
@@ -152,13 +154,26 @@ const MOCK_TODO_KEY = 'op_mock_todos';
 const DEFAULT_ADMIN_HASH =
   'sha256:62d9ba597c35a2f737a0173ea82a5289c6628e5a06674ebbb140848810961838';
 const LOGIN_SECURITY_KEY = 'op_login_security';
+const LOGIN_PHONE_MODE_KEY = 'op_login_phone_mode';
+const LOGIN_PHONE_MODE_APPLY_KEY = 'op_login_phone_mode_apply';
 const SUPPORTED_LANGUAGES = [
   'en',
+  'en-US',
+  'en-GB',
+  'en-CA',
+  'en-AU',
+  'en-NZ',
   'es',
+  'es-ES',
+  'es-419',
   'fr',
+  'fr-FR',
+  'fr-CA',
   'de',
   'it',
   'pt',
+  'pt-PT',
+  'pt-BR',
   'nl',
   'no',
   'pl',
@@ -168,6 +183,9 @@ const SUPPORTED_LANGUAGES = [
   'hr',
   'ru',
   'uk',
+  'ga',
+  'sco',
+  'cy',
   'ar',
   'fa',
   'hi',
@@ -561,6 +579,57 @@ export class AuthService {
     this.applyLanguageFromPreferences();
   }
 
+  setLoginPhoneModePreference(enabled: boolean) {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(LOGIN_PHONE_MODE_KEY, JSON.stringify(Boolean(enabled)));
+  }
+
+  getLoginPhoneModePreference() {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(LOGIN_PHONE_MODE_KEY);
+    if (!raw) return null;
+    try {
+      return Boolean(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+
+  applyLoginPhoneModePreference() {
+    if (!this.isLoggedIn()) return;
+    const pref = this.getLoginPhoneModePreference();
+    if (pref === null) return;
+    const prefs = this.preferences();
+    if (prefs.phoneMode === pref) return;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LOGIN_PHONE_MODE_APPLY_KEY, String(Date.now()));
+    }
+    this.savePreferences({ ...prefs, phoneMode: pref });
+  }
+
+  consumeLoginPhoneModeApplyFlag() {
+    if (typeof window === 'undefined') return false;
+    const raw = window.localStorage.getItem(LOGIN_PHONE_MODE_APPLY_KEY);
+    if (!raw) return false;
+    window.localStorage.removeItem(LOGIN_PHONE_MODE_APPLY_KEY);
+    return true;
+  }
+
+  saveUniversePreferences(userId: string, universeId: string, prefs: UserPreferences) {
+    const key = this.universeKey(userId, universeId);
+    const nextAll = { ...this.prefsSignal(), [key]: prefs };
+    this.prefsSignal.set(nextAll);
+    this.persistPrefs();
+  }
+
+  markUniverseOpened(userId: string, universeId: string) {
+    const key = this.universeKey(userId, universeId);
+    const stored = this.prefsSignal()[key];
+    if (!stored || stored.universeOpened) return;
+    this.prefsSignal.set({ ...this.prefsSignal(), [key]: { ...stored, universeOpened: true } });
+    this.persistPrefs();
+  }
+
   getPreferencesFor(userId: string | null): UserPreferences {
     if (!userId) return this.defaultPreferences();
 
@@ -624,6 +693,7 @@ export class AuthService {
       this.sessionSignal.set({ ...session, universeId });
       this.persistSession();
     }
+    this.markUniverseOpened(userId, universeId);
   }
 
   createUniverse(userId: string, name: string, activate = true) {
@@ -1069,6 +1139,14 @@ export class AuthService {
         prefs[key] = { ...prefs[key], allowUniverseChat: true };
         prefsUpdated = true;
       }
+      if (prefs[key].universeOpened === undefined) {
+        prefs[key] = { ...prefs[key], universeOpened: false };
+        prefsUpdated = true;
+      }
+      if (prefs[key].phoneMode === undefined) {
+        prefs[key] = { ...prefs[key], phoneMode: this.isPhoneDevice() };
+        prefsUpdated = true;
+      }
       if (prefs[key].universeGuestPassword === undefined) {
         prefs[key] = { ...prefs[key], universeGuestPassword: '' };
         prefsUpdated = true;
@@ -1321,6 +1399,7 @@ export class AuthService {
       themeMode: 'system',
       colorTheme: 'standard',
       accessibilityMode: false,
+      phoneMode: this.isPhoneDevice(),
       credentials: [],
       maxPersistedApps: 255,
       canvasWidth: org.defaultViewportWidth,
@@ -1341,6 +1420,7 @@ export class AuthService {
       allowUniverseChat: true,
       universeGuestPassword: '',
       universeObserverPassword: '',
+      universeOpened: false,
     };
   }
 
@@ -1364,6 +1444,19 @@ export class AuthService {
     const fallback = this.getBrowserLanguage();
     const preferred = this.normalizeLanguage(prefs.language || fallback || 'en');
     this.translate.use(preferred);
+  }
+
+  getDefaultPhoneMode() {
+    if (typeof window !== 'undefined' && window.innerWidth <= 1024) return true;
+    return this.isPhoneDevice();
+  }
+
+  private isPhoneDevice() {
+    if (typeof navigator === 'undefined') return false;
+    const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+    if (nav.userAgentData?.mobile !== undefined) return Boolean(nav.userAgentData.mobile);
+    const ua = navigator.userAgent || '';
+    return /Mobi|Android|iPhone|iPad|iPod|Windows Phone|webOS|BlackBerry/i.test(ua);
   }
 
   private getBrowserLanguage() {

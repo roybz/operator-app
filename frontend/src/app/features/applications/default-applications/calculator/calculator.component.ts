@@ -93,8 +93,35 @@ const currencyCache = new Map<string, { rate: number; ts: number }>();
   selector: 'app-calculator',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .calculator-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .calculator-shell {
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) .calculator-grid {
+        gap: 6px !important;
+      }
+
+      :host-context(.phone-mode) button {
+        min-height: 40px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:12px;">
+    <div class="calculator-shell">
       @if (settingsOpen()) {
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -129,7 +156,10 @@ const currencyCache = new Map<string, { rate: number; ts: number }>();
         />
 
         @if (state().scientific) {
-          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+          <div
+            class="calculator-grid"
+            style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;"
+          >
             <button (click)="applyUnary('sqrt')">√</button>
             <button (click)="applyUnary('pow2')">x²</button>
             <button (click)="applyUnary('sin')">sin</button>
@@ -141,7 +171,10 @@ const currencyCache = new Map<string, { rate: number; ts: number }>();
           </div>
         }
 
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+        <div
+          class="calculator-grid"
+          style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;"
+        >
           <button (click)="clear()">C</button>
           <button (click)="toggleSign()">±</button>
           <button (click)="percent()">%</button>

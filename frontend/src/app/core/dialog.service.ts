@@ -13,6 +13,12 @@ export interface DialogInstance {
   stashed: boolean;
   archived?: boolean;
   tileRect?: DialogRect;
+  phoneRect?: DialogRect;
+  phoneMinimized?: boolean;
+  phoneStashed?: boolean;
+  phoneTileRect?: DialogRect;
+  phoneRestoreRect?: DialogRect;
+  phoneMaximized?: boolean;
   z: number;
   isMaximized: boolean;
   restoreRect?: DialogRect;
@@ -36,6 +42,8 @@ const STATE_KEY = 'op_dialog_state_v1';
 const PREVIEW_STATE_KEY = 'op_preview_dialog_state_v1';
 
 const TILE_SIZE = { width: 180, height: 80 };
+const PHONE_TILE_SIZE = { width: 140, height: 64 };
+const TILE_PADDING = 12;
 
 @Injectable({ providedIn: 'root' })
 export class DialogService {
@@ -215,6 +223,12 @@ export class DialogService {
       stashed: false,
       archived: false,
       tileRect: undefined,
+      phoneRect: undefined,
+      phoneMinimized: false,
+      phoneStashed: false,
+      phoneTileRect: undefined,
+      phoneRestoreRect: undefined,
+      phoneMaximized: false,
       deleteLocked: false,
       z: this.state().zCounter + 1,
       isMaximized: false,
@@ -245,12 +259,16 @@ export class DialogService {
     this.updateInstance(instanceId, (instance) => ({ ...instance, minimized: true }));
   }
 
+  setMinimized(instanceId: string, minimized: boolean) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, minimized }));
+  }
+
   stashInstance(instanceId: string, bounds: DOMRect) {
     this.updateInstance(instanceId, (instance) => ({
       ...instance,
       stashed: true,
       minimized: false,
-      tileRect: this.createTileRect(instance, bounds),
+      tileRect: this.createTileRect(instance, bounds, TILE_SIZE),
     }));
   }
 
@@ -258,13 +276,83 @@ export class DialogService {
     this.updateInstance(instanceId, (instance) => ({
       ...instance,
       tileRect: instance.tileRect
-        ? this.clampTileRect({ ...instance.tileRect, ...rect }, bounds)
-        : this.createTileRect(instance, bounds),
+        ? this.clampTileRect({ ...instance.tileRect, ...rect }, bounds, TILE_SIZE)
+        : this.createTileRect(instance, bounds, TILE_SIZE),
     }));
   }
 
   unstashInstance(instanceId: string) {
     this.updateInstance(instanceId, (instance) => ({ ...instance, stashed: false }));
+  }
+
+  setPhoneRect(instanceId: string, rect: DialogRect, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect(rect, bounds),
+    }));
+  }
+
+  movePhoneInstance(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect({ ...(instance.phoneRect ?? instance.rect), ...rect }, bounds),
+    }));
+  }
+
+  resizePhoneInstance(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect({ ...(instance.phoneRect ?? instance.rect), ...rect }, bounds),
+    }));
+  }
+
+  setPhoneMinimized(instanceId: string, minimized: boolean) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, phoneMinimized: minimized }));
+  }
+
+  stashPhoneInstance(instanceId: string, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneStashed: true,
+      phoneMinimized: false,
+      phoneTileRect: this.findAvailableTileRect(bounds, PHONE_TILE_SIZE, true),
+    }));
+  }
+
+  movePhoneTile(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneTileRect: instance.phoneTileRect
+        ? this.clampTileRect({ ...instance.phoneTileRect, ...rect }, bounds, PHONE_TILE_SIZE)
+        : this.findAvailableTileRect(bounds, PHONE_TILE_SIZE, true),
+    }));
+  }
+
+  unstashPhoneInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, phoneStashed: false }));
+  }
+
+  togglePhoneMaximize(instanceId: string, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => {
+      const currentRect = instance.phoneRect ?? instance.rect;
+      if (instance.phoneMaximized) {
+        return {
+          ...instance,
+          phoneMaximized: false,
+          phoneRect: instance.phoneRestoreRect ?? currentRect,
+          phoneRestoreRect: undefined,
+        };
+      }
+      return {
+        ...instance,
+        phoneMaximized: true,
+        phoneRestoreRect: currentRect,
+        phoneRect: this.clampRect(
+          { x: 0, y: 0, width: bounds.width, height: bounds.height },
+          bounds,
+        ),
+      };
+    });
   }
 
   setTitleOverride(instanceId: string, titleOverride: string | null) {
@@ -287,6 +375,8 @@ export class DialogService {
       archived: true,
       minimized: false,
       stashed: false,
+      phoneMinimized: false,
+      phoneStashed: false,
     }));
   }
 
@@ -371,6 +461,31 @@ export class DialogService {
     });
   }
 
+  clampAllToBounds(bounds: DOMRect, usePhone = false) {
+    const dialogsByWorkspace = this.state().dialogsByWorkspace;
+    const nextDialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    Object.entries(dialogsByWorkspace).forEach(([workspaceId, dialogs]) => {
+      nextDialogsByWorkspace[workspaceId] = dialogs.map((instance) => {
+        if (usePhone) {
+          const phoneRect = instance.phoneRect
+            ? this.clampRect(instance.phoneRect, bounds)
+            : undefined;
+          const phoneTileRect = instance.phoneTileRect
+            ? this.clampTileRect(instance.phoneTileRect, bounds, PHONE_TILE_SIZE)
+            : undefined;
+          return { ...instance, phoneRect, phoneTileRect };
+        }
+        const rect = this.clampRect(instance.rect, bounds);
+        const tileRect = instance.tileRect
+          ? this.clampTileRect(instance.tileRect, bounds, TILE_SIZE)
+          : undefined;
+        return { ...instance, rect, tileRect };
+      });
+    });
+    this.state.set({ ...this.state(), dialogsByWorkspace: nextDialogsByWorkspace });
+    this.persist();
+  }
+
   resetPositions(mode: 'left' | 'middle', bounds: DOMRect) {
     const workspaceId = this.getActiveWorkspaceId();
     const dialogs = this.getDialogsForWorkspace(workspaceId);
@@ -434,23 +549,65 @@ export class DialogService {
     return { x, y, width, height };
   }
 
-  private createTileRect(instance: DialogInstance, bounds: DOMRect): DialogRect {
-    const centerX = instance.rect.x + instance.rect.width / 2 - TILE_SIZE.width / 2;
-    const centerY = instance.rect.y + instance.rect.height / 2 - TILE_SIZE.height / 2;
+  private createTileRect(
+    instance: DialogInstance,
+    bounds: DOMRect,
+    size: { width: number; height: number },
+    rectOverride?: DialogRect,
+  ): DialogRect {
+    const rect = rectOverride ?? instance.rect;
+    const centerX = rect.x + rect.width / 2 - size.width / 2;
+    const centerY = rect.y + rect.height / 2 - size.height / 2;
     return {
-      x: Math.min(Math.max(centerX, 0), Math.max(0, bounds.width - TILE_SIZE.width)),
-      y: Math.min(Math.max(centerY, 0), Math.max(0, bounds.height - TILE_SIZE.height)),
-      width: TILE_SIZE.width,
-      height: TILE_SIZE.height,
+      x: Math.min(Math.max(centerX, 0), Math.max(0, bounds.width - size.width)),
+      y: Math.min(Math.max(centerY, 0), Math.max(0, bounds.height - size.height)),
+      width: size.width,
+      height: size.height,
     };
   }
 
-  private clampTileRect(rect: DialogRect, bounds: DOMRect): DialogRect {
-    const width = TILE_SIZE.width;
-    const height = TILE_SIZE.height;
+  private clampTileRect(
+    rect: DialogRect,
+    bounds: DOMRect,
+    size: { width: number; height: number },
+  ): DialogRect {
+    const width = size.width;
+    const height = size.height;
     const x = Math.min(Math.max(rect.x, 0), Math.max(0, bounds.width - width));
     const y = Math.min(Math.max(rect.y, 0), Math.max(0, bounds.height - height));
     return { x, y, width, height };
+  }
+
+  private findAvailableTileRect(
+    bounds: DOMRect,
+    size: { width: number; height: number },
+    usePhone: boolean,
+  ): DialogRect {
+    const existing = Object.values(this.state().dialogsByWorkspace)
+      .flat()
+      .map((instance) => (usePhone ? instance.phoneTileRect : instance.tileRect))
+      .filter((rect): rect is DialogRect => Boolean(rect));
+    const maxX = Math.max(TILE_PADDING, bounds.width - size.width - TILE_PADDING);
+    const maxY = Math.max(TILE_PADDING, bounds.height - size.height - TILE_PADDING);
+    for (let y = TILE_PADDING; y <= maxY; y += size.height + TILE_PADDING) {
+      for (let x = TILE_PADDING; x <= maxX; x += size.width + TILE_PADDING) {
+        const candidate = { x, y, width: size.width, height: size.height };
+        const overlap = existing.some(
+          (rect) =>
+            x < rect.x + rect.width &&
+            x + size.width > rect.x &&
+            y < rect.y + rect.height &&
+            y + size.height > rect.y,
+        );
+        if (!overlap) return candidate;
+      }
+    }
+    return {
+      x: TILE_PADDING,
+      y: TILE_PADDING,
+      width: size.width,
+      height: size.height,
+    };
   }
 
   private load() {
@@ -543,6 +700,12 @@ export class DialogService {
         stashed: instance.stashed ?? false,
         archived: instance.archived ?? false,
         tileRect: instance.tileRect,
+        phoneRect: instance.phoneRect,
+        phoneMinimized: instance.phoneMinimized ?? false,
+        phoneStashed: instance.phoneStashed ?? false,
+        phoneTileRect: instance.phoneTileRect,
+        phoneRestoreRect: instance.phoneRestoreRect,
+        phoneMaximized: instance.phoneMaximized ?? false,
         deleteLocked: instance.deleteLocked ?? false,
       }));
     });

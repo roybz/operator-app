@@ -1,8 +1,18 @@
-import { Component, EventEmitter, HostListener, Input, Output, inject, signal } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+  AfterViewInit,
+  ElementRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DialogInstance } from '../../core/dialog.service';
-import { AppId } from '../../features/dependencies/app-types';
+import { DialogInstance } from '../../../core/dialog.service';
+import { AppId } from '../../../features/dependencies/app-types';
 
 export interface AppGroup {
   id: AppId;
@@ -16,13 +26,21 @@ export interface AppGroup {
   imports: [CommonModule, TranslateModule],
   template: `
     <div class="app-list" (pointerdown)="closeActions()">
-      <div class="app-list__scroll">
+      <div
+        class="app-list__scroll"
+        [style.flex]="phoneMode ? '1 1 auto' : null"
+        [style.minHeight]="phoneMode ? '0' : null"
+      >
         @for (app of apps; track app.id) {
           <div class="app-row">
             <button
               class="app-list__toggle"
               (click)="toggleCollapsed(app.id); $event.stopPropagation()"
               [disabled]="actionsDisabled"
+              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
+              [style.opacity]="phoneMode ? 1 : null"
+              [style.background]="phoneMode ? 'transparent' : null"
+              [style.borderRadius]="phoneMode ? '999px' : null"
               [title]="
                 isCollapsed(app.id)
                   ? ('dialogs.expandList' | translate)
@@ -37,6 +55,10 @@ export interface AppGroup {
               class="app-list__icon app-list__icon--add"
               (click)="openApp.emit(app.id); $event.stopPropagation()"
               [disabled]="actionsDisabled"
+              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
+              [style.opacity]="phoneMode ? 1 : null"
+              [style.background]="phoneMode ? 'transparent' : null"
+              [style.borderRadius]="phoneMode ? '999px' : null"
               title="{{ 'dialogs.add' | translate }}"
             >
               +
@@ -49,7 +71,7 @@ export interface AppGroup {
                   <button
                     class="app-instance__name"
                     (click)="restore.emit(instance.id); $event.stopPropagation()"
-                    [style.fontStyle]="instance.minimized ? 'normal' : 'italic'"
+                    [style.fontStyle]="isInstanceActive(instance) ? 'italic' : 'normal'"
                     [disabled]="actionsDisabled"
                     [style.opacity]="instance.archived ? 0.6 : 1"
                   >
@@ -61,6 +83,10 @@ export interface AppGroup {
                         class="app-instance__unarchive"
                         (click)="onUnarchive(instance.id); $event.stopPropagation()"
                         [disabled]="actionsDisabled"
+                        [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
+                        [style.opacity]="phoneMode ? 1 : null"
+                        [style.background]="phoneMode ? 'transparent' : null"
+                        [style.borderRadius]="phoneMode ? '999px' : null"
                         title="{{ 'dialogs.unarchive' | translate }}"
                       >
                         <span class="app-list__action-icon app-list__action-icon--unarchive"
@@ -71,14 +97,23 @@ export interface AppGroup {
                   } @else {
                     <button
                       class="app-instance__kebab"
+                      (pointerdown)="$event.stopPropagation()"
                       (click)="toggleActions(instance.id, $event)"
                       [disabled]="actionsDisabled"
+                      [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
+                      [style.opacity]="phoneMode ? 1 : null"
+                      [style.background]="phoneMode ? 'transparent' : null"
+                      [style.borderRadius]="phoneMode ? '999px' : null"
                       title="{{ 'dialogs.actions' | translate }}"
                     >
                       ⋯
                     </button>
                     @if (openActionsId() === instance.id) {
-                      <div class="app-instance__actions" (pointerdown)="$event.stopPropagation()">
+                      <div
+                        class="app-instance__actions"
+                        [class.app-instance__actions--up]="openActionsDirection() === 'up'"
+                        (pointerdown)="$event.stopPropagation()"
+                      >
                         <button
                           class="app-instance__action"
                           (click)="onDuplicate(instance.id)"
@@ -122,12 +157,16 @@ export interface AppGroup {
           }
         }
       </div>
-      <button class="app-list__archived-toggle" (click)="toggleArchivedList()">
-        {{ showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate) }}
-      </button>
-      @if (showArchived() && !hasArchivedInstances()) {
-        <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
-      }
+      <div class="app-list__footer">
+        <button class="app-list__archived-toggle" (click)="toggleArchivedList()">
+          {{
+            showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate)
+          }}
+        </button>
+        @if (showArchived() && !hasArchivedInstances()) {
+          <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
+        }
+      </div>
     </div>
   `,
   styles: [
@@ -136,12 +175,39 @@ export interface AppGroup {
         display: flex;
         flex-direction: column;
         gap: 12px;
+        --app-list-footer-height: 56px;
       }
 
       .app-list__scroll {
-        max-height: 50vh;
+        max-height: calc(53vh - var(--app-list-footer-height));
         overflow: auto;
-        padding-right: 4px;
+        padding: 4px 4px var(--app-list-footer-height) 4px;
+        border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+        touch-action: pan-y;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        pointer-events: auto;
+      }
+
+      :host-context(.phone-mode) .app-list {
+        flex: 1;
+        min-height: 0;
+        height: 100%;
+        font-size: 16px;
+      }
+
+      :host-context(.phone-mode) .app-list__scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      .app-list__footer {
+        position: sticky;
+        bottom: 0;
+        background: var(--color-surface);
+        padding: 14px 0 10px;
+        min-height: var(--app-list-footer-height);
       }
 
       .app-row {
@@ -149,6 +215,7 @@ export interface AppGroup {
         grid-template-columns: 18px 18px 1fr 24px;
         align-items: center;
         column-gap: 6px;
+        padding: 4px 0;
       }
 
       .app-list__name {
@@ -270,6 +337,82 @@ export interface AppGroup {
         box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
       }
 
+      .app-instance__actions--up {
+        top: auto;
+        bottom: 100%;
+        margin-top: 0;
+        margin-bottom: 6px;
+      }
+
+      :host-context(.phone-mode) .app-row {
+        grid-template-columns: 24px 22px 1fr 32px;
+        column-gap: 8px;
+        padding: 8px 0;
+      }
+
+      :host-context(.phone-mode) .app-list__toggle {
+        width: 22px;
+        height: 22px;
+        font-size: 14px;
+        opacity: 1 !important;
+        border: 1px solid rgba(148, 163, 184, 0.55) !important;
+        border-radius: 8px;
+        background: transparent;
+      }
+
+      :host-context(.phone-mode) .app-list__app-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 16px;
+      }
+
+      :host-context(.phone-mode) .app-list__icon {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+        opacity: 1 !important;
+        border: 1px solid rgba(148, 163, 184, 0.55) !important;
+        border-radius: 8px;
+        background: transparent;
+      }
+
+      :host-context(.phone-mode) .app-instance {
+        grid-template-columns: 1fr 32px;
+        column-gap: 8px;
+        padding: 6px 0;
+      }
+
+      :host-context(.phone-mode) .app-instance__kebab,
+      :host-context(.phone-mode) .app-instance__unarchive {
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+        opacity: 1 !important;
+        border: 1px solid rgba(148, 163, 184, 0.55) !important;
+        border-radius: 8px;
+        background: transparent;
+      }
+
+      :host-context(.phone-mode) .app-list__toggle,
+      :host-context(.phone-mode) .app-list__icon,
+      :host-context(.phone-mode) .app-instance__kebab,
+      :host-context(.phone-mode) .app-instance__unarchive {
+        opacity: 1 !important;
+      }
+
+      :host-context(.phone-mode) .app-instance__actions {
+        min-width: 180px;
+      }
+
+      :host-context(.phone-mode) .app-instance__action {
+        padding: 10px 12px;
+        font-size: 15px;
+      }
+
+      :host-context(.phone-mode) .app-instance__action span {
+        font-size: 15px;
+      }
+
       .app-instance__action,
       .app-instance__unarchive {
         display: flex;
@@ -327,10 +470,19 @@ export interface AppGroup {
         opacity: 0.7;
         margin-top: 4px;
       }
+
+      .app-list__toggle:focus-visible,
+      .app-list__icon--add:focus-visible,
+      .app-instance__kebab:focus-visible,
+      .app-instance__action:focus-visible,
+      .app-instance__name:focus-visible {
+        outline: none;
+        box-shadow: none;
+      }
     `,
   ],
 })
-export class AppListComponent {
+export class AppListComponent implements AfterViewInit {
   @Input({ required: true }) apps: AppGroup[] = [];
   @Input({ required: true }) instancesByApp: Record<AppId, DialogInstance[]> = {
     kanban: [],
@@ -346,6 +498,8 @@ export class AppListComponent {
   };
   @Input() deleteTargetActive = false;
   @Input() actionsDisabled = false;
+  @Input() phoneMode = false;
+  @Input() activeInstanceId: string | null = null;
 
   @Output() openApp = new EventEmitter<AppId>();
   @Output() restore = new EventEmitter<string>();
@@ -353,6 +507,28 @@ export class AppListComponent {
   @Output() toggleLock = new EventEmitter<string>();
   @Output() archive = new EventEmitter<string>();
   @Output() unarchive = new EventEmitter<string>();
+
+  private host = inject(ElementRef<HTMLElement>);
+  private scrollEl = signal<HTMLElement | null>(null);
+
+  ngAfterViewInit() {
+    queueMicrotask(() => {
+      this.scrollEl.set(this.host.nativeElement.querySelector('.app-list__scroll'));
+      const el = this.scrollEl();
+      if (!el) return;
+      el.addEventListener(
+        'wheel',
+        (event) => {
+          if (event.ctrlKey) return;
+          if (Math.abs(event.deltaY) > 0) {
+            el.scrollTop += event.deltaY;
+            event.preventDefault();
+          }
+        },
+        { passive: false },
+      );
+    });
+  }
 
   private translate = inject(TranslateService);
   private collapsed = signal<Record<AppId, boolean>>({
@@ -369,6 +545,7 @@ export class AppListComponent {
   });
   showArchived = signal(false);
   openActionsId = signal<string | null>(null);
+  openActionsDirection = signal<'up' | 'down'>('down');
 
   instanceLabel(instance: DialogInstance) {
     if (instance.titleOverride) return instance.titleOverride;
@@ -398,6 +575,14 @@ export class AppListComponent {
     return [...active, ...archived];
   }
 
+  isInstanceActive(instance: DialogInstance) {
+    if (this.phoneMode) {
+      if (this.activeInstanceId !== instance.id) return false;
+      return !instance.phoneMinimized;
+    }
+    return !instance.minimized;
+  }
+
   hasArchivedInstances() {
     return Object.values(this.instancesByApp).some((instances) =>
       instances.some((instance) => instance.archived),
@@ -406,7 +591,26 @@ export class AppListComponent {
 
   toggleActions(instanceId: string, event: Event) {
     event.stopPropagation();
-    this.openActionsId.set(this.openActionsId() === instanceId ? null : instanceId);
+    if (this.openActionsId() === instanceId) {
+      this.openActionsId.set(null);
+      return;
+    }
+    const target = event.currentTarget as HTMLElement | null;
+    const menuHeight = 140;
+    if (target) {
+      const scrollRoot = target.closest('.app-list__scroll') as HTMLElement | null;
+      const rect = target.getBoundingClientRect();
+      const scrollRect = scrollRoot?.getBoundingClientRect();
+      if (scrollRect) {
+        const spaceBelow = scrollRect.bottom - rect.bottom;
+        this.openActionsDirection.set(spaceBelow < menuHeight ? 'up' : 'down');
+      } else {
+        this.openActionsDirection.set('down');
+      }
+    } else {
+      this.openActionsDirection.set('down');
+    }
+    this.openActionsId.set(instanceId);
   }
 
   closeActions() {

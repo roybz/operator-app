@@ -56,9 +56,37 @@ const defaultState = (): TimerState => ({
   selector: 'app-timer',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .timer-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .timer-shell {
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) .timer-modes {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      :host-context(.phone-mode) button {
+        min-height: 40px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:12px;">
-      <div style="display:flex; gap:8px;">
+    <div class="timer-shell">
+      <div class="timer-modes" style="display:flex; gap:8px;">
         <button (click)="setMode('stopwatch')">{{ 'timer.stopwatch' | translate }}</button>
         <button (click)="setMode('countdown')">{{ 'timer.countdown' | translate }}</button>
         <button (click)="setMode('pomodoro')">{{ 'timer.pomodoro' | translate }}</button>
@@ -69,22 +97,40 @@ const defaultState = (): TimerState => ({
       </div>
 
       @if (state().mode === 'countdown') {
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <input
             type="number"
             min="0"
+            [value]="daysFromSeconds(state().countdownSeconds)"
+            (change)="updateCountdownDays($event)"
+            style="width:5ch;"
+          />
+          <span>{{ 'timer.days' | translate }}</span>
+          <input
+            type="number"
+            min="0"
+            max="23"
+            [value]="hoursFromSeconds(state().countdownSeconds)"
+            (change)="updateCountdownHours($event)"
+            style="width:5ch;"
+          />
+          <span>{{ 'timer.hours' | translate }}</span>
+          <input
+            type="number"
+            min="0"
+            max="59"
             [value]="minutesFromSeconds(state().countdownSeconds)"
             (change)="updateCountdownMinutes($event)"
-            style="width:80px;"
+            style="width:5ch;"
           />
           <span>{{ 'timer.minutes' | translate }}</span>
           <input
             type="number"
             min="0"
             max="59"
-            [value]="state().countdownSeconds % 60"
+            [value]="secondsFromSeconds(state().countdownSeconds)"
             (change)="updateCountdownSeconds($event)"
-            style="width:80px;"
+            style="width:5ch;"
           />
           <span>{{ 'timer.seconds' | translate }}</span>
         </div>
@@ -99,7 +145,7 @@ const defaultState = (): TimerState => ({
               min="5"
               [value]="minutesFromSeconds(state().pomodoroWork)"
               (change)="updatePomodoro('work', $event)"
-              style="width:80px;"
+              style="width:5ch;"
             />
           </label>
           <label>
@@ -109,7 +155,7 @@ const defaultState = (): TimerState => ({
               min="1"
               [value]="minutesFromSeconds(state().pomodoroBreak)"
               (change)="updatePomodoro('break', $event)"
-              style="width:80px;"
+              style="width:5ch;"
             />
           </label>
           <label>
@@ -119,7 +165,7 @@ const defaultState = (): TimerState => ({
               min="5"
               [value]="minutesFromSeconds(state().pomodoroLongBreak)"
               (change)="updatePomodoro('longBreak', $event)"
-              style="width:80px;"
+              style="width:5ch;"
             />
           </label>
           <div>
@@ -274,21 +320,53 @@ export class TimerComponent implements OnInit, OnDestroy {
     });
   }
 
+  updateCountdownDays(event: Event) {
+    const days = Math.max(0, Math.floor(Number((event.target as HTMLInputElement).value || 0)));
+    this.setCountdownParts(
+      days,
+      this.hoursFromSeconds(this.state().countdownSeconds),
+      this.minutesFromSeconds(this.state().countdownSeconds),
+      this.secondsFromSeconds(this.state().countdownSeconds),
+    );
+  }
+
+  updateCountdownHours(event: Event) {
+    const hours = Math.max(
+      0,
+      Math.min(23, Math.floor(Number((event.target as HTMLInputElement).value || 0))),
+    );
+    this.setCountdownParts(
+      this.daysFromSeconds(this.state().countdownSeconds),
+      hours,
+      this.minutesFromSeconds(this.state().countdownSeconds),
+      this.secondsFromSeconds(this.state().countdownSeconds),
+    );
+  }
+
   updateCountdownMinutes(event: Event) {
-    const minutes = Math.max(0, Number((event.target as HTMLInputElement).value) || 0);
-    const seconds = this.state().countdownSeconds % 60;
-    const total = minutes * 60 + seconds;
-    this.commit({ ...this.state(), countdownSeconds: total, remainingSeconds: total });
+    const minutes = Math.max(
+      0,
+      Math.min(59, Math.floor(Number((event.target as HTMLInputElement).value) || 0)),
+    );
+    this.setCountdownParts(
+      this.daysFromSeconds(this.state().countdownSeconds),
+      this.hoursFromSeconds(this.state().countdownSeconds),
+      minutes,
+      this.secondsFromSeconds(this.state().countdownSeconds),
+    );
   }
 
   updateCountdownSeconds(event: Event) {
     const seconds = Math.max(
       0,
-      Math.min(59, Number((event.target as HTMLInputElement).value) || 0),
+      Math.min(59, Math.floor(Number((event.target as HTMLInputElement).value) || 0)),
     );
-    const minutes = Math.floor(this.state().countdownSeconds / 60);
-    const total = minutes * 60 + seconds;
-    this.commit({ ...this.state(), countdownSeconds: total, remainingSeconds: total });
+    this.setCountdownParts(
+      this.daysFromSeconds(this.state().countdownSeconds),
+      this.hoursFromSeconds(this.state().countdownSeconds),
+      this.minutesFromSeconds(this.state().countdownSeconds),
+      seconds,
+    );
   }
 
   updatePomodoro(field: PomodoroPhase, event: Event) {
@@ -318,6 +396,23 @@ export class TimerComponent implements OnInit, OnDestroy {
   }
 
   minutesFromSeconds(value: number) {
-    return Math.floor(value / 60);
+    return Math.floor((value % 3600) / 60);
+  }
+
+  daysFromSeconds(value: number) {
+    return Math.floor(value / 86400);
+  }
+
+  hoursFromSeconds(value: number) {
+    return Math.floor((value % 86400) / 3600);
+  }
+
+  secondsFromSeconds(value: number) {
+    return value % 60;
+  }
+
+  private setCountdownParts(days: number, hours: number, minutes: number, seconds: number) {
+    const total = days * 86400 + hours * 3600 + minutes * 60 + seconds;
+    this.commit({ ...this.state(), countdownSeconds: total, remainingSeconds: total });
   }
 }

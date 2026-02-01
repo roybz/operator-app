@@ -1,4 +1,14 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  Input,
+  OnInit,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
@@ -82,8 +92,55 @@ const uid = (prefix: string) =>
   selector: 'app-data-table',
   standalone: true,
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .data-table-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .data-table-shell {
+        gap: 10px;
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) table {
+        display: block;
+        overflow-x: auto;
+      }
+
+      :host-context(.phone-mode) button {
+        min-height: 40px;
+      }
+
+      .data-table-scroll {
+        position: relative;
+      }
+
+      .data-table-scroll--left {
+        box-shadow: inset 8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+
+      .data-table-scroll--right {
+        box-shadow: inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+
+      .data-table-scroll--left.data-table-scroll--right {
+        box-shadow:
+          inset 8px 0 8px -8px rgba(0, 0, 0, 0.2),
+          inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
+    <div class="data-table-shell">
       @if (settingsOpen()) {
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -159,8 +216,15 @@ const uid = (prefix: string) =>
           <button (click)="addColumn()">{{ 'dataTable.addColumn' | translate }}</button>
         </div>
 
-        <div style="overflow:auto; flex:1; margin-top:8px;">
-          <table style="width:100%; border-collapse:collapse;">
+        <div
+          #scrollEl
+          class="data-table-scroll"
+          [class.data-table-scroll--left]="scrollShadows().left"
+          [class.data-table-scroll--right]="scrollShadows().right"
+          style="overflow:auto; flex:1; margin-top:8px;"
+          (scroll)="updateScrollShadows($event)"
+        >
+          <table style="width:100%; border-collapse:collapse; min-width:max-content;">
             <thead>
               <tr>
                 @for (column of activeTable().columns; track column.id) {
@@ -285,7 +349,9 @@ const uid = (prefix: string) =>
     }
   `,
 })
-export class DataTableComponent implements OnInit {
+export class DataTableComponent implements OnInit, AfterViewInit {
+  @ViewChild('scrollEl') scrollEl?: ElementRef<HTMLDivElement>;
+  private host = inject(ElementRef);
   @Input({ required: true }) instanceId!: string;
 
   private prefs = inject(AppPreferencesService);
@@ -304,6 +370,7 @@ export class DataTableComponent implements OnInit {
   importMessage = signal<string | null>(null);
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
+  scrollShadows = signal({ left: false, right: false });
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -329,6 +396,15 @@ export class DataTableComponent implements OnInit {
       stateStore.set(this.instanceId, next);
     }
     this.persistState();
+  }
+
+  ngAfterViewInit() {
+    if (this.scrollEl?.nativeElement) {
+      const el = this.scrollEl.nativeElement;
+      this.updateScrollShadows(el);
+      requestAnimationFrame(() => this.updateScrollShadows(el));
+      setTimeout(() => this.updateScrollShadows(el), 0);
+    }
   }
 
   closeSettings() {
@@ -487,6 +563,38 @@ export class DataTableComponent implements OnInit {
     }
     return rows;
   });
+
+  updateScrollShadows(eventOrTarget: Event | HTMLDivElement) {
+    const target =
+      eventOrTarget instanceof Event
+        ? (eventOrTarget.target as HTMLDivElement | null)
+        : eventOrTarget;
+    if (!target) return;
+    const maxScroll = Math.max(0, target.scrollWidth - target.clientWidth);
+    const canScroll = maxScroll > 1;
+    const atLeft = target.scrollLeft <= 1;
+    const atRight = target.scrollLeft >= maxScroll - 1;
+    const showLeft = canScroll && !atLeft;
+    const showRight = canScroll && !atRight;
+    this.scrollShadows.set({ left: showLeft, right: showRight });
+    const dialogBody = this.host.nativeElement
+      .closest('.dialog')
+      ?.querySelector('.dialog__body--phone, .dialog__body');
+    if (dialogBody) {
+      dialogBody.style.setProperty(
+        '--phone-scroll-shadow-left',
+        showLeft
+          ? 'inset 14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
+          : 'inset 2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
+      );
+      dialogBody.style.setProperty(
+        '--phone-scroll-shadow-right',
+        showRight
+          ? 'inset -14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
+          : 'inset -2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
+      );
+    }
+  }
 
   cellValue(row: DataRow, columnId: string) {
     return row.values[columnId] ?? '';

@@ -52,8 +52,31 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
   selector: 'app-sticky-notes',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .sticky-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        height: 100%;
+      }
+
+      :host-context(.phone-mode) .sticky-shell {
+        padding: 12px;
+      }
+
+      :host-context(.phone-mode) button {
+        min-height: 40px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
+    <div class="sticky-shell">
       @if (settingsOpen()) {
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">

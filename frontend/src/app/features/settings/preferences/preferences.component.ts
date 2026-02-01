@@ -6,11 +6,22 @@ import { SettingsDraftService } from '../settings-draft.service';
 
 const LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
+  { code: 'en-US', label: 'English (United States)' },
+  { code: 'en-GB', label: 'English (United Kingdom)' },
+  { code: 'en-CA', label: 'English (Canada)' },
+  { code: 'en-AU', label: 'English (Australia)' },
+  { code: 'en-NZ', label: 'English (New Zealand)' },
   { code: 'es', label: 'Español' },
+  { code: 'es-ES', label: 'Español (España)' },
+  { code: 'es-419', label: 'Español (Latinoamérica)' },
   { code: 'fr', label: 'Français' },
+  { code: 'fr-FR', label: 'Français (France)' },
+  { code: 'fr-CA', label: 'Français (Canada)' },
   { code: 'de', label: 'Deutsch' },
   { code: 'it', label: 'Italiano' },
   { code: 'pt', label: 'Português' },
+  { code: 'pt-PT', label: 'Português (Portugal)' },
+  { code: 'pt-BR', label: 'Português (Brasil)' },
   { code: 'nl', label: 'Nederlands' },
   { code: 'no', label: 'Norsk' },
   { code: 'pl', label: 'Polski' },
@@ -20,6 +31,9 @@ const LANGUAGE_OPTIONS = [
   { code: 'hr', label: 'Hrvatski' },
   { code: 'ru', label: 'Русский' },
   { code: 'uk', label: 'Українська' },
+  { code: 'ga', label: 'Gaeilge' },
+  { code: 'sco', label: 'Scots' },
+  { code: 'cy', label: 'Cymraeg' },
   { code: 'ar', label: 'العربية' },
   { code: 'fa', label: 'فارسی' },
   { code: 'hi', label: 'हिन्दी' },
@@ -116,6 +130,8 @@ const LANGUAGE_OPTIONS = [
             <option value="standard">{{ 'preferences.themeStandard' | translate }}</option>
             <option value="notepad">{{ 'preferences.themeNotepad' | translate }}</option>
             <option value="ice">{{ 'preferences.themeIce' | translate }}</option>
+            <option value="lava">{{ 'preferences.themeLava' | translate }}</option>
+            <option value="green">{{ 'preferences.themeGreen' | translate }}</option>
           </select>
         </label>
 
@@ -250,7 +266,12 @@ export class PreferencesSettingsComponent {
   }
 
   onColorThemeChange(event: Event) {
-    const colorTheme = (event.target as HTMLSelectElement).value as 'standard' | 'notepad' | 'ice';
+    const colorTheme = (event.target as HTMLSelectElement).value as
+      | 'standard'
+      | 'notepad'
+      | 'ice'
+      | 'lava'
+      | 'green';
     this.save({ ...this.prefs(), colorTheme });
   }
 

@@ -6,6 +6,17 @@ import { TranslateModule } from '@ngx-translate/core';
   selector: 'app-confirm-dialog',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      .confirm-dialog__panel {
+        width: min(420px, 92vw);
+      }
+
+      :host-context(.phone-mode) .confirm-dialog__panel {
+        width: min(420px, 84vw);
+      }
+    `,
+  ],
   template: `
     <div
       style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3500;"
@@ -16,7 +27,8 @@ import { TranslateModule } from '@ngx-translate/core';
       (keydown.space)="canceled.emit()"
     >
       <div
-        style="background:var(--color-surface); padding:20px; border-radius:12px; width:min(420px, 92vw); box-shadow:0 12px 32px rgba(0,0,0,0.2);"
+        class="confirm-dialog__panel"
+        style="background:var(--color-surface); padding:20px; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.2);"
         (pointerdown)="$event.stopPropagation()"
       >
         <div style="display:flex; justify-content:flex-end;">
@@ -32,7 +44,7 @@ import { TranslateModule } from '@ngx-translate/core';
           <h3 style="margin:0 0 12px;">{{ title }}</h3>
         }
         @if (message) {
-          <p style="margin:5px 0; line-height:24px;">{{ message }}</p>
+          <p style="margin:5px 0; line-height:24px; white-space:pre-line;">{{ message }}</p>
         }
         <ng-content />
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">

@@ -44,24 +44,19 @@
     "title": "Operator App"
   },
   "apps": {
+    "kanban": "Kanbans",
+    "todo": "Todos",
     "calculator": "Calculators",
-    "calculatorGroup": "Calculators",
+    "timer": "Timers",
+    "navigator": "Navigators",
+    "notes": "Notes",
+    "stickyNotes": "Sticky Notes",
     "calendar": "Calendars (Beta)",
     "clock": "Clocks",
     "dataTable": "Data Tables",
+    "viewArchived": "View archived applications",
     "hideArchived": "Hide archived applications",
-    "kanban": "Kanbans",
-    "navigator": "Navigators",
-    "navigatorGroup": "Navigators",
-    "noArchived": "There are no archived applications at the moment.",
-    "notes": "Notes",
-    "notesGroup": "Notes",
-    "stickyNotes": "Sticky Notes",
-    "timer": "Timers",
-    "timerGroup": "Timers",
-    "todo": "Todos",
-    "todoGroup": "Todos",
-    "viewArchived": "View archived applications"
+    "noArchived": "There are no archived applications at the moment."
   },
   "auth": {
     "error": {
@@ -75,7 +70,8 @@
     "guest": "Als Gast fortfahren",
     "guestDisabled": "Guest access is disabled by an admin.",
     "lockoutWarning": "6 failed attempts will lock you out for 5 hours.",
-    "loggedInAs": "Logged in as {{user}}",
+    "loggedInAs": "Logged in as: {{user}}",
+    "loggedOut": "Successfully logged out.",
     "password": "Password",
     "resetGuest": "Reset everything for the local guest account?",
     "resetGuestConfirm": "Reset the local guest account and clear its data?",
@@ -84,7 +80,7 @@
     "roleInvitee": "invitee",
     "roleObserver": "observer",
     "signIn": "Anmelden",
-    "tagline": "Think ahead.",
+    "tagline": "Get things done.",
     "title": "Operator App",
     "username": "Benutzername"
   },
@@ -121,13 +117,14 @@
   },
   "canvas": {
     "lockCanvas": "Lock canvas size?",
-    "mode": "Canvas size",
+    "mode": "Canvas size:",
     "modeFollow": "Canvas follows browser size",
     "modeLocked": "Locked canvas",
     "originalScale": "Original scale",
     "updateSize": "Update",
     "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out"
+    "zoomOut": "Zoom out",
+    "display": "Display"
   },
   "clock": {
     "addClock": "Add clock",
@@ -147,11 +144,14 @@
     "addRow": "Add row",
     "addTable": "Add table",
     "closeSettings": "Close settings",
+    "confirmWipeInstance": "Wipe all data for this instance?",
     "defaultColumn": "New column",
     "defaultTable": "New table",
     "deleteConfirm": "Are you sure you want to delete this table?",
     "deleteRow": "Delete row",
     "deleteTable": "Delete table",
+    "exportInstance": "Export instance data",
+    "importInstance": "Import instance data",
     "search": "Search",
     "settingsTitle": "Data Table Settings",
     "tableLabel": "Table",
@@ -164,10 +164,7 @@
       "text": "Text",
       "url": "URL"
     },
-    "exportInstance": "Export instance data",
-    "importInstance": "Import instance data",
-    "wipeInstance": "Wipe instance data",
-    "confirmWipeInstance": "Wipe all data for this instance?"
+    "wipeInstance": "Wipe instance data"
   },
   "dialogs": {
     "actions": "Actions",
@@ -186,12 +183,20 @@
       "maxPersisted": "Maximale Anzahl persistenter Apps erreicht."
     },
     "expandList": "Expand list",
+    "exportLimit": "Only two export actions can run at a time.",
     "hideAll": "Alle Dialoge ausblenden",
+    "importConfirm": "Import the selected file? This will add to your current data.",
+    "importFailed": "Import failed.",
+    "importLimit": "Only two import actions can run at a time.",
+    "importSuccess": "Import complete.",
+    "importTitle": "Confirm import",
+    "importing": "Importing...",
     "lockDelete": "Lock",
     "maximize": "Maximieren",
     "minimize": "Minimieren",
     "moveWorkspace": "Move to workspace",
     "moveWorkspaceTitle": "Move {{name}} to another Workspace?",
+    "ok": "Ok",
     "reset": "Dialogpositionen zurucksetzen",
     "resetLeft": "Nach links zurucksetzen",
     "resetMiddle": "Zur Mitte zurucksetzen",
@@ -201,15 +206,7 @@
     "trash": "Loschen",
     "unarchive": "Unarchive",
     "unlockDelete": "Unlock",
-    "unstash": "Wiederherstellen",
-    "importTitle": "Confirm import",
-    "importConfirm": "Import the selected file? This will add to your current data.",
-    "importing": "Importing...",
-    "importSuccess": "Import complete.",
-    "importFailed": "Import failed.",
-    "ok": "Ok",
-    "importLimit": "Only two import actions can run at a time.",
-    "exportLimit": "Only two export actions can run at a time."
+    "unstash": "Wiederherstellen"
   },
   "kanban": {
     "addBoard": "Add board",
@@ -229,19 +226,19 @@
     "columnInProgress": "In Progress",
     "columnTodo": "Todo",
     "confirmRemoveColumn": "Remove this column?",
+    "confirmWipeInstance": "Wipe all data for this instance?",
     "defaultBoard": "Board 1",
     "defaultCardTitle": "New card",
     "defaultColumn": "New column",
     "deleteItems": "Items will be deleted",
     "due": "Due",
+    "exportInstance": "Export instance data",
+    "importInstance": "Import instance data",
     "moveItemsLeft": "Move items to the column on the left",
     "removeBoard": "Remove",
     "removeColumn": "Remove column",
     "settingsTitle": "Kanban settings",
-    "exportInstance": "Export instance data",
-    "importInstance": "Import instance data",
-    "wipeInstance": "Wipe instance data",
-    "confirmWipeInstance": "Wipe all data for this instance?"
+    "wipeInstance": "Wipe instance data"
   },
   "landing": {
     "welcome": "Welcome to Operator App."
@@ -307,6 +304,12 @@
     "unlock": "Unlock",
     "wipeInstance": "Wipe all instance data"
   },
+  "phone": {
+    "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",
+    "modeLabel": "Phone mode?"
+  },
+  "phone.modeConfirm": "Switching phone mode will reload the layout. Continue?",
+  "phone.modeLabel": "Phone mode?",
   "preferences": {
     "accessibilityMode": "Accessibility mode (high contrast)",
     "backgroundImageCenter": "Zentrieren",
@@ -340,7 +343,9 @@
     "stickyModeMarkdown": "Markdown",
     "stickyModeRich": "Rich text",
     "themeDark": "Dark",
+    "themeGreen": "Lively Green",
     "themeIce": "Ice Blue (Beta)",
+    "themeLava": "Lava Red",
     "themeLight": "Light",
     "themeMode": "Theme",
     "themeNotepad": "Notepad Yellow (Beta)",
@@ -436,7 +441,9 @@
     "seconds": "sec",
     "start": "Start",
     "stopwatch": "Stopwatch",
-    "work": "Work"
+    "work": "Work",
+    "days": "Days",
+    "hours": "Hours"
   },
   "todo": {
     "actions": "Actions",
@@ -448,6 +455,7 @@
     "clearCompletedConfirm": "Clear all completed todos?",
     "closeSettings": "Close settings",
     "confirmDeleteProject": "Delete this project and its todos?",
+    "confirmWipeInstance": "Wipe all data for this instance?",
     "confirmWipeProject": "Wipe all todos in this project?",
     "delete": "Loschen",
     "deleteProject": "Delete project",
@@ -461,6 +469,8 @@
       "list": "Aufgaben konnten nicht geladen werden.",
       "unknown": "Etwas ist schiefgelaufen."
     },
+    "exportInstance": "Export instance data",
+    "importInstance": "Import instance data",
     "loading": "Wird geladen…",
     "placeholder": "Aufgabe hinzufugen",
     "projectName": "Project name",
@@ -471,11 +481,8 @@
     "subtaskPlaceholder": "Add a subtask",
     "subtasks": "Subtasks",
     "title": "Todos",
-    "wipeProject": "Wipe data",
-    "exportInstance": "Export instance data",
-    "importInstance": "Import instance data",
     "wipeInstance": "Wipe instance data",
-    "confirmWipeInstance": "Wipe all data for this instance?"
+    "wipeProject": "Wipe data"
   },
   "topbar": {
     "collapse": "Obere Leiste einklappen",
@@ -536,6 +543,7 @@
     "wipeAll": "Wipe all universes",
     "wipeAllConfirm": "Are you sure you want to wipe all universes and their data?"
   },
+  "universe.phoneModePrompt": "This universe last opened in desktop mode. Switch it to phone mode for this session?",
   "users": {
     "adminOnly": "Nur Admins konnen Benutzer verwalten.",
     "create": "Erstellen",
@@ -573,5 +581,17 @@
   },
   "workspaces": {
     "button": "Workspaces"
+  },
+  "appNames": {
+    "kanban": "Kanban",
+    "todo": "Todo",
+    "calculator": "Calculator",
+    "timer": "Timer",
+    "navigator": "Navigator",
+    "notes": "Note",
+    "stickyNotes": "Sticky Note",
+    "calendar": "Calendar",
+    "clock": "Clock",
+    "dataTable": "Data Table"
   }
 }

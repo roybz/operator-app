@@ -1,4 +1,14 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  Input,
+  OnInit,
+  ViewChild,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
@@ -69,8 +79,47 @@ export function cloneKanbanState(fromId: string, toId: string) {
   selector: 'app-kanban',
   standalone: true,
   imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  styles: [
+    `
+      :host {
+        display: block;
+        height: 100%;
+      }
+
+      .kanban-board {
+        display: flex;
+        gap: 12px;
+        overflow: auto;
+        flex: 1;
+      }
+      .kanban-board--left {
+        box-shadow: inset 8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+      .kanban-board--right {
+        box-shadow: inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+      .kanban-board--left.kanban-board--right {
+        box-shadow:
+          inset 8px 0 8px -8px rgba(0, 0, 0, 0.2),
+          inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+      }
+
+      :host-context(.phone-mode) .kanban-board {
+        gap: 8px;
+        padding: 4px 0 8px;
+      }
+
+      :host-context(.phone-mode) .kanban-board section {
+        min-width: 220px !important;
+      }
+
+      :host-context(.phone-mode) .kanban-shell {
+        padding: 12px;
+      }
+    `,
+  ],
   template: `
-    <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
+    <div class="kanban-shell" style="display:flex; flex-direction:column; gap:12px; height:100%;">
       @if (settingsOpen()) {
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -138,7 +187,13 @@ export function cloneKanbanState(fromId: string, toId: string) {
           }
         </div>
 
-        <div style="display:flex; gap:12px; overflow:auto; flex:1;">
+        <div
+          #boardScroll
+          class="kanban-board"
+          [class.kanban-board--left]="scrollShadows().left"
+          [class.kanban-board--right]="scrollShadows().right"
+          (scroll)="updateScrollShadows($event)"
+        >
           @for (column of activeBoard().columns; track column.id) {
             <section
               style="flex:1; min-width:220px; border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;"
@@ -338,8 +393,10 @@ export function cloneKanbanState(fromId: string, toId: string) {
     }
   `,
 })
-export class KanbanComponent implements OnInit {
+export class KanbanComponent implements OnInit, AfterViewInit {
   @Input({ required: true }) instanceId!: string;
+  @ViewChild('boardScroll') boardScroll?: ElementRef<HTMLDivElement>;
+  private host = inject(ElementRef);
 
   private prefs = inject(AppPreferencesService);
   private translate = inject(TranslateService);
@@ -366,6 +423,7 @@ export class KanbanComponent implements OnInit {
   importMessage = signal<string | null>(null);
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
+  scrollShadows = signal({ left: false, right: false });
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -401,6 +459,15 @@ export class KanbanComponent implements OnInit {
     this.persistState();
   }
 
+  ngAfterViewInit() {
+    if (this.boardScroll?.nativeElement) {
+      const el = this.boardScroll.nativeElement;
+      this.updateScrollShadows(el);
+      requestAnimationFrame(() => this.updateScrollShadows(el));
+      setTimeout(() => this.updateScrollShadows(el), 0);
+    }
+  }
+
   closeSettings() {
     this.instanceSettings.close(this.instanceId);
   }
@@ -409,6 +476,38 @@ export class KanbanComponent implements OnInit {
     return (
       this.state().boards.find((b) => b.id === this.state().activeBoardId) ?? this.state().boards[0]
     );
+  }
+
+  updateScrollShadows(eventOrTarget: Event | HTMLDivElement) {
+    const target =
+      eventOrTarget instanceof Event
+        ? (eventOrTarget.target as HTMLDivElement | null)
+        : eventOrTarget;
+    if (!target) return;
+    const maxScroll = Math.max(0, target.scrollWidth - target.clientWidth);
+    const canScroll = maxScroll > 1;
+    const atLeft = target.scrollLeft <= 1;
+    const atRight = target.scrollLeft >= maxScroll - 1;
+    const showLeft = canScroll && !atLeft;
+    const showRight = canScroll && !atRight;
+    this.scrollShadows.set({ left: showLeft, right: showRight });
+    const dialogBody = this.host.nativeElement
+      .closest('.dialog')
+      ?.querySelector('.dialog__body--phone, .dialog__body');
+    if (dialogBody) {
+      dialogBody.style.setProperty(
+        '--phone-scroll-shadow-left',
+        showLeft
+          ? 'inset 14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
+          : 'inset 2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
+      );
+      dialogBody.style.setProperty(
+        '--phone-scroll-shadow-right',
+        showRight
+          ? 'inset -14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
+          : 'inset -2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
+      );
+    }
   }
 
   card(cardId: string) {

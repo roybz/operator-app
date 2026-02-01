@@ -2,15 +2,17 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogInstance } from '../../core/dialog.service';
+import { LongPressDirective } from '../long-press/long-press.directive';
 
 @Component({
   selector: 'app-dialog',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, LongPressDirective],
   template: `
     <div
       class="dialog"
       [class.dialog--disabled]="disabled"
+      [class.dialog--phone]="phoneMode"
       [style.left.px]="instance.rect.x"
       [style.top.px]="instance.rect.y"
       [style.width.px]="instance.rect.width"
@@ -18,7 +20,11 @@ import { DialogInstance } from '../../core/dialog.service';
       [style.zIndex]="instance.z"
       (pointerdown)="onPointerDown($event)"
     >
-      <div class="dialog__bar" (pointerdown)="startDrag($event)">
+      <div
+        class="dialog__bar"
+        [class.dialog__bar--static]="phoneMode"
+        (pointerdown)="startDrag($event)"
+      >
         <button
           class="dialog__icon"
           (pointerdown)="$event.stopPropagation()"
@@ -31,7 +37,13 @@ import { DialogInstance } from '../../core/dialog.service';
         </button>
         <div class="dialog__title">
           @if (!isEditingTitle) {
-            <div class="dialog__title-content" (dblclick)="startTitleEdit()">
+            <div
+              class="dialog__title-content"
+              (dblclick)="startTitleEdit()"
+              appLongPress
+              [longPressEnabled]="phoneMode"
+              (longPress)="startTitleEdit()"
+            >
               <span class="dialog__title-icon">{{ icon }}</span>
               <span>{{ title }}</span>
             </div>
@@ -93,21 +105,37 @@ import { DialogInstance } from '../../core/dialog.service';
           </button>
         </div>
       </div>
-      <div class="dialog__body">
+      <div class="dialog__body" [class.dialog__body--phone]="phoneMode">
         <ng-content />
       </div>
       @if (hasSettings) {
-        <button
-          class="dialog__settings"
-          (pointerdown)="$event.stopPropagation()"
-          (click)="settings.emit()"
-          title="{{ 'dialogs.settings' | translate }}"
-          [disabled]="disabled"
-        >
-          ⚙️
-        </button>
+        @if (phoneMode) {
+          <div class="dialog__footer">
+            <button
+              class="dialog__settings dialog__settings--footer"
+              (pointerdown)="$event.stopPropagation()"
+              (click)="settings.emit()"
+              title="{{ 'dialogs.settings' | translate }}"
+              [disabled]="disabled"
+            >
+              ⚙️
+            </button>
+          </div>
+        } @else {
+          <button
+            class="dialog__settings"
+            (pointerdown)="$event.stopPropagation()"
+            (click)="settings.emit()"
+            title="{{ 'dialogs.settings' | translate }}"
+            [disabled]="disabled"
+          >
+            ⚙️
+          </button>
+        }
       }
-      <div class="dialog__resize" (pointerdown)="startResize($event)"></div>
+      @if (!phoneMode) {
+        <div class="dialog__resize" (pointerdown)="startResize($event)"></div>
+      }
     </div>
   `,
   styles: [
@@ -130,6 +158,9 @@ import { DialogInstance } from '../../core/dialog.service';
         background: var(--color-bg);
         cursor: grab;
         user-select: none;
+      }
+      .dialog__bar--static {
+        cursor: default;
       }
       .dialog__title {
         flex: 1;
@@ -173,6 +204,15 @@ import { DialogInstance } from '../../core/dialog.service';
         overflow: auto;
         padding: 8px 12px;
       }
+      .dialog__body--phone {
+        padding-bottom: 8px;
+        box-shadow: var(--phone-scroll-shadow-left, none), var(--phone-scroll-shadow-right, none);
+      }
+      .dialog__footer {
+        display: flex;
+        align-items: center;
+        padding: 6px 10px 10px;
+      }
       .dialog__resize {
         position: absolute;
         right: 2px;
@@ -198,12 +238,18 @@ import { DialogInstance } from '../../core/dialog.service';
         font-size: 16px;
         transition: opacity 120ms ease;
       }
+      .dialog--phone .dialog__settings {
+        opacity: 0.7;
+      }
       .dialog__settings:hover {
         opacity: 1;
       }
       .dialog__settings:disabled {
         opacity: 0.2;
         cursor: not-allowed;
+      }
+      .dialog__settings--footer {
+        position: static;
       }
       .dialog--disabled {
         pointer-events: none;
@@ -220,7 +266,9 @@ export class DialogComponent {
   @Input() icon = '';
   @Input() hasSettings = false;
   @Input() canMoveWorkspace = false;
+  @Input() phoneMode = false;
 
+  @Input() scale = 1;
   @Output() moved = new EventEmitter<{ x: number; y: number }>();
   @Output() resized = new EventEmitter<{ width: number; height: number }>();
   @Output() minimize = new EventEmitter<void>();
@@ -247,6 +295,7 @@ export class DialogComponent {
   }
 
   startDrag(event: PointerEvent) {
+    if (this.phoneMode) return;
     if (this.disabled) return;
     if (this.isEditingTitle) return;
     const target = event.target as HTMLElement;
@@ -264,6 +313,7 @@ export class DialogComponent {
   }
 
   startResize(event: PointerEvent) {
+    if (this.phoneMode) return;
     if (this.disabled) return;
     event.preventDefault();
     this.bringToFront.emit();
@@ -279,13 +329,15 @@ export class DialogComponent {
   @HostListener('window:pointermove', ['$event'])
   onPointerMove(event: PointerEvent) {
     if (this.dragStart) {
-      const dx = event.clientX - this.dragStart.x;
-      const dy = event.clientY - this.dragStart.y;
+      const scale = this.scale || 1;
+      const dx = (event.clientX - this.dragStart.x) / scale;
+      const dy = (event.clientY - this.dragStart.y) / scale;
       this.moved.emit({ x: this.dragStart.left + dx, y: this.dragStart.top + dy });
     }
     if (this.resizeStart) {
-      const dw = event.clientX - this.resizeStart.x;
-      const dh = event.clientY - this.resizeStart.y;
+      const scale = this.scale || 1;
+      const dw = (event.clientX - this.resizeStart.x) / scale;
+      const dh = (event.clientY - this.resizeStart.y) / scale;
       this.resized.emit({
         width: this.resizeStart.width + dw,
         height: this.resizeStart.height + dh,
