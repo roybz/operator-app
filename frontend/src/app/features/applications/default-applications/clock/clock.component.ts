@@ -12,6 +12,7 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 interface ClockEntry {
   id: string;
@@ -29,21 +30,30 @@ const STORAGE_PREFIX = 'op_app_state:clock';
 const storageKey = (userId: string, instanceId: string) =>
   `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
-export function clearClockState(instanceId: string) {
+export function clearClockState(instanceId: string, storage: StorageService) {
   stateStore.delete(instanceId);
-  if (typeof window === 'undefined') return;
-  Object.keys(window.localStorage)
+  storage
+    .keysSync()
     .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => window.localStorage.removeItem(key));
+    .forEach((key) => void storage.removeItem(key));
 }
 
-export function cloneClockState(fromId: string, toId: string) {
+export function cloneClockState(fromId: string, toId: string, storage: StorageService) {
   const stored = stateStore.get(fromId);
   if (!stored) return;
   stateStore.set(toId, {
     ...stored,
     clocks: stored.clocks.map((clock) => ({ ...clock })),
   });
+  storage
+    .keysSync()
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
+    .forEach((key) => {
+      const value = storage.getItemSync(key);
+      if (value === null) return;
+      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
+      void storage.setItem(nextKey, value);
+    });
 }
 
 const fallbackZones = [
@@ -162,6 +172,7 @@ export class ClockComponent implements OnInit, OnDestroy {
   private prefs = inject(AppPreferencesService);
   private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
+  private storage = inject(StorageService);
   private interval?: number;
   private now = signal(new Date());
   state = signal<ClockState>({
@@ -181,20 +192,18 @@ export class ClockComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as unknown;
-          const normalized = this.normalizeState(parsed);
-          this.state.set(normalized);
-          stateStore.set(this.instanceId, normalized);
-          this.initializeOptions(normalized.clocks[0]?.timeZone || this.prefs.timeZone());
-          this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
-          return;
-        } catch {
-          // ignore malformed stored data
-        }
+    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        const normalized = this.normalizeState(parsed);
+        this.state.set(normalized);
+        stateStore.set(this.instanceId, normalized);
+        this.initializeOptions(normalized.clocks[0]?.timeZone || this.prefs.timeZone());
+        this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
+        return;
+      } catch {
+        // ignore malformed stored data
       }
     }
 
@@ -341,9 +350,8 @@ export class ClockComponent implements OnInit, OnDestroy {
   }
 
   private persistState() {
-    if (typeof window === 'undefined') return;
     const userId = this.prefs.userId();
-    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   private normalizeState(raw: unknown): ClockState {

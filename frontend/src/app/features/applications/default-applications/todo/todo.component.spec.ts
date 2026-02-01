@@ -6,6 +6,9 @@ import {
   TranslateService,
 } from '@ngx-translate/core';
 import { TodoPageComponent } from './todo.component';
+import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
+import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 interface OpWindow extends Window {
   __OP_CONFIG__?: { apiBaseUrl?: string; mockMode?: boolean };
@@ -24,7 +27,10 @@ describe('TodoPageComponent', () => {
           loader: { provide: TranslateLoader, useClass: TranslateFakeLoader },
         }),
       ],
+      providers: [{ provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter }],
     }).compileComponents();
+
+    await TestBed.inject(StorageService).hydrate();
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {
@@ -32,7 +38,6 @@ describe('TodoPageComponent', () => {
         title: 'Todo',
         placeholder: 'Add a todo',
         add: 'Add',
-        reload: 'Reload',
         loading: 'Loading…',
         duplicate: 'Duplicate',
         delete: 'Delete',
@@ -62,7 +67,6 @@ describe('TodoPageComponent', () => {
     expect(compiled.querySelector('h2')?.textContent).toContain('Todo');
     expect(input?.getAttribute('placeholder')).toBe('Add a todo');
     expect(compiled.textContent).toContain('Add');
-    expect(compiled.textContent).toContain('Reload');
   });
 
   it('adds and deletes a todo in mock mode', async () => {

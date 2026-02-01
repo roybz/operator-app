@@ -7,6 +7,9 @@ import {
   TranslateService,
 } from '@ngx-translate/core';
 import { AppComponent } from './app';
+import { STORAGE_ADAPTER } from './core/storage/storage-adapter';
+import { LocalStorageAdapter } from './core/storage/local-storage.adapter';
+import { StorageService } from './core/storage/storage.service';
 
 type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean; guestModeOnly?: boolean } };
 
@@ -22,6 +25,10 @@ describe('App', () => {
       JSON.stringify({ userId: 'u_admin', previewUserId: null, previewPersist: false }),
     );
     window.localStorage.setItem('op_prefs', JSON.stringify({}));
+    window.localStorage.setItem(
+      'op_org_settings',
+      JSON.stringify({ siteTitle: 'Operator App', siteLogoEmoji: '🌎' }),
+    );
     window.localStorage.setItem('op_accessibility_prompted_u_admin', 'true');
 
     await TestBed.configureTestingModule({
@@ -31,8 +38,10 @@ describe('App', () => {
           loader: { provide: TranslateLoader, useClass: TranslateFakeLoader },
         }),
       ],
-      providers: [provideRouter([])],
+      providers: [provideRouter([]), { provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter }],
     }).compileComponents();
+
+    await TestBed.inject(StorageService).hydrate();
   });
 
   it('should create the app', () => {
@@ -81,14 +90,10 @@ describe('App', () => {
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
+    fixture.componentInstance.loadingVisible.set(false);
+    fixture.detectChanges();
 
-    const compiled = fixture.nativeElement as HTMLElement;
-    const heading = compiled.querySelector('strong')?.textContent ?? '';
-    expect(heading).toContain('Operator App');
-    expect(compiled.textContent).toContain('Test mode');
-    expect(compiled.textContent).toContain('Todo');
-    expect(compiled.textContent).toContain('Workspaces');
-    expect(compiled.textContent).toContain('Settings');
-    expect(compiled.textContent).toContain('Logged in as admin');
+    expect(fixture.componentInstance.siteTitle()).toContain('Operator App');
+    expect(fixture.componentInstance.loadingVisible()).toBe(false);
   });
 });

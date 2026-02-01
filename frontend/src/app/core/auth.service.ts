@@ -3,6 +3,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
 import packageJson from '../../../package.json';
+import { StorageService } from './storage/storage.service';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -261,9 +262,14 @@ export class AuthService {
   readonly orgSettings = this.orgSettingsSignal.asReadonly();
 
   private translate = inject(TranslateService);
+  private storage = inject(StorageService);
 
   constructor() {
-    this.loadFromStorage();
+    this.updateUniverseContextFromLocation();
+  }
+
+  async hydrate() {
+    await this.loadFromStorage();
     this.updateUniverseContextFromLocation();
     this.readySignal.set(true);
   }
@@ -345,12 +351,10 @@ export class AuthService {
     this.previewPrefsSignal.set(previewPrefs);
     this.persistPreviewPrefs();
 
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(`op_accessibility_prompted_${GUEST_USER_ID}`);
-      Object.keys(window.localStorage)
-        .filter((key) => key.startsWith(`op_accessibility_prompted_${GUEST_USER_ID}:`))
-        .forEach((key) => window.localStorage.removeItem(key));
-    }
+    this.removeKey(`op_accessibility_prompted_${GUEST_USER_ID}`);
+    this.keys()
+      .filter((key) => key.startsWith(`op_accessibility_prompted_${GUEST_USER_ID}:`))
+      .forEach((key) => this.removeKey(key));
   }
 
   logout() {
@@ -490,10 +494,8 @@ export class AuthService {
     if (!this.isAdmin()) return { ok: false, message: 'users.error.adminOnly' };
     this.clearMockTodosForUser(userId);
     this.clearAppStateForUser(userId);
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(`${DIALOG_STATE_KEY}:${userId}`);
-      window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}`);
-    }
+    this.removeKey(`${DIALOG_STATE_KEY}:${userId}`);
+    this.removeKey(`${PREVIEW_STATE_KEY}:${userId}`);
 
     const remainingPrefs = { ...this.prefsSignal() };
     delete remainingPrefs[userId];
@@ -580,13 +582,11 @@ export class AuthService {
   }
 
   setLoginPhoneModePreference(enabled: boolean) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(LOGIN_PHONE_MODE_KEY, JSON.stringify(Boolean(enabled)));
+    void this.storage.setItem(LOGIN_PHONE_MODE_KEY, JSON.stringify(Boolean(enabled)));
   }
 
   getLoginPhoneModePreference() {
-    if (typeof window === 'undefined') return null;
-    const raw = window.localStorage.getItem(LOGIN_PHONE_MODE_KEY);
+    const raw = this.storage.getItemSync(LOGIN_PHONE_MODE_KEY);
     if (!raw) return null;
     try {
       return Boolean(JSON.parse(raw));
@@ -601,17 +601,14 @@ export class AuthService {
     if (pref === null) return;
     const prefs = this.preferences();
     if (prefs.phoneMode === pref) return;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(LOGIN_PHONE_MODE_APPLY_KEY, String(Date.now()));
-    }
+    void this.storage.setItem(LOGIN_PHONE_MODE_APPLY_KEY, String(Date.now()));
     this.savePreferences({ ...prefs, phoneMode: pref });
   }
 
   consumeLoginPhoneModeApplyFlag() {
-    if (typeof window === 'undefined') return false;
-    const raw = window.localStorage.getItem(LOGIN_PHONE_MODE_APPLY_KEY);
+    const raw = this.storage.getItemSync(LOGIN_PHONE_MODE_APPLY_KEY);
     if (!raw) return false;
-    window.localStorage.removeItem(LOGIN_PHONE_MODE_APPLY_KEY);
+    void this.storage.removeItem(LOGIN_PHONE_MODE_APPLY_KEY);
     return true;
   }
 
@@ -754,18 +751,16 @@ export class AuthService {
     const nextPrefs = { ...this.prefsSignal() };
     delete nextPrefs[this.universeKey(userId, universeId)];
 
-    if (typeof window !== 'undefined') {
-      Object.keys(window.localStorage)
-        .filter((key) => key.includes(`:${userId}:${universeId}:`))
-        .forEach((key) => window.localStorage.removeItem(key));
-      window.localStorage.removeItem(`${DIALOG_STATE_KEY}:${userId}:${universeId}`);
-      window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}:${universeId}`);
-      window.localStorage.removeItem(`${UNIVERSE_PRESENCE_KEY}:${universeId}`);
-      window.localStorage.removeItem(`${UNIVERSE_CHAT_KEY}:${universeId}`);
-      window.localStorage.removeItem(`${UNIVERSE_EDIT_KEY}:${universeId}`);
-      window.localStorage.removeItem(`${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`);
-      window.localStorage.removeItem(`${UNIVERSE_KICK_KEY}:${universeId}`);
-    }
+    this.keys()
+      .filter((key) => key.includes(`:${userId}:${universeId}:`))
+      .forEach((key) => this.removeKey(key));
+    this.removeKey(`${DIALOG_STATE_KEY}:${userId}:${universeId}`);
+    this.removeKey(`${PREVIEW_STATE_KEY}:${userId}:${universeId}`);
+    this.removeKey(`${UNIVERSE_PRESENCE_KEY}:${universeId}`);
+    this.removeKey(`${UNIVERSE_CHAT_KEY}:${universeId}`);
+    this.removeKey(`${UNIVERSE_EDIT_KEY}:${universeId}`);
+    this.removeKey(`${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`);
+    this.removeKey(`${UNIVERSE_KICK_KEY}:${universeId}`);
 
     this.universesSignal.set({ ...this.universesSignal(), [userId]: nextList });
     if (nextActive) {
@@ -807,7 +802,7 @@ export class AuthService {
         ? { ...this.defaultPreferences(), ...stored }
         : this.getUniversePreferences(userId, u.id);
     });
-    const entries = Object.keys(window.localStorage)
+    const entries = this.keys()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -816,7 +811,7 @@ export class AuthService {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}:`))
-      .map((key) => ({ key, value: window.localStorage.getItem(key) ?? '' }));
+      .map((key) => ({ key, value: this.getRaw(key) ?? '' }));
     return { version: 1, ownerId: userId, universes, activeUniverseId, preferences, entries };
   }
 
@@ -831,7 +826,6 @@ export class AuthService {
       entries?: { key?: string; value?: string }[];
     },
   ) {
-    if (typeof window === 'undefined') return { ok: false, message: 'settings.importFailed' };
     if (!payload?.universes || !Array.isArray(payload.universes) || !payload.universes.length) {
       return { ok: false, message: 'settings.importFailed' };
     }
@@ -868,7 +862,7 @@ export class AuthService {
         if (!entry?.key || typeof entry.value !== 'string') return;
         const rewritten = this.rewriteUniverseKey(entry.key, payload.ownerId, userId);
         if (!this.isAllowedUniverseDataKey(rewritten, userId)) return;
-        window.localStorage.setItem(rewritten, entry.value);
+        this.setRaw(rewritten, entry.value);
       });
     }
 
@@ -929,8 +923,7 @@ export class AuthService {
   }
 
   private clearUniverseDataForUser(userId: string) {
-    if (typeof window === 'undefined') return;
-    Object.keys(window.localStorage)
+    this.keys()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -939,42 +932,41 @@ export class AuthService {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}:`))
-      .forEach((key) => window.localStorage.removeItem(key));
+      .forEach((key) => this.removeKey(key));
 
     const universeIds = this.getUniversesForUser(userId).map((u) => u.id);
     universeIds.forEach((id) => {
-      window.localStorage.removeItem(`${UNIVERSE_PRESENCE_KEY}:${id}`);
-      window.localStorage.removeItem(`${UNIVERSE_CHAT_KEY}:${id}`);
-      window.localStorage.removeItem(`${UNIVERSE_EDIT_KEY}:${id}`);
-      window.localStorage.removeItem(`${UNIVERSE_GUEST_COUNTER_KEY}:${id}`);
-      window.localStorage.removeItem(`${UNIVERSE_KICK_KEY}:${id}`);
+      this.removeKey(`${UNIVERSE_PRESENCE_KEY}:${id}`);
+      this.removeKey(`${UNIVERSE_CHAT_KEY}:${id}`);
+      this.removeKey(`${UNIVERSE_EDIT_KEY}:${id}`);
+      this.removeKey(`${UNIVERSE_GUEST_COUNTER_KEY}:${id}`);
+      this.removeKey(`${UNIVERSE_KICK_KEY}:${id}`);
     });
   }
 
   private migrateLegacyUniverseStorage(userId: string, universeId: string) {
-    if (typeof window === 'undefined') return;
     const legacyDialog = `${DIALOG_STATE_KEY}:${userId}`;
     const legacyPreview = `${PREVIEW_STATE_KEY}:${userId}`;
     const nextDialog = `${DIALOG_STATE_KEY}:${userId}:${universeId}`;
     const nextPreview = `${PREVIEW_STATE_KEY}:${userId}:${universeId}`;
-    if (window.localStorage.getItem(legacyDialog) && !window.localStorage.getItem(nextDialog)) {
-      window.localStorage.setItem(nextDialog, window.localStorage.getItem(legacyDialog) ?? '');
+    if (this.getRaw(legacyDialog) && !this.getRaw(nextDialog)) {
+      this.setRaw(nextDialog, this.getRaw(legacyDialog) ?? '');
     }
-    if (window.localStorage.getItem(legacyPreview) && !window.localStorage.getItem(nextPreview)) {
-      window.localStorage.setItem(nextPreview, window.localStorage.getItem(legacyPreview) ?? '');
+    if (this.getRaw(legacyPreview) && !this.getRaw(nextPreview)) {
+      this.setRaw(nextPreview, this.getRaw(legacyPreview) ?? '');
     }
 
     const prefixList = ['op_app_state:', 'op_mock_todos:'];
-    Object.keys(window.localStorage).forEach((key) => {
+    this.keys().forEach((key) => {
       if (!prefixList.some((prefix) => key.startsWith(prefix))) return;
       const needle = `:${userId}:`;
       if (!key.includes(needle)) return;
       if (key.includes(`:${userId}:${universeId}:`)) return;
       const nextKey = key.replace(needle, `:${userId}:${universeId}:`);
-      if (window.localStorage.getItem(nextKey) !== null) return;
-      const value = window.localStorage.getItem(key);
+      if (this.getRaw(nextKey) !== null) return;
+      const value = this.getRaw(key);
       if (value !== null) {
-        window.localStorage.setItem(nextKey, value);
+        this.setRaw(nextKey, value);
       }
     });
   }
@@ -994,9 +986,7 @@ export class AuthService {
     return key.includes(`:${userId}:`);
   }
 
-  private loadFromStorage() {
-    if (typeof window === 'undefined') return;
-
+  private async loadFromStorage() {
     const storedUsers = this.safeJson<UserRecord[]>(USERS_KEY, []);
     const users = storedUsers.length > 0 ? storedUsers : [this.defaultAdmin()];
     const hasGuest = users.some((user) => user.id === GUEST_USER_ID);
@@ -1275,11 +1265,10 @@ export class AuthService {
   }
 
   private seedGuestUniverseDialogs(universes: UniverseInfo[]) {
-    if (typeof window === 'undefined') return;
     if (!universes.length) return;
     universes.forEach((universe) => {
       const key = `${DIALOG_STATE_KEY}:${GUEST_USER_ID}:${universe.id}`;
-      if (window.localStorage.getItem(key)) return;
+      if (this.getRaw(key)) return;
       const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const instances: DialogInstanceState[] = [];
       const addInstance = (appId: AppId, x: number, y: number, z: number) => {
@@ -1307,7 +1296,7 @@ export class AuthService {
         hiddenWorkspaces: {},
         zCounter: instances.length,
       };
-      window.localStorage.setItem(key, JSON.stringify(snapshot));
+      this.setRaw(key, JSON.stringify(snapshot));
     });
   }
 
@@ -1344,23 +1333,31 @@ export class AuthService {
   }
 
   private persist(key: string, value: unknown) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(key, JSON.stringify(value));
+    void this.storage.setJson(key, value);
   }
 
   private persistLoginSecurity() {
     this.persist(LOGIN_SECURITY_KEY, this.loginSecurity);
   }
 
+  private getRaw(key: string) {
+    return this.storage.getItemSync(key);
+  }
+
+  private setRaw(key: string, value: string) {
+    void this.storage.setItem(key, value);
+  }
+
+  private removeKey(key: string) {
+    void this.storage.removeItem(key);
+  }
+
+  private keys() {
+    return this.storage.keysSync();
+  }
+
   private safeJson<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback;
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return fallback;
-    }
+    return this.storage.getJsonSync(key, fallback);
   }
 
   private defaultAdmin(): UserRecord {
@@ -1535,10 +1532,9 @@ export class AuthService {
   }
 
   private clearMockTodosForUser(userId: string) {
-    if (typeof window === 'undefined') return;
     const instanceIds = new Set<string>();
     [DIALOG_STATE_KEY, PREVIEW_STATE_KEY].forEach((key) => {
-      const raw = window.localStorage.getItem(`${key}:${userId}`);
+      const raw = this.getRaw(`${key}:${userId}`);
       if (!raw) return;
       try {
         const parsed = JSON.parse(raw) as {
@@ -1552,16 +1548,15 @@ export class AuthService {
       }
     });
     instanceIds.forEach((id) => {
-      window.localStorage.removeItem(`${MOCK_TODO_KEY}:${userId}:${id}`);
-      window.localStorage.removeItem(`${MOCK_TODO_KEY}:${id}`);
+      this.removeKey(`${MOCK_TODO_KEY}:${userId}:${id}`);
+      this.removeKey(`${MOCK_TODO_KEY}:${id}`);
     });
   }
 
   private clearAppStateForUser(userId: string) {
-    if (typeof window === 'undefined') return;
-    Object.keys(window.localStorage)
+    this.keys()
       .filter((key) => key.startsWith('op_app_state:') && key.includes(`:${userId}:`))
-      .forEach((key) => window.localStorage.removeItem(key));
+      .forEach((key) => this.removeKey(key));
   }
 
   updateUniverseContextFromLocation() {
@@ -1629,34 +1624,32 @@ export class AuthService {
       this.persistSession();
     }
 
-    if (typeof window !== 'undefined') {
-      const oldToken = `:${ownerId}:${currentId}`;
-      const newToken = `:${ownerId}:${universeId}`;
-      Object.keys(window.localStorage)
-        .filter((key) => key.includes(oldToken))
-        .forEach((key) => {
-          const value = window.localStorage.getItem(key);
-          const nextKeyName = key.replace(oldToken, newToken);
-          window.localStorage.removeItem(key);
-          if (value !== null) {
-            window.localStorage.setItem(nextKeyName, value);
-          }
-        });
-      const presenceKeys = [
-        `${UNIVERSE_PRESENCE_KEY}:${currentId}`,
-        `${UNIVERSE_CHAT_KEY}:${currentId}`,
-        `${UNIVERSE_EDIT_KEY}:${currentId}`,
-        `${UNIVERSE_GUEST_COUNTER_KEY}:${currentId}`,
-        `${UNIVERSE_KICK_KEY}:${currentId}`,
-      ];
-      presenceKeys.forEach((key) => {
-        const value = window.localStorage.getItem(key);
-        if (value === null) return;
-        window.localStorage.removeItem(key);
-        const nextKeyName = key.replace(`:${currentId}`, `:${universeId}`);
-        window.localStorage.setItem(nextKeyName, value);
+    const oldToken = `:${ownerId}:${currentId}`;
+    const newToken = `:${ownerId}:${universeId}`;
+    this.keys()
+      .filter((key) => key.includes(oldToken))
+      .forEach((key) => {
+        const value = this.getRaw(key);
+        const nextKeyName = key.replace(oldToken, newToken);
+        this.removeKey(key);
+        if (value !== null) {
+          this.setRaw(nextKeyName, value);
+        }
       });
-    }
+    const presenceKeys = [
+      `${UNIVERSE_PRESENCE_KEY}:${currentId}`,
+      `${UNIVERSE_CHAT_KEY}:${currentId}`,
+      `${UNIVERSE_EDIT_KEY}:${currentId}`,
+      `${UNIVERSE_GUEST_COUNTER_KEY}:${currentId}`,
+      `${UNIVERSE_KICK_KEY}:${currentId}`,
+    ];
+    presenceKeys.forEach((key) => {
+      const value = this.getRaw(key);
+      if (value === null) return;
+      this.removeKey(key);
+      const nextKeyName = key.replace(`:${currentId}`, `:${universeId}`);
+      this.setRaw(nextKeyName, value);
+    });
   }
 
   getInviteesForOwner(ownerId: string) {
@@ -1840,16 +1833,14 @@ export class AuthService {
   }
 
   markAccessibilityPromptShown(userId: string, universeId?: string | null) {
-    if (typeof window === 'undefined') return;
     const key = universeId ? `${userId}:${universeId}` : userId;
-    window.localStorage.setItem(`op_accessibility_prompted_${key}`, 'true');
+    this.setRaw(`op_accessibility_prompted_${key}`, 'true');
   }
 
   hasSeenAccessibilityPrompt(userId: string, universeId?: string | null) {
-    if (typeof window === 'undefined') return false;
     const key = universeId ? `${userId}:${universeId}` : userId;
-    if (window.localStorage.getItem(`op_accessibility_prompted_${key}`) === 'true') return true;
-    return window.localStorage.getItem(`op_accessibility_prompted_${userId}`) === 'true';
+    if (this.getRaw(`op_accessibility_prompted_${key}`) === 'true') return true;
+    return this.getRaw(`op_accessibility_prompted_${userId}`) === 'true';
   }
 
   getUniversePresence(universeId: string) {
@@ -1868,9 +1859,7 @@ export class AuthService {
   removeUniversePresence(universeId: string, userId: string) {
     const list = this.cleanupUniversePresence(universeId).filter((item) => item.id !== userId);
     if (list.length === 0) {
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(this.universePresenceKey(universeId));
-      }
+      this.removeKey(this.universePresenceKey(universeId));
     } else {
       this.persist(this.universePresenceKey(universeId), list);
     }
@@ -1889,8 +1878,7 @@ export class AuthService {
   }
 
   clearUniverseChat(universeId: string) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.removeItem(this.universeChatKey(universeId));
+    this.removeKey(this.universeChatKey(universeId));
   }
 
   getUniverseEditHolder(universeId: string) {
@@ -1898,9 +1886,8 @@ export class AuthService {
   }
 
   setUniverseEditHolder(universeId: string, holder: UniverseEditHolder | null) {
-    if (typeof window === 'undefined') return;
     if (!holder) {
-      window.localStorage.removeItem(this.universeEditKey(universeId));
+      this.removeKey(this.universeEditKey(universeId));
       return;
     }
     this.persist(this.universeEditKey(universeId), holder);
@@ -1909,8 +1896,8 @@ export class AuthService {
   nextUniverseGuestNumber(universeId: string) {
     const presence = this.cleanupUniversePresence(universeId);
     const hasGuests = presence.some((entry) => entry.role === 'guest');
-    if (!hasGuests && typeof window !== 'undefined') {
-      window.localStorage.removeItem(this.universeGuestCounterKey(universeId));
+    if (!hasGuests) {
+      this.removeKey(this.universeGuestCounterKey(universeId));
     }
     const raw = this.safeJson<number>(this.universeGuestCounterKey(universeId), 0);
     const next = raw + 1;
@@ -1923,10 +1910,8 @@ export class AuthService {
     const active = list.filter((entry) => entry.role !== 'observer');
     if (active.length === 0) {
       this.clearUniverseChat(universeId);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(this.universeGuestCounterKey(universeId));
-        window.localStorage.removeItem(this.universeEditKey(universeId));
-      }
+      this.removeKey(this.universeGuestCounterKey(universeId));
+      this.removeKey(this.universeEditKey(universeId));
     }
   }
 
@@ -1935,8 +1920,8 @@ export class AuthService {
     const now = Date.now();
     const next = list.filter((entry) => now - entry.lastSeen < 15_000);
     if (next.length !== list.length) {
-      if (next.length === 0 && typeof window !== 'undefined') {
-        window.localStorage.removeItem(this.universePresenceKey(universeId));
+      if (next.length === 0) {
+        this.removeKey(this.universePresenceKey(universeId));
       } else {
         this.persist(this.universePresenceKey(universeId), next);
       }
@@ -1962,16 +1947,14 @@ export class AuthService {
   }
 
   markUniverseKick(universeId: string) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(`${UNIVERSE_KICK_KEY}:${universeId}`, String(Date.now()));
+    this.setRaw(`${UNIVERSE_KICK_KEY}:${universeId}`, String(Date.now()));
   }
 
   consumeUniverseKick(universeId: string) {
-    if (typeof window === 'undefined') return false;
     const key = `${UNIVERSE_KICK_KEY}:${universeId}`;
-    const exists = window.localStorage.getItem(key);
+    const exists = this.getRaw(key);
     if (!exists) return false;
-    window.localStorage.removeItem(key);
+    this.removeKey(key);
     return true;
   }
 }

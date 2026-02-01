@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth.service';
 import { DialogService } from '../../core/dialog.service';
 import { LicenseComponent } from '../license/license.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
+import { StorageService } from '../../core/storage/storage.service';
 import packageJson from '../../../../package.json';
 
 @Component({
@@ -302,6 +303,7 @@ export class LoginComponent {
   licenseOpen = signal(false);
   appVersion = packageJson.version ?? '0.0.0';
   loggedOutMessage = signal('');
+  private storage = inject(StorageService);
 
   constructor() {
     this.auth.updateUniverseContextFromLocation();
@@ -310,9 +312,7 @@ export class LoginComponent {
     const loggedOut = this.route.snapshot.queryParamMap.get('loggedOut');
     if (loggedOut) {
       this.auth.logout();
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem('op_session');
-      }
+      void this.storage.removeItem('op_session');
       this.loggedOutMessage.set(this.translate.instant('auth.loggedOut'));
     }
     if (this.auth.isLoggedIn() && !this.universeLogin() && !loggedOut) {
@@ -330,9 +330,7 @@ export class LoginComponent {
       const loggedOutParam = params.get('loggedOut');
       if (loggedOutParam) {
         this.auth.logout();
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem('op_session');
-        }
+        void this.storage.removeItem('op_session');
       }
       this.loggedOutMessage.set(loggedOutParam ? this.translate.instant('auth.loggedOut') : '');
     });

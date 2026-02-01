@@ -6,6 +6,7 @@ import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
 import { ExportGuardService } from '../../../core/export-guard.service';
 import { ImportGuardService } from '../../../core/import-guard.service';
+import { StorageService } from '../../../core/storage/storage.service';
 import { AppId } from '../../dependencies/app-types';
 import { APP_LIST } from '../../dependencies/app-registry';
 import { clearCalculatorState } from '../../applications/default-applications/calculator/calculator.component';
@@ -145,6 +146,7 @@ export class ApplicationsSettingsComponent {
   private auth = inject(AuthService);
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
+  private storage = inject(StorageService);
 
   apps = APPLICATIONS;
   prefs = signal(this.draft.preferences());
@@ -195,15 +197,15 @@ export class ApplicationsSettingsComponent {
     if (!appId) return;
     const removedIds = this.dialogService.wipeAppData(appId);
     removedIds.forEach((id) => {
-      if (appId === 'calculator') clearCalculatorState(id);
-      if (appId === 'timer') clearTimerState(id);
-      if (appId === 'navigator') clearNavigatorState(id);
-      if (appId === 'notes') clearNotesState(id);
-      if (appId === 'stickyNotes') clearStickyNoteState(id);
-      if (appId === 'calendar') clearCalendarState(id);
-      if (appId === 'clock') clearClockState(id);
-      if (appId === 'kanban') clearKanbanState(id);
-      if (appId === 'dataTable') clearDataTableState(id);
+      if (appId === 'calculator') clearCalculatorState(id, this.storage);
+      if (appId === 'timer') clearTimerState(id, this.storage);
+      if (appId === 'navigator') clearNavigatorState(id, this.storage);
+      if (appId === 'notes') clearNotesState(id, this.storage);
+      if (appId === 'stickyNotes') clearStickyNoteState(id, this.storage);
+      if (appId === 'calendar') clearCalendarState(id, this.storage);
+      if (appId === 'clock') clearClockState(id, this.storage);
+      if (appId === 'kanban') clearKanbanState(id, this.storage);
+      if (appId === 'dataTable') clearDataTableState(id, this.storage);
     });
     this.confirmAppId.set(null);
   }
@@ -300,8 +302,8 @@ export class ApplicationsSettingsComponent {
   }
 
   private clearAppStorage(userId: string) {
-    if (typeof window === 'undefined') return;
-    Object.keys(window.localStorage)
+    this.storage
+      .keysSync()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -310,12 +312,12 @@ export class ApplicationsSettingsComponent {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}`))
-      .forEach((key) => window.localStorage.removeItem(key));
+      .forEach((key) => void this.storage.removeItem(key));
   }
 
   private collectAppData(userId: string) {
-    if (typeof window === 'undefined') return { version: 1, userId, entries: [] };
-    const entries = Object.keys(window.localStorage)
+    const entries = this.storage
+      .keysSync()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -324,7 +326,7 @@ export class ApplicationsSettingsComponent {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}`))
-      .map((key) => ({ key, value: window.localStorage.getItem(key) ?? '' }));
+      .map((key) => ({ key, value: this.storage.getItemSync(key) ?? '' }));
     return { version: 1, userId, entries };
   }
 
@@ -341,7 +343,7 @@ export class ApplicationsSettingsComponent {
       if (!entry?.key || typeof entry.value !== 'string') return;
       const key = this.rewriteKey(entry.key, payload.userId, userId);
       if (!this.isAllowedKey(key, userId)) return;
-      window.localStorage.setItem(key, entry.value);
+      void this.storage.setItem(key, entry.value);
     });
     return true;
   }

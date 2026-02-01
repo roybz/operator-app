@@ -2,6 +2,7 @@ import { Component, Input, OnInit, effect, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 interface NavigatorTab {
   id: string;
@@ -24,21 +25,30 @@ const NAVIGATION_DISABLED = true;
 const storageKey = (userId: string, instanceId: string) =>
   `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
-export function clearNavigatorState(instanceId: string) {
+export function clearNavigatorState(instanceId: string, storage: StorageService) {
   stateStore.delete(instanceId);
-  if (typeof window === 'undefined') return;
-  Object.keys(window.localStorage)
+  storage
+    .keysSync()
     .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => window.localStorage.removeItem(key));
+    .forEach((key) => void storage.removeItem(key));
 }
 
-export function cloneNavigatorState(fromId: string, toId: string) {
+export function cloneNavigatorState(fromId: string, toId: string, storage: StorageService) {
   const stored = stateStore.get(fromId);
   if (!stored) return;
   stateStore.set(toId, {
     ...stored,
     tabs: stored.tabs.map((tab) => ({ ...tab, history: [...tab.history] })),
   });
+  storage
+    .keysSync()
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
+    .forEach((key) => {
+      const value = storage.getItemSync(key);
+      if (value === null) return;
+      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
+      void storage.setItem(nextKey, value);
+    });
 }
 
 const createTab = (url: string): NavigatorTab => ({
@@ -132,6 +142,7 @@ export class NavigatorComponent implements OnInit {
 
   private prefs = inject(AppPreferencesService);
   private sanitizer = inject(DomSanitizer);
+  private storage = inject(StorageService);
   state = signal<NavigatorState>({ tabs: [], activeTabId: '' });
   language = signal('en');
   navigationDisabled = NAVIGATION_DISABLED;
@@ -145,17 +156,15 @@ export class NavigatorComponent implements OnInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as NavigatorState;
-          this.state.set(parsed);
-          stateStore.set(this.instanceId, parsed);
-          return;
-        } catch {
-          // ignore malformed stored data
-        }
+    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as NavigatorState;
+        this.state.set(parsed);
+        stateStore.set(this.instanceId, parsed);
+        return;
+      } catch {
+        // ignore malformed stored data
       }
     }
     const stored = stateStore.get(this.instanceId);
@@ -254,9 +263,8 @@ export class NavigatorComponent implements OnInit {
   }
 
   private persistState() {
-    if (typeof window === 'undefined') return;
     const userId = this.prefs.userId();
-    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   safeUrl(url?: string): SafeResourceUrl {

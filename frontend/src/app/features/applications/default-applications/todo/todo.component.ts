@@ -16,6 +16,7 @@ import { InstanceSettingsService } from '../../../../core/instance-settings.serv
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 @Component({
   selector: 'app-todo-page',
@@ -487,6 +488,7 @@ export class TodoPageComponent implements OnInit {
   private readonly instanceSettings = inject(InstanceSettingsService);
   private readonly importGuard = inject(ImportGuardService);
   private readonly exportGuard = inject(ExportGuardService);
+  private readonly storage = inject(StorageService);
 
   async ngOnInit() {
     await this.reload();
@@ -496,7 +498,7 @@ export class TodoPageComponent implements OnInit {
     this.err.set(null);
     this.loading.set(true);
     try {
-      const nextState = loadTodoState(this.instanceId, this.prefs.userId());
+      const nextState = loadTodoState(this.storage, this.instanceId, this.prefs.userId());
       this.state.set(nextState);
       this.todos.set(this.activeProject(nextState)?.todos ?? []);
       const collapsed = nextState.subtaskCollapsed ?? {};
@@ -937,7 +939,7 @@ export class TodoPageComponent implements OnInit {
     this.todos.set(this.activeProject(next)?.todos ?? []);
     this.subtaskCollapsed.set(collapsed);
     this.syncSubtaskCollapse(this.activeProject(next)?.todos ?? []);
-    saveTodoState(this.instanceId, this.prefs.userId(), next);
+    saveTodoState(this.storage, this.instanceId, this.prefs.userId(), next);
   }
 
   private activeProject(state = this.state()) {
@@ -991,7 +993,7 @@ export class TodoPageComponent implements OnInit {
       const current = this.state();
       const updated = { ...current, subtaskCollapsed: next };
       this.state.set(updated);
-      saveTodoState(this.instanceId, this.prefs.userId(), updated);
+      saveTodoState(this.storage, this.instanceId, this.prefs.userId(), updated);
     }
   }
 

@@ -7,6 +7,9 @@ import {
 } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { KanbanComponent } from './kanban.component';
+import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
+import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 describe('KanbanComponent', () => {
   it('renders the board selector', async () => {
@@ -27,8 +30,11 @@ describe('KanbanComponent', () => {
             userId: () => 'test-user',
           },
         },
+        { provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter },
       ],
     }).compileComponents();
+
+    await TestBed.inject(StorageService).hydrate();
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {

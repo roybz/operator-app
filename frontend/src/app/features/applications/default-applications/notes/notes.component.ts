@@ -6,6 +6,7 @@ import { AppPreferencesService } from '../../../dependencies/app-preferences.ser
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -33,7 +34,8 @@ interface NotesState {
   selectedIds: string[];
   view: NotesView;
   listCollapsed: boolean;
-  sidebarOpen: boolean;
+  sidebarOpenDesktop: boolean;
+  sidebarOpenPhone: boolean;
   phoneSidebarInit?: boolean;
 }
 
@@ -43,15 +45,15 @@ const STORAGE_PREFIX = 'op_app_state:notes';
 const storageKey = (userId: string, instanceId: string) =>
   `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
-export function clearNotesState(instanceId: string) {
+export function clearNotesState(instanceId: string, storage: StorageService) {
   stateStore.delete(instanceId);
-  if (typeof window === 'undefined') return;
-  Object.keys(window.localStorage)
+  storage
+    .keysSync()
     .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => window.localStorage.removeItem(key));
+    .forEach((key) => void storage.removeItem(key));
 }
 
-export function cloneNotesState(fromId: string, toId: string) {
+export function cloneNotesState(fromId: string, toId: string, storage: StorageService) {
   const stored = stateStore.get(fromId);
   if (!stored) return;
   const cloneTree = (node: NoteNode, parentId?: string): NoteNode => {
@@ -68,6 +70,15 @@ export function cloneNotesState(fromId: string, toId: string) {
     selectedId: null,
     selectedIds: [],
   });
+  storage
+    .keysSync()
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
+    .forEach((key) => {
+      const value = storage.getItemSync(key);
+      if (value === null) return;
+      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
+      void storage.setItem(nextKey, value);
+    });
 }
 
 const createFolder = (name: string, parentId?: string, locked = false): NoteNode => ({
@@ -192,33 +203,21 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
       }
       @if (isPhoneMode()) {
         <button class="notes-sidebar-toggle" (click)="toggleSidebar()">
-          {{ state().sidebarOpen ? '⟨' : '⟩' }}
+          {{ sidebarOpen() ? '⟨' : '⟩' }}
         </button>
       }
       <aside
-        [attr.data-collapsed]="state().sidebarOpen ? 'false' : 'true'"
+        [attr.data-collapsed]="sidebarOpen() ? 'false' : 'true'"
         [style.width]="
-          isPhoneMode()
-            ? state().sidebarOpen
-              ? '100%'
-              : '0'
-            : state().sidebarOpen
-              ? '240px'
-              : '40px'
+          isPhoneMode() ? (sidebarOpen() ? '100%' : '0') : sidebarOpen() ? '240px' : '40px'
         "
         [style.minWidth]="
-          isPhoneMode()
-            ? state().sidebarOpen
-              ? '100%'
-              : '0'
-            : state().sidebarOpen
-              ? '200px'
-              : '40px'
+          isPhoneMode() ? (sidebarOpen() ? '100%' : '0') : sidebarOpen() ? '200px' : '40px'
         "
-        [style.display]="isPhoneMode() && !state().sidebarOpen ? 'none' : 'flex'"
+        [style.display]="isPhoneMode() && !sidebarOpen() ? 'none' : 'flex'"
         style="border-right:1px solid var(--color-border); padding-right:8px; padding-left:13px; overflow:auto; transition:width 160ms ease; display:flex; flex-direction:column;"
       >
-        @if (state().sidebarOpen) {
+        @if (sidebarOpen()) {
           <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
             <div style="display:flex; gap:6px; align-items:center;">
               <button
@@ -264,7 +263,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
           }
         }
 
-        @if (state().sidebarOpen) {
+        @if (sidebarOpen()) {
           <div style="display:flex; gap:6px; margin: 10px 0 6px; flex-wrap:wrap;">
             <button (click)="addFolder()" [disabled]="isArchiveView()">
               {{ 'notes.addFolder' | translate }}
@@ -325,7 +324,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
 
       <section
         style="flex:1; display:flex; flex-direction:column; gap:12px;"
-        [style.display]="isPhoneMode() && state().sidebarOpen ? 'none' : 'flex'"
+        [style.display]="isPhoneMode() && sidebarOpen() ? 'none' : 'flex'"
       >
         @if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -522,6 +521,7 @@ export class NotesComponent implements OnInit {
   private instanceSettings = inject(InstanceSettingsService);
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
+  private storage = inject(StorageService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -529,7 +529,8 @@ export class NotesComponent implements OnInit {
     selectedIds: [],
     view: 'notes',
     listCollapsed: false,
-    sidebarOpen: true,
+    sidebarOpenDesktop: true,
+    sidebarOpenPhone: false,
   });
   editingNodeId = signal<string | null>(null);
   editingName = signal('');
@@ -549,34 +550,44 @@ export class NotesComponent implements OnInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as NotesState;
-          const next = {
-            ...parsed,
-            sidebarOpen:
-              this.isPhoneMode() && !parsed.phoneSidebarInit ? false : parsed.sidebarOpen,
-            phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
-          };
-          this.state.set(next);
-          stateStore.set(this.instanceId, next);
-          this.persistState();
-          this.syncRichSnapshot();
-          return;
-        } catch {
-          // ignore malformed stored data
-        }
+    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as NotesState & { sidebarOpen?: boolean };
+        const sidebarDesktop =
+          parsed.sidebarOpenDesktop ?? parsed.sidebarOpen ?? this.state().sidebarOpenDesktop;
+        const sidebarPhone =
+          parsed.sidebarOpenPhone ??
+          (this.isPhoneMode() && !parsed.phoneSidebarInit
+            ? false
+            : (parsed.sidebarOpen ?? this.state().sidebarOpenPhone));
+        const next = {
+          ...parsed,
+          sidebarOpenDesktop: sidebarDesktop,
+          sidebarOpenPhone: sidebarPhone,
+          phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+        };
+        this.state.set(next);
+        stateStore.set(this.instanceId, next);
+        this.persistState();
+        this.syncRichSnapshot();
+        return;
+      } catch {
+        // ignore malformed stored data
       }
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       const nextStored = this.cloneState(stored);
+      const legacySidebar = (nextStored as { sidebarOpen?: boolean }).sidebarOpen;
+      const sidebarDesktop = nextStored.sidebarOpenDesktop ?? legacySidebar ?? true;
+      const sidebarPhone =
+        nextStored.sidebarOpenPhone ??
+        (this.isPhoneMode() && !nextStored.phoneSidebarInit ? false : (legacySidebar ?? false));
       const next = {
         ...nextStored,
-        sidebarOpen:
-          this.isPhoneMode() && !nextStored.phoneSidebarInit ? false : nextStored.sidebarOpen,
+        sidebarOpenDesktop: sidebarDesktop,
+        sidebarOpenPhone: sidebarPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
       };
       this.state.set(next);
@@ -594,7 +605,8 @@ export class NotesComponent implements OnInit {
       ...this.state(),
       root,
       selectedId: firstNote.id,
-      sidebarOpen: this.isPhoneMode() ? false : true,
+      sidebarOpenDesktop: true,
+      sidebarOpenPhone: this.isPhoneMode() ? false : this.state().sidebarOpenPhone,
       phoneSidebarInit: this.isPhoneMode() ? true : undefined,
     };
     this.state.set(next);
@@ -610,9 +622,8 @@ export class NotesComponent implements OnInit {
   }
 
   private persistState() {
-    if (typeof window === 'undefined') return;
     const userId = this.prefs.userId();
-    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   activeRoot() {
@@ -663,7 +674,15 @@ export class NotesComponent implements OnInit {
   }
 
   toggleSidebar() {
-    this.commit({ ...this.state(), sidebarOpen: !this.state().sidebarOpen });
+    if (this.isPhoneMode()) {
+      this.commit({ ...this.state(), sidebarOpenPhone: !this.state().sidebarOpenPhone });
+      return;
+    }
+    this.commit({ ...this.state(), sidebarOpenDesktop: !this.state().sidebarOpenDesktop });
+  }
+
+  sidebarOpen() {
+    return this.isPhoneMode() ? this.state().sidebarOpenPhone : this.state().sidebarOpenDesktop;
   }
 
   settingsOpen() {

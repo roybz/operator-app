@@ -55,6 +55,7 @@ import { cloneStickyNoteState } from './features/applications/default-applicatio
 import { cloneDataTableState } from './features/applications/default-applications/data-table/data-table.component';
 import { cloneTodoState } from './features/applications/default-applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
+import { StorageService } from './core/storage/storage.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -1046,6 +1047,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly dialogService = inject(DialogService);
   readonly settingsDraft = inject(SettingsDraftService);
   readonly instanceSettings = inject(InstanceSettingsService);
+  readonly storage = inject(StorageService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1413,9 +1415,9 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!this.auth.isLoggedIn()) return;
       this.phoneBootChecked = true;
       const prefs = this.auth.preferences();
-      const flagged = window.localStorage.getItem(PHONE_MODE_BOOT_KEY);
+      const flagged = this.storage.getItemSync(PHONE_MODE_BOOT_KEY);
       if (!flagged) return;
-      window.localStorage.removeItem(PHONE_MODE_BOOT_KEY);
+      void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
       if (prefs.phoneMode) {
         this.auth.savePreferences({ ...prefs, phoneMode: false });
       }
@@ -1581,15 +1583,15 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     this.handleLogoutRoute();
-    const stored = window.localStorage.getItem('op_nav_open');
+    const stored = this.storage.getItemSync('op_nav_open');
     if (stored !== null) this.navOpen = stored === 'true';
-    const storedTopBar = window.localStorage.getItem('op_topbar_open');
+    const storedTopBar = this.storage.getItemSync('op_topbar_open');
     if (storedTopBar !== null) this.topBarOpen.set(storedTopBar === 'true');
-    const storedWorkspaceBar = window.localStorage.getItem('op_workspace_bar_open');
+    const storedWorkspaceBar = this.storage.getItemSync('op_workspace_bar_open');
     if (storedWorkspaceBar !== null) this.workspaceMenuOpen.set(storedWorkspaceBar === 'true');
-    const storedUniverseBar = window.localStorage.getItem('op_universe_bar_open');
+    const storedUniverseBar = this.storage.getItemSync('op_universe_bar_open');
     if (storedUniverseBar !== null) this.universeBarOpen.set(storedUniverseBar === 'true');
-    const storedScale = window.localStorage.getItem('op_canvas_scale');
+    const storedScale = this.storage.getItemSync('op_canvas_scale');
     if (storedScale) {
       this.canvasScale.set(Number(storedScale) || 1);
       setTimeout(this.updateCanvasBounds, 0);
@@ -1756,9 +1758,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleNav() {
     this.navOpen = !this.navOpen;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_nav_open', String(this.navOpen));
-    }
+    void this.storage.setItem('op_nav_open', String(this.navOpen));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -1783,10 +1783,8 @@ export class AppComponent implements OnInit, OnDestroy {
     } else {
       this.topBarOpen.set(true);
     }
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_topbar_open', String(this.topBarOpen()));
-      window.localStorage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
-    }
+    void this.storage.setItem('op_topbar_open', String(this.topBarOpen()));
+    void this.storage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -1827,9 +1825,9 @@ export class AppComponent implements OnInit, OnDestroy {
     this.runLoadingTransition();
     if (typeof window !== 'undefined') {
       if (enabled) {
-        window.localStorage.setItem(PHONE_MODE_BOOT_KEY, String(Date.now()));
+        void this.storage.setItem(PHONE_MODE_BOOT_KEY, String(Date.now()));
       } else {
-        window.localStorage.removeItem(PHONE_MODE_BOOT_KEY);
+        void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
       }
     }
     if (enabled) {
@@ -1841,7 +1839,7 @@ export class AppComponent implements OnInit, OnDestroy {
       }
       if (typeof window !== 'undefined') {
         window.setTimeout(() => {
-          window.localStorage.removeItem(PHONE_MODE_BOOT_KEY);
+          void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
         }, 500);
       }
       setTimeout(this.updateCanvasBounds, 0);
@@ -1884,9 +1882,7 @@ export class AppComponent implements OnInit, OnDestroy {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     this.workspaceMenuOpen.set(!this.workspaceMenuOpen());
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
-    }
+    void this.storage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
   }
 
   toggleUniverseMenu() {
@@ -2204,17 +2200,17 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async cloneAppData(appId: AppId, fromId: string, toId: string) {
     if (appId === 'todo') {
-      cloneTodoState(fromId, toId, this.auth.storageUserKey());
+      cloneTodoState(this.storage, fromId, toId, this.auth.storageUserKey());
     }
-    if (appId === 'calculator') cloneCalculatorState(fromId, toId);
-    if (appId === 'timer') cloneTimerState(fromId, toId);
-    if (appId === 'navigator') cloneNavigatorState(fromId, toId);
-    if (appId === 'notes') cloneNotesState(fromId, toId);
-    if (appId === 'stickyNotes') cloneStickyNoteState(fromId, toId);
-    if (appId === 'calendar') cloneCalendarState(fromId, toId);
-    if (appId === 'clock') cloneClockState(fromId, toId);
-    if (appId === 'kanban') cloneKanbanState(fromId, toId);
-    if (appId === 'dataTable') cloneDataTableState(fromId, toId);
+    if (appId === 'calculator') cloneCalculatorState(fromId, toId, this.storage);
+    if (appId === 'timer') cloneTimerState(fromId, toId, this.storage);
+    if (appId === 'navigator') cloneNavigatorState(fromId, toId, this.storage);
+    if (appId === 'notes') cloneNotesState(fromId, toId, this.storage);
+    if (appId === 'stickyNotes') cloneStickyNoteState(fromId, toId, this.storage);
+    if (appId === 'calendar') cloneCalendarState(fromId, toId, this.storage);
+    if (appId === 'clock') cloneClockState(fromId, toId, this.storage);
+    if (appId === 'kanban') cloneKanbanState(fromId, toId, this.storage);
+    if (appId === 'dataTable') cloneDataTableState(fromId, toId, this.storage);
   }
 
   private effectiveUserId() {
@@ -2350,10 +2346,17 @@ export class AppComponent implements OnInit, OnDestroy {
     return instances.findIndex((instance) => instance.id === instanceId) + 1;
   }
 
-  instanceLabel(instance: { titleKey: string; titleOverride?: string; id: string; appId: AppId }) {
+  instanceLabel(instance: {
+    titleKey: string;
+    titleOverride?: string;
+    id: string;
+    appId: AppId;
+    instanceNumber?: number;
+  }) {
     if (instance.titleOverride) return instance.titleOverride;
     const base = this.translate.instant(this.instanceNameKey(instance.appId));
-    return `${base} (${this.instanceIndex(instance.appId, instance.id)})`;
+    const index = instance.instanceNumber ?? this.instanceIndex(instance.appId, instance.id);
+    return `${base} (${index})`;
   }
 
   instanceNameKey(appId: AppId) {
@@ -2504,9 +2507,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   toggleUniverseBar() {
     this.universeBarOpen.set(!this.universeBarOpen());
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_universe_bar_open', String(this.universeBarOpen()));
-    }
+    void this.storage.setItem('op_universe_bar_open', String(this.universeBarOpen()));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -2726,9 +2727,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private setCanvasScale(next: number) {
     this.canvasScale.set(Number(next.toFixed(2)));
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_canvas_scale', String(this.canvasScale()));
-    }
+    void this.storage.setItem('op_canvas_scale', String(this.canvasScale()));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -2868,7 +2867,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const hasLoggedOut = rawSearch.includes('loggedOut=1');
     if (rawPath.startsWith('/logout') || hasLoggedOut) {
       this.auth.logout();
-      window.localStorage.removeItem('op_session');
+      void this.storage.removeItem('op_session');
       this.forceLoggedOut.set(true);
       if (rawPath.startsWith('/logout')) {
         this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });

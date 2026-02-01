@@ -16,6 +16,7 @@ import { AppPreferencesService } from '../../../dependencies/app-preferences.ser
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 interface ChecklistItem {
   id: string;
@@ -61,18 +62,27 @@ const storageKey = (userId: string, instanceId: string) =>
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
-export function clearKanbanState(instanceId: string) {
+export function clearKanbanState(instanceId: string, storage: StorageService) {
   stateStore.delete(instanceId);
-  if (typeof window === 'undefined') return;
-  Object.keys(window.localStorage)
+  storage
+    .keysSync()
     .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => window.localStorage.removeItem(key));
+    .forEach((key) => void storage.removeItem(key));
 }
 
-export function cloneKanbanState(fromId: string, toId: string) {
+export function cloneKanbanState(fromId: string, toId: string, storage: StorageService) {
   const stored = stateStore.get(fromId);
   if (!stored) return;
   stateStore.set(toId, JSON.parse(JSON.stringify(stored)) as KanbanState);
+  storage
+    .keysSync()
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
+    .forEach((key) => {
+      const value = storage.getItemSync(key);
+      if (value === null) return;
+      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
+      void storage.setItem(nextKey, value);
+    });
 }
 
 @Component({
@@ -403,6 +413,7 @@ export class KanbanComponent implements OnInit, AfterViewInit {
   private instanceSettings = inject(InstanceSettingsService);
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
+  private storage = inject(StorageService);
   state = signal<KanbanState>({
     boards: [],
     activeBoardId: '',
@@ -427,17 +438,15 @@ export class KanbanComponent implements OnInit, AfterViewInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as KanbanState;
-          this.state.set(parsed);
-          stateStore.set(this.instanceId, parsed);
-          return;
-        } catch {
-          // ignore malformed stored data
-        }
+    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as KanbanState;
+        this.state.set(parsed);
+        stateStore.set(this.instanceId, parsed);
+        return;
+      } catch {
+        // ignore malformed stored data
       }
     }
 
@@ -985,8 +994,7 @@ export class KanbanComponent implements OnInit, AfterViewInit {
   }
 
   private persistState() {
-    if (typeof window === 'undefined') return;
     const userId = this.prefs.userId();
-    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 }

@@ -8,6 +8,9 @@ import {
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ClockComponent } from './clock.component';
+import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
+import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 describe('ClockComponent', () => {
   it('renders the settings view with a time zone selector', async () => {
@@ -28,8 +31,11 @@ describe('ClockComponent', () => {
             userId: () => 'test-user',
           },
         },
+        { provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter },
       ],
     }).compileComponents();
+
+    await TestBed.inject(StorageService).hydrate();
 
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', {

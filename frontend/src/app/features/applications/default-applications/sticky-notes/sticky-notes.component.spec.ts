@@ -3,6 +3,9 @@ import { StickyNotesComponent } from './sticky-notes.component';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { UserPreferences } from '../../../../core/auth.service';
+import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
+import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 class MockPrefsService {
   preferences() {
@@ -34,8 +37,11 @@ describe('StickyNotesComponent', () => {
       providers: [
         { provide: AppPreferencesService, useClass: MockPrefsService },
         { provide: InstanceSettingsService, useClass: MockInstanceSettingsService },
+        { provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter },
       ],
     }).compileComponents();
+
+    await TestBed.inject(StorageService).hydrate();
 
     fixture = TestBed.createComponent(StickyNotesComponent);
     fixture.componentInstance.instanceId = 'sticky-test';

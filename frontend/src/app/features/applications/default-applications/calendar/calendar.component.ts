@@ -4,6 +4,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { ImportGuardService } from '../../../../core/import-guard.service';
+import { StorageService } from '../../../../core/storage/storage.service';
 
 interface CalendarEvent {
   id: string;
@@ -25,7 +26,8 @@ interface CalendarState {
   viewDate: string;
   viewMode: 'month' | 'week' | 'day';
   calendars: ExternalCalendar[];
-  showSettings: boolean;
+  showSettingsDesktop: boolean;
+  showSettingsPhone: boolean;
   selectedCalendarId: string | null;
   phoneSidebarInit?: boolean;
 }
@@ -36,15 +38,15 @@ const STORAGE_PREFIX = 'op_app_state:calendar';
 const storageKey = (userId: string, instanceId: string) =>
   `${STORAGE_PREFIX}:${userId}:${instanceId}`;
 
-export function clearCalendarState(instanceId: string) {
+export function clearCalendarState(instanceId: string, storage: StorageService) {
   stateStore.delete(instanceId);
-  if (typeof window === 'undefined') return;
-  Object.keys(window.localStorage)
+  storage
+    .keysSync()
     .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => window.localStorage.removeItem(key));
+    .forEach((key) => void storage.removeItem(key));
 }
 
-export function cloneCalendarState(fromId: string, toId: string) {
+export function cloneCalendarState(fromId: string, toId: string, storage: StorageService) {
   const stored = stateStore.get(fromId);
   if (!stored) return;
   stateStore.set(toId, {
@@ -54,13 +56,23 @@ export function cloneCalendarState(fromId: string, toId: string) {
       events: cal.events.map((event) => ({ ...event })),
     })),
   });
+  storage
+    .keysSync()
+    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
+    .forEach((key) => {
+      const value = storage.getItemSync(key);
+      if (value === null) return;
+      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
+      void storage.setItem(nextKey, value);
+    });
 }
 
 const defaultState = (): CalendarState => ({
   viewDate: new Date().toISOString(),
   viewMode: 'month',
   calendars: [],
-  showSettings: true,
+  showSettingsDesktop: true,
+  showSettingsPhone: false,
   selectedCalendarId: null,
 });
 
@@ -129,7 +141,7 @@ const defaultState = (): CalendarState => ({
   ],
   template: `
     <div class="calendar-shell">
-      @if (isPhoneMode() && !state().showSettings) {
+      @if (isPhoneMode() && !showSettings()) {
         <button class="calendar-sidebar-toggle" (click)="toggleSettings()">⟨</button>
       }
       <section style="flex:1; display:flex; flex-direction:column; gap:12px;">
@@ -156,7 +168,7 @@ const defaultState = (): CalendarState => ({
           @if (!isPhoneMode()) {
             <button (click)="toggleSettings()">
               {{
-                state().showSettings
+                showSettings()
                   ? ('calendar.hideSettings' | translate)
                   : ('calendar.showSettings' | translate)
               }}
@@ -243,7 +255,7 @@ const defaultState = (): CalendarState => ({
         }
       </section>
 
-      @if (state().showSettings) {
+      @if (showSettings()) {
         <aside
           [style.position]="isPhoneMode() ? 'absolute' : 'static'"
           [style.top]="isPhoneMode() ? '0' : null"
@@ -377,6 +389,7 @@ export class CalendarComponent implements OnInit {
   private translate = inject(TranslateService);
   private prefs = inject(AppPreferencesService);
   private importGuard = inject(ImportGuardService);
+  private storage = inject(StorageService);
   isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
   state = signal<CalendarState>(defaultState());
   newName = signal('');
@@ -390,24 +403,29 @@ export class CalendarComponent implements OnInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    if (typeof window !== 'undefined') {
-      const raw = window.localStorage.getItem(storageKey(userId, this.instanceId));
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw) as CalendarState;
-          const next = {
-            ...parsed,
-            showSettings:
-              this.isPhoneMode() && !parsed.phoneSidebarInit ? false : parsed.showSettings,
-            phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
-          };
-          this.state.set(next);
-          stateStore.set(this.instanceId, next);
-          this.persistState();
-          return;
-        } catch {
-          // ignore malformed stored data
-        }
+    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as CalendarState & { showSettings?: boolean };
+        const showDesktop =
+          parsed.showSettingsDesktop ?? parsed.showSettings ?? this.state().showSettingsDesktop;
+        const showPhone =
+          parsed.showSettingsPhone ??
+          (this.isPhoneMode() && !parsed.phoneSidebarInit
+            ? false
+            : (parsed.showSettings ?? this.state().showSettingsPhone));
+        const next = {
+          ...parsed,
+          showSettingsDesktop: showDesktop,
+          showSettingsPhone: showPhone,
+          phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+        };
+        this.state.set(next);
+        stateStore.set(this.instanceId, next);
+        this.persistState();
+        return;
+      } catch {
+        // ignore malformed stored data
       }
     }
     const stored = stateStore.get(this.instanceId);
@@ -419,10 +437,18 @@ export class CalendarComponent implements OnInit {
           events: cal.events.map((event) => ({ ...event })),
         })),
       };
+      const legacyShowSettings = (nextStored as { showSettings?: boolean }).showSettings;
+      const showDesktop =
+        nextStored.showSettingsDesktop ?? legacyShowSettings ?? this.state().showSettingsDesktop;
+      const showPhone =
+        nextStored.showSettingsPhone ??
+        (this.isPhoneMode() && !nextStored.phoneSidebarInit
+          ? false
+          : (legacyShowSettings ?? this.state().showSettingsPhone));
       const next = {
         ...nextStored,
-        showSettings:
-          this.isPhoneMode() && !nextStored.phoneSidebarInit ? false : nextStored.showSettings,
+        showSettingsDesktop: showDesktop,
+        showSettingsPhone: showPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
       };
       this.state.set(next);
@@ -432,7 +458,8 @@ export class CalendarComponent implements OnInit {
     }
     const next: CalendarState = {
       ...this.state(),
-      showSettings: this.isPhoneMode() ? false : this.state().showSettings,
+      showSettingsDesktop: this.state().showSettingsDesktop,
+      showSettingsPhone: this.isPhoneMode() ? false : this.state().showSettingsPhone,
       phoneSidebarInit: this.isPhoneMode() ? true : undefined,
     };
     this.state.set(next);
@@ -447,9 +474,8 @@ export class CalendarComponent implements OnInit {
   }
 
   private persistState() {
-    if (typeof window === 'undefined') return;
     const userId = this.prefs.userId();
-    window.localStorage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
   }
 
   periodLabel() {
@@ -575,7 +601,15 @@ export class CalendarComponent implements OnInit {
   }
 
   toggleSettings() {
-    this.commit({ ...this.state(), showSettings: !this.state().showSettings });
+    if (this.isPhoneMode()) {
+      this.commit({ ...this.state(), showSettingsPhone: !this.state().showSettingsPhone });
+      return;
+    }
+    this.commit({ ...this.state(), showSettingsDesktop: !this.state().showSettingsDesktop });
+  }
+
+  showSettings() {
+    return this.isPhoneMode() ? this.state().showSettingsPhone : this.state().showSettingsDesktop;
   }
 
   toggleCalendarVisibility(calendar: ExternalCalendar, event: Event) {

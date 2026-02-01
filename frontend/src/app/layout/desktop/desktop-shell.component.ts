@@ -1,9 +1,10 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AppListComponent, AppGroup } from '../shared/app-list/app-list.component';
 import { DialogInstance } from '../../core/dialog.service';
 import { AppId } from '../../features/dependencies/app-types';
+import { StorageService } from '../../core/storage/storage.service';
 
 @Component({
   selector: 'app-desktop-shell',
@@ -185,7 +186,7 @@ import { AppId } from '../../features/dependencies/app-types';
     </aside>
   `,
 })
-export class DesktopShellComponent {
+export class DesktopShellComponent implements OnInit {
   @Input() navOpen = false;
   @Input() dialogsHidden = false;
   @Input() resetMenuOpen = false;
@@ -204,8 +205,9 @@ export class DesktopShellComponent {
   @Input() showZoomControls = false;
   @Input() showCanvasDivider = false;
   @Input() canOpenSettings = true;
-  displayOptionsOpen = this.readDisplayOptions();
+  displayOptionsOpen = true;
   displayOptionsHovered = false;
+  private storage = inject(StorageService);
 
   @Output() toggleNav = new EventEmitter<void>();
   @Output() toggleDialogsHidden = new EventEmitter<void>();
@@ -230,16 +232,17 @@ export class DesktopShellComponent {
   @Output() openLicense = new EventEmitter<void>();
   @Output() logout = new EventEmitter<void>();
 
+  ngOnInit() {
+    this.displayOptionsOpen = this.readDisplayOptions();
+  }
+
   toggleDisplayOptions() {
     this.displayOptionsOpen = !this.displayOptionsOpen;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_display_options_open', this.displayOptionsOpen ? '1' : '0');
-    }
+    void this.storage.setItem('op_display_options_open', this.displayOptionsOpen ? '1' : '0');
   }
 
   private readDisplayOptions() {
-    if (typeof window === 'undefined') return true;
-    const raw = window.localStorage.getItem('op_display_options_open');
+    const raw = this.storage.getItemSync('op_display_options_open');
     if (raw === null) return true;
     return raw === '1';
   }

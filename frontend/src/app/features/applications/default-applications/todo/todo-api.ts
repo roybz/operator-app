@@ -26,16 +26,16 @@ export interface TodoState {
   subtaskCollapsed?: Record<string, boolean>;
 }
 
+interface StorageLike {
+  getItemSync: (key: string) => string | null;
+  setItem: (key: string, value: string) => Promise<void>;
+}
+
 const MOCK_STORAGE_KEY = 'op_mock_todos';
 const STATE_STORAGE_KEY = 'op_todo_state_v2';
 
-function isBrowser(): boolean {
-  return typeof window !== 'undefined';
-}
-
-function readMockTodos(instanceId: string, userId: string): Todo[] {
-  if (!isBrowser()) return [];
-  const raw = window.localStorage.getItem(`${MOCK_STORAGE_KEY}:${userId}:${instanceId}`);
+function readMockTodos(storage: StorageLike, instanceId: string, userId: string): Todo[] {
+  const raw = storage.getItemSync(`${MOCK_STORAGE_KEY}:${userId}:${instanceId}`);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -71,12 +71,8 @@ function normalizeState(state: TodoState): TodoState {
   };
 }
 
-export function loadTodoState(instanceId: string, userId: string): TodoState {
-  if (!isBrowser()) {
-    const project = defaultProject([]);
-    return { version: 2, projectsEnabled: false, projects: [project], activeProjectId: project.id };
-  }
-  const raw = window.localStorage.getItem(stateKey(instanceId, userId));
+export function loadTodoState(storage: StorageLike, instanceId: string, userId: string): TodoState {
+  const raw = storage.getItemSync(stateKey(instanceId, userId));
   if (raw) {
     try {
       return normalizeState(JSON.parse(raw) as TodoState);
@@ -84,7 +80,7 @@ export function loadTodoState(instanceId: string, userId: string): TodoState {
       // fall through to migration
     }
   }
-  const legacyTodos = readMockTodos(instanceId, userId);
+  const legacyTodos = readMockTodos(storage, instanceId, userId);
   if (legacyTodos.length) {
     const project = defaultProject(legacyTodos);
     const next: TodoState = {
@@ -94,7 +90,7 @@ export function loadTodoState(instanceId: string, userId: string): TodoState {
       activeProjectId: project.id,
       subtaskCollapsed: {},
     };
-    saveTodoState(instanceId, userId, next);
+    saveTodoState(storage, instanceId, userId, next);
     return next;
   }
   const project = defaultProject([]);
@@ -105,19 +101,27 @@ export function loadTodoState(instanceId: string, userId: string): TodoState {
     activeProjectId: project.id,
     subtaskCollapsed: {},
   };
-  saveTodoState(instanceId, userId, fallback);
+  saveTodoState(storage, instanceId, userId, fallback);
   return fallback;
 }
 
-export function saveTodoState(instanceId: string, userId: string, state: TodoState) {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(stateKey(instanceId, userId), JSON.stringify(normalizeState(state)));
+export function saveTodoState(
+  storage: StorageLike,
+  instanceId: string,
+  userId: string,
+  state: TodoState,
+) {
+  void storage.setItem(stateKey(instanceId, userId), JSON.stringify(normalizeState(state)));
 }
 
-export function cloneTodoState(fromInstanceId: string, toInstanceId: string, userId: string) {
-  if (!isBrowser()) return;
-  const state = loadTodoState(fromInstanceId, userId);
-  saveTodoState(toInstanceId, userId, {
+export function cloneTodoState(
+  storage: StorageLike,
+  fromInstanceId: string,
+  toInstanceId: string,
+  userId: string,
+) {
+  const state = loadTodoState(storage, fromInstanceId, userId);
+  saveTodoState(storage, toInstanceId, userId, {
     ...state,
     projects: state.projects.map((project) => ({
       ...project,

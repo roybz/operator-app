@@ -121,7 +121,9 @@ export interface UniverseItem {
           <button (click)="toggleNav.emit()" style="font-size:22px; padding:10px 12px;">☰</button>
           <div style="display:flex; align-items:center; gap:12px; justify-content:flex-end;">
             @if (showTime) {
-              <div style="font-size:14px; opacity:0.8;">{{ timeLabel }}</div>
+              <div style="font-size:14px; opacity:0.8; white-space:nowrap;">
+                {{ timeLabel }}
+              </div>
             }
             <button
               (click)="toggleWorkspaceMenu.emit()"
@@ -142,7 +144,9 @@ export interface UniverseItem {
             <div style="font-size:14px; opacity:0.8;">{{ city }}</div>
           }
           @if (showTime) {
-            <div style="font-size:14px; opacity:0.8;">{{ timeLabel }}</div>
+            <div style="font-size:14px; opacity:0.8; white-space:nowrap;">
+              {{ timeLabel }}
+            </div>
           }
           <button
             (click)="toggleWorkspaceMenu.emit()"

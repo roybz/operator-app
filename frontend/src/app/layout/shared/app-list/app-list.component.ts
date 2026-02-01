@@ -32,7 +32,7 @@ export interface AppGroup {
         [style.minHeight]="phoneMode ? '0' : null"
       >
         @for (app of apps; track app.id) {
-          <div class="app-row">
+          <div class="app-row" [attr.data-app-id]="app.id">
             <button
               class="app-list__toggle"
               (click)="toggleCollapsed(app.id); $event.stopPropagation()"
@@ -550,7 +550,8 @@ export class AppListComponent implements AfterViewInit {
   instanceLabel(instance: DialogInstance) {
     if (instance.titleOverride) return instance.titleOverride;
     const instances = this.instancesByApp[instance.appId] ?? [];
-    const idx = instances.findIndex((item) => item.id === instance.id) + 1;
+    const idx =
+      instance.instanceNumber ?? instances.findIndex((item) => item.id === instance.id) + 1;
     return `${this.translate.instant(instance.titleKey)} (${idx})`;
   }
 

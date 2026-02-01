@@ -2,12 +2,14 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
+import { StorageService } from './storage/storage.service';
 
 export interface DialogInstance {
   id: string;
   appId: AppId;
   titleKey: string;
   titleOverride?: string;
+  instanceNumber?: number;
   rect: DialogRect;
   minimized: boolean;
   stashed: boolean;
@@ -36,6 +38,7 @@ interface DialogState {
   dialogsByWorkspace: Record<string, DialogInstance[]>;
   hiddenWorkspaces: Record<string, boolean>;
   zCounter: number;
+  appCounters: Partial<Record<AppId, number>>;
 }
 
 const STATE_KEY = 'op_dialog_state_v1';
@@ -52,6 +55,7 @@ export class DialogService {
   readonly workspaces = this.state.asReadonly();
 
   private auth = inject(AuthService);
+  private storage = inject(StorageService);
 
   constructor() {
     effect(() => {
@@ -68,6 +72,12 @@ export class DialogService {
       const activeId = session.userId ? this.auth.getActiveUniverseId(session.userId) : null;
       if (activeId) this.load();
     });
+  }
+
+  async hydrate() {
+    const session = this.auth.session();
+    if (!session.userId && !session.previewUserId) return;
+    this.load();
   }
 
   getWorkspaces() {
@@ -214,10 +224,12 @@ export class DialogService {
 
     const config = APP_REGISTRY[appId];
     const rect = this.centerRect(config.defaultSize, bounds);
+    const nextNumber = this.nextInstanceNumber(appId);
     const instance: DialogInstance = {
       id: this.uid('dlg'),
       appId,
       titleKey: config.labelKey,
+      instanceNumber: nextNumber,
       rect,
       minimized: false,
       stashed: false,
@@ -241,10 +253,29 @@ export class DialogService {
     this.state.set({
       ...this.state(),
       zCounter: instance.z,
+      appCounters: {
+        ...(this.state().appCounters ?? {}),
+        [appId]: Math.max(this.state().appCounters?.[appId] ?? 0, nextNumber),
+      },
       dialogsByWorkspace: { ...this.state().dialogsByWorkspace, [workspaceId]: nextDialogs },
     });
     this.persist();
     return { ok: true, instance };
+  }
+
+  private nextInstanceNumber(appId: AppId) {
+    const used = new Set<number>();
+    Object.values(this.state().dialogsByWorkspace).forEach((list) => {
+      list.forEach((instance) => {
+        if (instance.appId !== appId) return;
+        if (typeof instance.instanceNumber === 'number') {
+          used.add(instance.instanceNumber);
+        }
+      });
+    });
+    let next = 1;
+    while (used.has(next)) next += 1;
+    return next;
   }
 
   restoreInstance(instanceId: string) {
@@ -400,9 +431,13 @@ export class DialogService {
     this.state.set({ ...this.state(), dialogsByWorkspace });
     this.persist();
 
-    if (typeof window !== 'undefined' && appId === 'todo') {
+    if (appId === 'todo') {
       removedIds.forEach((id) => {
-        window.localStorage.removeItem(`op_mock_todos:${id}`);
+        const prefix = `op_mock_todos:`;
+        this.storage
+          .keysSync()
+          .filter((key) => key.startsWith(prefix) && key.endsWith(`:${id}`))
+          .forEach((key) => void this.storage.removeItem(key));
       });
     }
     return removedIds;
@@ -611,15 +646,14 @@ export class DialogService {
   }
 
   private load() {
-    if (typeof window === 'undefined') return;
     const userKey = this.userStorageKey();
-    let raw = window.localStorage.getItem(userKey);
+    let raw = this.getRaw(userKey);
     if (!raw) {
       const legacyKey = this.legacyUserStorageKey();
       if (legacyKey) {
-        const legacy = window.localStorage.getItem(legacyKey);
+        const legacy = this.getRaw(legacyKey);
         if (legacy) {
-          window.localStorage.setItem(userKey, legacy);
+          this.setRaw(userKey, legacy);
           raw = legacy;
         }
       }
@@ -639,9 +673,8 @@ export class DialogService {
   }
 
   private persist() {
-    if (typeof window === 'undefined') return;
     const userKey = this.userStorageKey();
-    window.localStorage.setItem(userKey, JSON.stringify(this.state()));
+    this.setRaw(userKey, JSON.stringify(this.state()));
   }
 
   private userStorageKey() {
@@ -661,18 +694,33 @@ export class DialogService {
   }
 
   resetForUser(userId: string) {
-    if (typeof window === 'undefined') return;
-    Object.keys(window.localStorage)
+    this.keys()
       .filter((key) => key.startsWith(`${STATE_KEY}:${userId}`))
-      .forEach((key) => window.localStorage.removeItem(key));
-    Object.keys(window.localStorage)
+      .forEach((key) => this.removeKey(key));
+    this.keys()
       .filter((key) => key.startsWith(`${PREVIEW_STATE_KEY}:${userId}`))
-      .forEach((key) => window.localStorage.removeItem(key));
+      .forEach((key) => this.removeKey(key));
     const activeUser = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id;
     if (activeUser === userId) {
       this.state.set(this.defaultState());
       this.persist();
     }
+  }
+
+  private getRaw(key: string) {
+    return this.storage.getItemSync(key);
+  }
+
+  private setRaw(key: string, value: string) {
+    void this.storage.setItem(key, value);
+  }
+
+  private removeKey(key: string) {
+    void this.storage.removeItem(key);
+  }
+
+  private keys() {
+    return this.storage.keysSync();
   }
 
   private defaultState(): DialogState {
@@ -683,6 +731,7 @@ export class DialogService {
       dialogsByWorkspace: { [workspaceId]: [] },
       hiddenWorkspaces: {},
       zCounter: 0,
+      appCounters: {},
     };
   }
 
@@ -692,11 +741,19 @@ export class DialogService {
 
   private normalizeState(state: DialogState): DialogState {
     const dialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    const appCounters: Partial<Record<AppId, number>> = { ...(state.appCounters ?? {}) };
     Object.entries(state.dialogsByWorkspace ?? {}).forEach(([workspaceId, dialogs]) => {
       dialogsByWorkspace[workspaceId] = dialogs.map((instance) => ({
         ...instance,
         titleKey: instance.titleKey ?? APP_REGISTRY[instance.appId]?.labelKey ?? 'apps.todo',
         titleOverride: instance.titleOverride ?? undefined,
+        instanceNumber:
+          instance.instanceNumber ??
+          (() => {
+            const next = (appCounters[instance.appId] ?? 0) + 1;
+            appCounters[instance.appId] = next;
+            return next;
+          })(),
         stashed: instance.stashed ?? false,
         archived: instance.archived ?? false,
         tileRect: instance.tileRect,
@@ -708,6 +765,14 @@ export class DialogService {
         phoneMaximized: instance.phoneMaximized ?? false,
         deleteLocked: instance.deleteLocked ?? false,
       }));
+      dialogsByWorkspace[workspaceId].forEach((instance) => {
+        if (instance.instanceNumber !== undefined) {
+          appCounters[instance.appId] = Math.max(
+            appCounters[instance.appId] ?? 0,
+            instance.instanceNumber,
+          );
+        }
+      });
     });
     return {
       ...state,
@@ -716,6 +781,7 @@ export class DialogService {
       activeWorkspaceId: state.activeWorkspaceId || this.defaultState().activeWorkspaceId,
       hiddenWorkspaces: state.hiddenWorkspaces ?? {},
       zCounter: state.zCounter ?? 0,
+      appCounters,
     };
   }
 }
