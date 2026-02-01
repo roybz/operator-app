@@ -11,45 +11,58 @@ import {
   viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { filter } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { AuthService } from './core/auth.service';
-import { DialogService } from './core/dialog.service';
+import {
+  AuthService,
+  UniverseChatMessage,
+  UniverseEditHolder,
+  UniversePresenceEntry,
+  UserRole,
+} from './core/auth.service';
+import { DialogInstance, DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
-import { AppListComponent, AppGroup } from './shared/app-list/app-list.component';
-import { OverlayComponent } from './shared/overlay/overlay.component';
-import { TodoPageComponent } from './features/applications/todo/todo.component';
-import { CalculatorComponent } from './features/applications/calculator/calculator.component';
-import { TimerComponent } from './features/applications/timer/timer.component';
-import { NavigatorComponent } from './features/applications/navigator/navigator.component';
-import { NotesComponent } from './features/applications/notes/notes.component';
-import { CalendarComponent } from './features/applications/calendar/calendar.component';
-import { ClockComponent } from './features/applications/clock/clock.component';
-import { KanbanComponent } from './features/applications/kanban/kanban.component';
-import { StickyNotesComponent } from './features/applications/sticky-notes/sticky-notes.component';
-import { DataTableComponent } from './features/applications/data-table/data-table.component';
+import { AppGroup } from './layout/shared/app-list/app-list.component';
+import { ConfirmDialogComponent } from './shared/confirm-dialog/confirm-dialog.component';
+import { TodoPageComponent } from './features/applications/default-applications/todo/todo.component';
+import { CalculatorComponent } from './features/applications/default-applications/calculator/calculator.component';
+import { TimerComponent } from './features/applications/default-applications/timer/timer.component';
+import { NavigatorComponent } from './features/applications/default-applications/navigator/navigator.component';
+import { NotesComponent } from './features/applications/default-applications/notes/notes.component';
+import { CalendarComponent } from './features/applications/default-applications/calendar/calendar.component';
+import { ClockComponent } from './features/applications/default-applications/clock/clock.component';
+import { KanbanComponent } from './features/applications/default-applications/kanban/kanban.component';
+import { StickyNotesComponent } from './features/applications/default-applications/sticky-notes/sticky-notes.component';
+import { DataTableComponent } from './features/applications/default-applications/data-table/data-table.component';
 import { SettingsComponent } from './features/settings/settings.component';
 import { LicenseComponent } from './features/license/license.component';
+import { PhoneShellComponent } from './layout/phone/phone-shell.component';
+import { DesktopShellComponent } from './layout/desktop/desktop-shell.component';
+import { TopBarComponent, UniverseItem } from './layout/shared/top-bar.component';
+import { LongPressDirective } from './shared/long-press/long-press.directive';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
 import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
 import { AppId } from './features/dependencies/app-types';
-import { cloneCalculatorState } from './features/applications/calculator/calculator.component';
-import { cloneNavigatorState } from './features/applications/navigator/navigator.component';
-import { cloneNotesState } from './features/applications/notes/notes.component';
-import { cloneTimerState } from './features/applications/timer/timer.component';
-import { cloneCalendarState } from './features/applications/calendar/calendar.component';
-import { cloneClockState } from './features/applications/clock/clock.component';
-import { cloneKanbanState } from './features/applications/kanban/kanban.component';
-import { cloneStickyNoteState } from './features/applications/sticky-notes/sticky-notes.component';
-import { cloneDataTableState } from './features/applications/data-table/data-table.component';
-import { cloneTodos } from './features/applications/todo/todo-api';
+import { cloneCalculatorState } from './features/applications/default-applications/calculator/calculator.component';
+import { cloneNavigatorState } from './features/applications/default-applications/navigator/navigator.component';
+import { cloneNotesState } from './features/applications/default-applications/notes/notes.component';
+import { cloneTimerState } from './features/applications/default-applications/timer/timer.component';
+import { cloneCalendarState } from './features/applications/default-applications/calendar/calendar.component';
+import { cloneClockState } from './features/applications/default-applications/clock/clock.component';
+import { cloneKanbanState } from './features/applications/default-applications/kanban/kanban.component';
+import { cloneStickyNoteState } from './features/applications/default-applications/sticky-notes/sticky-notes.component';
+import { cloneDataTableState } from './features/applications/default-applications/data-table/data-table.component';
+import { cloneTodoState } from './features/applications/default-applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
+import { StorageService } from './core/storage/storage.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
-const RESERVED_SIDEBAR_WIDTH = 240;
+const RESERVED_SIDEBAR_WIDTH = 267;
 const RESERVED_TOPBAR_HEIGHT = 48;
 const RESERVED_WORKSPACE_HEIGHT = 72;
+const PHONE_MODE_BOOT_KEY = 'op_phone_mode_boot';
 
 const createFallbackRect = (width: number, height: number): DOMRect => {
   if (typeof DOMRect !== 'undefined') return new DOMRect(0, 0, width, height);
@@ -80,8 +93,10 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     RouterOutlet,
     TranslateModule,
     DialogComponent,
-    AppListComponent,
-    OverlayComponent,
+    ConfirmDialogComponent,
+    PhoneShellComponent,
+    DesktopShellComponent,
+    TopBarComponent,
     TodoPageComponent,
     CalculatorComponent,
     TimerComponent,
@@ -94,6 +109,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     DataTableComponent,
     SettingsComponent,
     LicenseComponent,
+    LongPressDirective,
   ],
   styles: [
     `
@@ -147,6 +163,136 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       .workspace-drop-line.right {
         right: -6px;
       }
+
+      .app-shell {
+        overflow: visible;
+        flex: 0 0 auto;
+      }
+
+      .app-main {
+        flex: 1;
+        min-height: 0;
+      }
+
+      :host {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+      }
+
+      button {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      #app-viewport {
+        height: 100%;
+        min-height: 0;
+      }
+
+      .phone-mode #app-viewport {
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+
+      .phone-mode #app-canvas {
+        margin: 0;
+      }
+
+      .universe-bar {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        border-top: 1px solid var(--color-border);
+        background: var(--color-surface);
+        z-index: 1200;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.12);
+      }
+
+      .phone-mode .universe-bar {
+        left: 0;
+        right: 0;
+        flex-wrap: nowrap;
+        flex-direction: column;
+        gap: 6px;
+        padding: 8px 10px;
+        align-items: stretch;
+        max-height: 18vh;
+        align-content: flex-start;
+      }
+
+      .phone-mode .universe-actions {
+        width: 100%;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-left: 0;
+      }
+
+      .phone-mode .universe-invitees {
+        width: 100%;
+        flex: 0 0 auto;
+        display: none;
+      }
+
+      .phone-mode .universe-chat {
+        right: 8px;
+        width: min(420px, 96vw);
+      }
+
+      .universe-chip {
+        padding: 6px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        background: var(--color-bg);
+        font-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .universe-chip--active {
+        box-shadow: 0 0 8px rgba(0, 194, 209, 0.6);
+      }
+
+      .universe-fade {
+        opacity: 0.7;
+      }
+
+      .universe-chat {
+        position: fixed;
+        right: 16px;
+        width: min(420px, 92vw);
+        max-height: 525px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+        display: flex;
+        flex-direction: column;
+        z-index: 2000;
+        font-size: 0.9em;
+      }
+
+      .universe-chat__messages {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .universe-chat__input {
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 8px;
+        min-height: 64px;
+        resize: vertical;
+      }
     `,
   ],
   template: `
@@ -160,7 +306,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       </div>
     }
 
-    @if (auth.ready() && !auth.isLoggedIn()) {
+    @if (auth.ready() && (!auth.isLoggedIn() || forceLoggedOut())) {
       @if (loginLoadingVisible()) {
         <div
           style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:3500; transition:opacity 120ms ease;"
@@ -170,17 +316,34 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         </div>
       }
       <router-outlet />
-    } @else if (auth.isLoggedIn()) {
-      <div style="position:relative;">
+    } @else if (auth.isLoggedIn() && !forceLoggedOut()) {
+      <div
+        class="app-shell"
+        [class.phone-mode]="phoneMode()"
+        style="position:relative; display:flex; flex-direction:column;"
+      >
+        @if (phoneMode() && !topBarOpen()) {
+          <div
+            id="phone-collapsed-bar"
+            style="position:sticky; top:0; z-index:1300; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:6px 10px; display:flex; align-items:center; justify-content:space-between;"
+          >
+            <button (click)="toggleNav()" style="font-size:22px; padding:8px 10px;">☰</button>
+            <button (click)="toggleTopBar()">{{ 'topbar.expand' | translate }}</button>
+          </div>
+        }
         @if (topBarOpen()) {
           <div
-            [style.maxHeight.px]="workspaceMenuOpen() ? 72 : 0"
+            id="workspace-bar"
+            [style.maxHeight.px]="workspaceMenuOpen() ? (phoneMode() ? 180 : 72) : 0"
             [style.opacity]="workspaceMenuOpen() ? 1 : 0"
             [style.borderBottom]="workspaceMenuOpen() ? '1px solid var(--color-border)' : 'none'"
-            style="overflow:hidden; background:var(--color-bg); transition:max-height 200ms ease, opacity 200ms ease;"
+            [style.overflowY]="phoneMode() ? 'auto' : 'hidden'"
+            style="overflow-x:hidden; background:var(--color-bg); transition:max-height 200ms ease, opacity 200ms ease;"
           >
             <div
-              style="display:flex; justify-content:center; gap:12px; align-items:center; padding:12px 16px;"
+              style="display:flex; gap:12px; align-items:center; padding:12px 16px;"
+              [style.justifyContent]="phoneMode() ? 'flex-start' : 'center'"
+              [style.flexWrap]="phoneMode() ? 'wrap' : 'nowrap'"
             >
               @for (ws of dialogService.getWorkspaces(); track ws.id) {
                 <div
@@ -193,6 +356,9 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                       draggable="false"
                       (pointerdown)="onWorkspacePointerDown(ws.id, $event)"
                       (dblclick)="startWorkspaceRename(ws); $event.stopPropagation()"
+                      appLongPress
+                      [longPressEnabled]="phoneMode()"
+                      (longPress)="startWorkspaceRename(ws)"
                       (click)="onWorkspaceClick(ws.id)"
                       [class.workspace-chip]="true"
                       [class.dragging]="workspaceDragId() === ws.id"
@@ -234,214 +400,116 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   </button>
                 </div>
               }
-              <button
-                (click)="dialogService.addWorkspace()"
-                [disabled]="dialogService.getWorkspaces().length >= 8"
-                style="padding:8px 12px;"
-              >
-                +
-              </button>
+              @if (dialogService.getWorkspaces().length < workspaceLimit() && canEdit()) {
+                <button (click)="dialogService.addWorkspace()" style="padding:8px 12px;">+</button>
+              }
             </div>
           </div>
 
-          <header
-            style="background:var(--color-surface); border-bottom:1px solid var(--color-border); padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
-          >
-            <div>
-              @if (siteLogoEmoji()) {
-                <span style="margin-right:6px;">{{ siteLogoEmoji() }}</span>
-              }
-              <strong>{{ siteTitle() }}</strong>
-              @if (auth.currentUser()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
-                >
-                  {{ 'auth.loggedInAs' | translate: { user: auth.currentUser()?.username ?? '' } }}
-                </span>
-              }
-              @if (isMockMode()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                >
-                  {{ 'mock.label' | translate }}
-                </span>
-              }
-              @if (auth.isPreviewing()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#e8f2ff; color:#1f5fa7; border:1px solid #cfe2ff; vertical-align:middle;"
-                >
-                  {{ 'preview.label' | translate: { user: previewUserLabel() } }}
-                </span>
-              }
-              @if (auth.previewPersist()) {
-                <span
-                  style="display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                >
-                  {{ 'preview.persist' | translate }}
-                </span>
-              }
-            </div>
-
-            <div style="display:flex; align-items:center; gap:12px;">
-              @if (auth.preferences().city) {
-                <div style="font-size:14px; opacity:0.8;">{{ auth.preferences().city }}</div>
-              }
-              @if (showTime()) {
-                <div style="font-size:14px; opacity:0.8;">{{ timeLabel() }}</div>
-              }
-              <button
-                (click)="toggleWorkspaceMenu()"
-                [style.boxShadow]="
-                  workspaceMenuOpen() ? '0 0 8px rgba(255, 228, 154, 0.9)' : 'none'
-                "
-              >
-                {{ 'workspaces.button' | translate }}
-              </button>
-              <button (click)="toggleTopBar()">{{ 'topbar.collapse' | translate }}</button>
-            </div>
-          </header>
+          <app-top-bar
+            [phoneMode]="phoneMode()"
+            [siteLogoEmoji]="siteLogoEmoji()"
+            [siteTitle]="siteTitle()"
+            [loggedInLabel]="auth.currentUser() ? loggedInAsLabel() : ''"
+            [mockLabel]="isMockMode()"
+            [previewLabel]="auth.isPreviewing() ? previewUserLabel() : ''"
+            [previewPersist]="auth.previewPersist()"
+            [canSwitchUniverse]="canSwitchUniverse()"
+            [currentUniverseName]="currentUniverseName()"
+            [universeMenuOpen]="universeMenuOpen()"
+            [universes]="universesList()"
+            [activeUniverseId]="auth.getActiveUniverseId(currentUserId() || '')"
+            [city]="auth.preferences().city"
+            [showTime]="showTime()"
+            [timeLabel]="timeLabel()"
+            [workspaceMenuOpen]="workspaceMenuOpen()"
+            (toggleNav)="toggleNav()"
+            (toggleWorkspaceMenu)="toggleWorkspaceMenu()"
+            (toggleTopBar)="toggleTopBar()"
+            (toggleUniverseMenu)="toggleUniverseMenu()"
+            (closeUniverseMenu)="universeMenuOpen.set(false)"
+            (switchUniverse)="switchUniverse($event)"
+          />
         }
       </div>
 
-      <main [style.height]="topBarOpen() ? 'calc(100vh - 48px)' : '100vh'" style="display:flex;">
-        <aside
-          [style.width]="navOpen ? '240px' : '0'"
-          [style.padding]="navOpen ? '16px' : '0'"
-          [style.borderRight]="navOpen ? '1px solid var(--color-border)' : 'none'"
-          [style.overflow]="navOpen ? 'visible' : 'hidden'"
-          style="display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box;"
-        >
-          @if (navOpen) {
-            <div>
-              <button (click)="toggleNav()" style="margin-bottom: 8px;">
-                {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
-              </button>
-              <button
-                (click)="toggleDialogsHidden()"
-                style="margin-bottom: 8px;"
-                [disabled]="settingsOpen()"
-                [style.opacity]="settingsOpen() ? 0.5 : 1"
-              >
-                {{
-                  dialogsHidden()
-                    ? ('dialogs.showAll' | translate)
-                    : ('dialogs.hideAll' | translate)
-                }}
-              </button>
-              <div style="margin-bottom: 12px;">
-                <button
-                  (click)="toggleResetMenu()"
-                  [disabled]="settingsOpen()"
-                  [style.opacity]="settingsOpen() ? 0.5 : 1"
-                >
-                  {{ 'dialogs.reset' | translate }}
-                </button>
-                @if (resetMenuOpen()) {
-                  <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
-                    <button
-                      (click)="resetDialogs('left')"
-                      [disabled]="settingsOpen()"
-                      [style.opacity]="settingsOpen() ? 0.5 : 1"
-                    >
-                      {{ 'dialogs.resetLeft' | translate }}
-                    </button>
-                    <button
-                      (click)="resetDialogs('middle')"
-                      [disabled]="settingsOpen()"
-                      [style.opacity]="settingsOpen() ? 0.5 : 1"
-                    >
-                      {{ 'dialogs.resetMiddle' | translate }}
-                    </button>
-                  </div>
-                }
-              </div>
-              <app-app-list
-                [apps]="visibleAppGroups()"
-                [instancesByApp]="instancesByApp()"
-                [deleteTargetActive]="!!deleteTargetId()"
-                [actionsDisabled]="settingsOpen()"
-                (openApp)="openApp($event)"
-                (restore)="restoreInstance($event)"
-                (duplicate)="duplicateInstance($event)"
-                (toggleLock)="toggleDeleteLock($event)"
-              />
-            </div>
-
-            <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-              @if (showViewportSizingControls()) {
-                <label style="display:flex; flex-direction:column; gap:6px;">
-                  {{ 'canvas.mode' | translate }}
-                  <select
-                    [value]="isCanvasLocked() ? 'locked' : 'follow'"
-                    (change)="setCanvasMode($event)"
-                  >
-                    <option value="follow">{{ 'canvas.modeFollow' | translate }}</option>
-                    <option value="locked">{{ 'canvas.modeLocked' | translate }}</option>
-                  </select>
-                </label>
-                @if (isCanvasLocked()) {
-                  <div style="display:flex; align-items:center; gap:8px;">
-                    <input
-                      type="number"
-                      [value]="canvasDraftWidth()"
-                      (input)="canvasDraftWidth.set($any($event.target).valueAsNumber)"
-                      min="1024"
-                      max="20000"
-                      style="width:90px; padding:4px;"
-                    />
-                    <span>×</span>
-                    <input
-                      type="number"
-                      [value]="canvasDraftHeight()"
-                      (input)="canvasDraftHeight.set($any($event.target).valueAsNumber)"
-                      min="768"
-                      max="20000"
-                      style="width:90px; padding:4px;"
-                    />
-                    <button (click)="applyCanvasSize()" [disabled]="!canvasDraftDirty()">
-                      {{ 'canvas.updateSize' | translate }}
-                    </button>
-                  </div>
-                }
-              }
-              @if (showZoomControls()) {
-                <div
-                  style="display:flex; align-items:center; gap:8px; border-top:1px solid var(--color-border); padding-top:8px; margin-top:8px;"
-                >
-                  <button
-                    (click)="resetZoom()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.originalScale' | translate }}
-                  </button>
-                  <button
-                    (click)="zoomOut()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.zoomOut' | translate }}
-                  </button>
-                  <button
-                    (click)="zoomIn()"
-                    [disabled]="settingsOpen()"
-                    [style.opacity]="settingsOpen() ? 0.5 : 1"
-                  >
-                    {{ 'canvas.zoomIn' | translate }}
-                  </button>
-                </div>
-              }
-              <button (click)="toggleSettings()">{{ 'nav.settings' | translate }}</button>
-              <button (click)="openLicense()">{{ 'nav.license' | translate }}</button>
-              <button (click)="logout()">{{ 'nav.logout' | translate }}</button>
-            </div>
-          }
-        </aside>
+      <main class="app-main" style="display:flex; overflow:hidden;">
+        @if (phoneMode()) {
+          <app-phone-shell
+            [navOpen]="navOpen"
+            [apps]="visibleAppGroups()"
+            [instancesByApp]="instancesByApp()"
+            [deleteTargetActive]="!!deleteTargetId()"
+            [actionsDisabled]="settingsOpen() || !canEdit()"
+            [activeInstanceId]="phoneActiveDialogId()"
+            (toggleNav)="toggleNav()"
+            (openApp)="openApp($event)"
+            (restore)="restoreInstance($event)"
+            (duplicate)="duplicateInstance($event)"
+            (toggleLock)="toggleDeleteLock($event)"
+            (archive)="confirmArchive($event)"
+            (unarchive)="unarchiveInstance($event)"
+            (toggleSettings)="toggleSettings()"
+            (openLicense)="openLicense()"
+            (logout)="logout()"
+          />
+        } @else {
+          <app-desktop-shell
+            [navOpen]="navOpen"
+            [dialogsHidden]="dialogsHidden()"
+            [resetMenuOpen]="resetMenuOpen()"
+            [settingsOpen]="settingsOpen()"
+            [canEdit]="canEdit()"
+            [deleteTargetActive]="!!deleteTargetId()"
+            [apps]="visibleAppGroups()"
+            [instancesByApp]="instancesByApp()"
+            [phoneMode]="phoneMode()"
+            [showViewportSizingControls]="showViewportSizingControls()"
+            [isCanvasLocked]="isCanvasLocked()"
+            [canvasMode]="isCanvasLocked() ? 'locked' : 'follow'"
+            [canvasDraftWidth]="canvasDraftWidth()"
+            [canvasDraftHeight]="canvasDraftHeight()"
+            [canvasDraftDirty]="canvasDraftDirty()"
+            [showZoomControls]="showZoomControls()"
+            [showCanvasDivider]="showCanvasDivider()"
+            [canOpenSettings]="canOpenSettings()"
+            (toggleNav)="toggleNav()"
+            (toggleDialogsHidden)="toggleDialogsHidden()"
+            (toggleResetMenu)="toggleResetMenu()"
+            (resetLeft)="resetDialogs('left')"
+            (resetMiddle)="resetDialogs('middle')"
+            (openApp)="openApp($event)"
+            (restore)="restoreInstance($event)"
+            (duplicate)="duplicateInstance($event)"
+            (toggleLock)="toggleDeleteLock($event)"
+            (archive)="confirmArchive($event)"
+            (unarchive)="unarchiveInstance($event)"
+            (phoneModeToggle)="requestPhoneModeToggle($event)"
+            (canvasModeChange)="setCanvasMode($event)"
+            (canvasDraftWidthChange)="canvasDraftWidth.set($event)"
+            (canvasDraftHeightChange)="canvasDraftHeight.set($event)"
+            (applyCanvasSize)="applyCanvasSize()"
+            (resetZoom)="resetZoom()"
+            (zoomOut)="zoomOut()"
+            (zoomIn)="zoomIn()"
+            (toggleSettings)="toggleSettings()"
+            (openLicense)="openLicense()"
+            (logout)="logout()"
+          />
+        }
 
         <section
           id="app-viewport"
-          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center;"
-          [style.overflow]="isOverlayActive() ? 'hidden' : 'auto'"
+          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:auto;"
+          [style.overflow]="
+            phoneMode() || isOverlayActive() || (!phoneMode() && canvasScale() < 1)
+              ? 'hidden'
+              : 'auto'
+          "
+          [style.alignItems]="!phoneMode() && canvasScale() < 1 ? 'flex-start' : 'center'"
+          [style.justifyContent]="!phoneMode() && canvasScale() < 1 ? 'flex-start' : 'center'"
+          [style.background]="!phoneMode() && canvasScale() < 1 ? 'var(--color-bg)' : 'transparent'"
+          [style.borderLeft]="navOpen && !phoneMode() ? '1px solid var(--color-border)' : 'none'"
         >
           @if (!topBarOpen()) {
             <button
@@ -453,7 +521,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               {{ 'topbar.expand' | translate }}
             </button>
           }
-          @if (!navOpen) {
+          @if (!navOpen && !phoneMode()) {
             <button
               (click)="toggleNav()"
               class="floating-control"
@@ -467,41 +535,60 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               class="floating-control"
               style="left:92px;"
               [style.top.px]="floatingSidebarToggleTop()"
-              [disabled]="settingsOpen()"
-              [style.opacity]="settingsOpen() ? 0.5 : 1"
+              [disabled]="settingsOpen() || !canEdit()"
+              [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
             >
               {{
                 dialogsHidden() ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate)
               }}
             </button>
           }
+          @if (phoneMode() && !topBarOpen()) {
+            <button
+              (click)="toggleNav()"
+              class="floating-control"
+              style="left:12px;"
+              [style.top.px]="floatingTopBarToggleTop()"
+            >
+              ☰
+            </button>
+          }
           <div
             id="app-canvas"
             [ngStyle]="canvasStyle()"
             [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
-            [style.width.px]="canvasWidth()"
-            [style.height.px]="canvasHeight()"
-            style="position:relative; flex:0 0 auto; min-width:1024px; min-height:768px; max-width:20000px; max-height:20000px; margin:0 auto; background-color:var(--color-bg); transform-origin: top left;"
-            [style.transform]="'scale(' + canvasScale() + ')'"
-            [style.cursor]="isPanning() ? 'grabbing' : 'default'"
+            [style.width.px]="effectiveCanvasWidth()"
+            [style.height.px]="effectiveCanvasHeight()"
+            [style.minWidth.px]="phoneMode() ? 0 : 1024"
+            [style.minHeight.px]="phoneMode() ? 0 : 768"
+            [style.margin]="!phoneMode() && canvasScale() < 1 ? '0' : '0 auto'"
+            style="position:relative; flex:0 0 auto; max-width:20000px; max-height:20000px; background-color:var(--color-bg); transform-origin: top left;"
+            [style.transform]="'scale(' + effectiveCanvasScale() + ')'"
+            [style.cursor]="phoneMode() ? 'default' : isPanning() ? 'grabbing' : 'default'"
             (pointerdown)="startCanvasPan($event)"
           >
             @for (instance of stashedDialogs(); track instance.id) {
               @if (instance.tileRect) {
                 <div
                   data-tile="true"
-                  style="position:absolute; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15);"
+                  style="position:absolute; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15); touch-action:none;"
                   [style.left.px]="instance.tileRect.x"
                   [style.top.px]="instance.tileRect.y"
                   [style.width.px]="instance.tileRect.width"
                   [style.height.px]="instance.tileRect.height"
                   [style.zIndex]="1"
                   [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
-                  (pointerdown)="$event.stopPropagation(); startTileDrag(instance, $event)"
+                  [style.cursor]="tileDragState?.id === instance.id ? 'grabbing' : 'grab'"
+                  (pointerdown)="
+                    $event.stopPropagation();
+                    $event.preventDefault();
+                    startTileDrag(instance, $event)
+                  "
                 >
                   <div style="flex:1; min-width:0;">
                     @if (editingTileId() === instance.id) {
                       <input
+                        [attr.data-tile-input]="instance.id"
                         [value]="editingTitle()"
                         (input)="editingTitle.set($any($event.target).value)"
                         (blur)="finishRename(instance)"
@@ -512,6 +599,9 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                       <div
                         style="text-align:left; font-size:13px; width:100%; cursor:text;"
                         (dblclick)="startRename(instance)"
+                        appLongPress
+                        [longPressEnabled]="phoneMode()"
+                        (longPress)="startRename(instance)"
                       >
                         {{ instanceLabel(instance) }}
                       </div>
@@ -528,16 +618,18 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             }
 
             @for (instance of visibleDialogs(); track instance.id) {
-              @if (!instance.minimized) {
+              @if (phoneMode() || !instance.minimized) {
                 <app-dialog
-                  [instance]="instance"
-                  [bounds]="canvasBounds()"
-                  [disabled]="isOverlayActive()"
+                  [instance]="renderInstance(instance)"
+                  [bounds]="phoneMode() ? viewportBounds() : canvasBounds()"
+                  [disabled]="isOverlayActive() || !canEdit()"
                   [title]="instanceLabel(instance)"
                   [icon]="instanceIcon(instance.appId)"
                   [trashDisabled]="!!instance.deleteLocked"
                   [hasSettings]="instanceHasSettings(instance.appId)"
                   [canMoveWorkspace]="dialogService.getWorkspaces().length > 1"
+                  [phoneMode]="phoneMode()"
+                  [scale]="effectiveCanvasScale()"
                   (moved)="onDialogMove(instance.id, $event)"
                   (resized)="onDialogResize(instance.id, $event)"
                   (stash)="stashInstance(instance.id)"
@@ -586,16 +678,65 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           </div>
 
           @if (settingsOpen()) {
-            <app-overlay (closed)="requestCloseSettings()">
-              <app-settings />
-            </app-overlay>
+            <div
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              (pointerdown)="requestCloseSettings()"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="requestCloseSettings()"
+              (keydown.space)="requestCloseSettings()"
+            >
+              <div
+                style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw); position:relative;"
+                [style.width]="phoneMode() ? '100%' : null"
+                [style.height]="phoneMode() ? '100%' : null"
+                [style.borderRadius]="phoneMode() ? '0' : '12px'"
+                (pointerdown)="$event.stopPropagation()"
+              >
+                <button
+                  (click)="requestCloseSettings()"
+                  style="position:sticky; top:24px; float:right; border-radius:999px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"
+                  title="{{ 'dialogs.close' | translate }}"
+                >
+                  ✕
+                </button>
+                <div
+                  style="position:sticky; top:24px; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:5;"
+                >
+                  <button
+                    (click)="settingsDraft.apply()"
+                    [disabled]="!settingsDraft.dirty()"
+                    [style.opacity]="settingsDraft.dirty() ? 1 : 0.6"
+                    style="height:28px;"
+                  >
+                    {{ 'settings.apply' | translate }}
+                  </button>
+                  @if (settingsDraft.dirty()) {
+                    <button (click)="settingsDraft.cancel()" style="height:28px;">
+                      {{ 'settings.cancelChanges' | translate }}
+                    </button>
+                  }
+                </div>
+                <app-settings [showControls]="false" />
+              </div>
+            </div>
           }
           @if (licenseOpen()) {
             <div
               style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              (pointerdown)="licenseOpen.set(false)"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="licenseOpen.set(false)"
+              (keydown.space)="licenseOpen.set(false)"
             >
               <div
                 style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
+                [style.width]="phoneMode() ? '100%' : null"
+                [style.height]="phoneMode() ? '100%' : null"
+                [style.maxHeight]="phoneMode() ? '100%' : '85vh'"
+                [style.borderRadius]="phoneMode() ? '0' : '12px'"
+                (pointerdown)="$event.stopPropagation()"
               >
                 <app-license (closed)="licenseOpen.set(false)" />
               </div>
@@ -604,14 +745,22 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (moveWorkspaceTargetId()) {
             <div
               style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
+              (pointerdown)="closeMoveWorkspace()"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="closeMoveWorkspace()"
+              (keydown.space)="closeMoveWorkspace()"
             >
               <div
                 style="background:var(--color-surface); padding:24px; border-radius:12px; width:min(640px, 92vw);"
+                (pointerdown)="$event.stopPropagation()"
               >
                 <h3 style="margin:0 0 16px;">
                   {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
                 </h3>
-                <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                <div
+                  style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;"
+                >
                   @for (ws of dialogService.getWorkspaces(); track ws.id) {
                     <button
                       (click)="moveInstanceToWorkspace(ws.id)"
@@ -636,55 +785,218 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               </div>
             </div>
           }
+          @if (universeSwitchConfirmOpen()) {
+            <app-confirm-dialog
+              [message]="'universe.switchWarning' | translate"
+              [confirmLabel]="'universe.switchConfirm' | translate"
+              [cancelLabel]="'dialogs.cancel' | translate"
+              (confirmed)="confirmUniverseMenuOpen()"
+              (canceled)="cancelUniverseMenuConfirm()"
+            />
+          }
+          @if (phoneModeUniversePromptOpen()) {
+            <app-confirm-dialog
+              [message]="'universe.phoneModePrompt' | translate"
+              [confirmLabel]="'dialogs.confirm' | translate"
+              [cancelLabel]="'dialogs.cancel' | translate"
+              (confirmed)="confirmPhoneModeUniverseSwitch()"
+              (canceled)="cancelPhoneModeUniverseSwitch()"
+            />
+          }
         </section>
       </main>
 
-      @if (deleteTargetId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1000;"
-        >
+      @if (showUniverseBar()) {
+        @if (universeBarOpen()) {
           <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
+            class="universe-bar"
+            [style.left.px]="universeBarLeft()"
+            [style.flexDirection]="phoneMode() ? 'column' : 'row'"
+            [style.maxHeight]="phoneMode() ? '18vh' : null"
+            [style.padding]="phoneMode() ? '8px 10px' : null"
           >
-            <p>{{ 'dialogs.confirmDelete' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="deleteTargetId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="deleteConfirmed()">{{ 'dialogs.confirm' | translate }}</button>
+            @if (phoneMode() && !inviteesOnline().length) {
+              <div
+                style="width:100%; flex:0 0 auto; text-align:center; font-size:12px; opacity:0.7; white-space:normal; word-break:break-word; margin-bottom:4px;"
+              >
+                {{ 'universe.noInvitees' | translate }}
+              </div>
+            }
+            <div
+              class="universe-invitees"
+              [style.display]="phoneMode() ? 'none' : 'flex'"
+              style="align-items:center; gap:8px; flex:1; min-width:0;"
+            >
+              @if (inviteesOnline().length) {
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  @for (invitee of inviteesOnline(); track invitee.id) {
+                    <div
+                      class="universe-chip"
+                      [class.universe-chip--active]="universeEditHolder()?.id === invitee.id"
+                    >
+                      <span>{{ invitee.username }}</span>
+                      @if (isUniverseOwner()) {
+                        <button
+                          (click)="grantEdit(invitee)"
+                          title="{{ 'universe.grantEdit' | translate }}"
+                        >
+                          ✏️
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else if (!phoneMode()) {
+                <div
+                  style="flex:1; text-align:center; font-size:12px; opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                >
+                  {{ 'universe.noInvitees' | translate }}
+                </div>
+              }
+            </div>
+            <div
+              class="universe-actions"
+              [style.width]="phoneMode() ? '100%' : null"
+              [style.justifyContent]="phoneMode() ? 'space-between' : null"
+              style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto;"
+            >
+              <div class="universe-chip">
+                {{
+                  (isMainGuest() ? 'universe.guestsCountOwned' : 'universe.guestsCount')
+                    | translate: { count: guestCount() }
+                }}
+              </div>
+              <div class="universe-chip">
+                {{
+                  (isMainGuest() ? 'universe.observersCountOwned' : 'universe.observersCount')
+                    | translate: { count: observerCount() }
+                }}
+              </div>
+              @if (universeEditHolder()) {
+                <div class="universe-chip universe-chip--active">
+                  {{ 'universe.editingAs' | translate: { name: universeEditHolder()?.username } }}
+                </div>
+              }
+              @if (isUniverseOwner() && universeEditHolder()?.id !== auth.session().userId) {
+                <button (click)="takeBackEditPermissions()">
+                  {{ 'universe.takeBackEdit' | translate }}
+                </button>
+              }
+              @if (allowUniverseChat()) {
+                <button (click)="toggleUniverseChat()">
+                  {{ 'universe.openChat' | translate }}
+                  @if (universeChatUnread() > 0) {
+                    <span>({{ universeChatUnread() }})</span>
+                  }
+                </button>
+              }
+              <button (click)="toggleUniverseBar()" style="margin-left:auto;">
+                {{ 'universe.collapseBar' | translate }}
+              </button>
+            </div>
+          </div>
+        } @else {
+          <button
+            class="floating-control"
+            style="right:12px; bottom:12px;"
+            (click)="toggleUniverseBar()"
+          >
+            {{ 'universe.expandBar' | translate }}
+          </button>
+        }
+      }
+
+      @if (universeChatOpen() && !settingsOpen()) {
+        <div class="universe-chat" [style.bottom.px]="universeBarOpen() ? 64 : 16">
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; padding:12px 12px 0;"
+          >
+            <h4 style="margin:0;">{{ 'universe.chatTitle' | translate }}</h4>
+            <button (click)="universeChatOpen.set(false)">✕</button>
+          </div>
+          <div
+            class="universe-chat__messages"
+            #universeChatScroll
+            (scroll)="onUniverseChatScroll($event)"
+          >
+            @for (msg of universeChatMessages(); track msg.id) {
+              <div style="border:1px solid var(--color-border); border-radius:8px; padding:8px;">
+                <div style="font-size:12px; opacity:0.7; margin-bottom:4px;">
+                  {{ msg.author }}
+                </div>
+                <div style="white-space:pre-wrap;">{{ msg.content }}</div>
+              </div>
+            }
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px; padding:12px;">
+            <textarea
+              #universeChatInput
+              class="universe-chat__input"
+              [value]="universeChatDraft()"
+              (input)="universeChatDraft.set($any($event.target)?.value || '')"
+              (keydown.enter)="onUniverseChatKeydown($event)"
+              [placeholder]="'universe.chatPlaceholder' | translate"
+            ></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+              @if (isUniverseOwner()) {
+                <button (click)="clearUniverseChat()">
+                  {{ 'universe.chatClear' | translate }}
+                </button>
+              }
+              <button (click)="sendUniverseChat()">{{ 'universe.chatSend' | translate }}</button>
             </div>
           </div>
         </div>
+      }
+
+      @if (deleteTargetId()) {
+        <app-confirm-dialog
+          [message]="'dialogs.confirmDelete' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="deleteConfirmed()"
+          (canceled)="deleteTargetId.set(null)"
+        />
       }
 
       @if (cloneTargetId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1050;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
-            <p>{{ 'dialogs.cloneConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="cancelClone()">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="confirmClone()">{{ 'dialogs.confirm' | translate }}</button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'dialogs.cloneConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmClone()"
+          (canceled)="cancelClone()"
+        />
+      }
+
+      @if (phoneModeConfirmOpen()) {
+        <app-confirm-dialog
+          [message]="'phone.modeConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmPhoneModeToggle()"
+          (canceled)="cancelPhoneModeToggle()"
+        />
+      }
+
+      @if (archiveTargetId()) {
+        <app-confirm-dialog
+          [message]="'dialogs.confirmArchive' | translate"
+          [confirmLabel]="'dialogs.archive' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="archiveConfirmed()"
+          (canceled)="archiveTargetId.set(null)"
+        />
       }
 
       @if (settingsCloseConfirmOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3100;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:340px;"
-          >
-            <p>{{ 'settings.closeConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="cancelCloseSettings()">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="confirmCloseSettings()">{{ 'settings.discard' | translate }}</button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.closeConfirm' | translate"
+          [confirmLabel]="'settings.discard' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmCloseSettings()"
+          (canceled)="cancelCloseSettings()"
+        />
       }
 
       @if (guestBlocked()) {
@@ -735,6 +1047,8 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly dialogService = inject(DialogService);
   readonly settingsDraft = inject(SettingsDraftService);
   readonly instanceSettings = inject(InstanceSettingsService);
+  readonly storage = inject(StorageService);
+  private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
     return !backendConnected || this.auth.orgSettings().testModeEnabled;
@@ -745,6 +1059,7 @@ export class AppComponent implements OnInit, OnDestroy {
   workspaceDragId = signal<string | null>(null);
   private readonly translate = inject(TranslateService);
   private timeInterval?: number;
+  private universeInterval?: number;
   private loadingTimeout?: number;
   private loginLoadingTimeout?: number;
   private now = signal(new Date());
@@ -762,10 +1077,27 @@ export class AppComponent implements OnInit, OnDestroy {
   settingsOpen = signal(false);
   licenseOpen = signal(false);
   settingsCloseConfirmOpen = signal(false);
+  phoneModeConfirmOpen = signal(false);
+  pendingPhoneMode = signal<boolean | null>(null);
   resetMenuOpen = signal(false);
   deleteTargetId = signal<string | null>(null);
   cloneTargetId = signal<string | null>(null);
+  archiveTargetId = signal<string | null>(null);
   moveWorkspaceTargetId = signal<string | null>(null);
+  universeMenuOpen = signal(false);
+  universeSwitchConfirmOpen = signal(false);
+  universeMenuPendingOpen = signal(false);
+  phoneModeUniversePromptOpen = signal(false);
+  pendingUniverseSwitchId = signal<string | null>(null);
+  universeBarOpen = signal(true);
+  universeChatOpen = signal(false);
+  universeChatDraft = signal('');
+  universePresence = signal<UniversePresenceEntry[]>([]);
+  universeChatMessages = signal<UniverseChatMessage[]>([]);
+  universeEditHolder = signal<UniverseEditHolder | null>(null);
+  universeChatUnread = signal(0);
+  universeChatLastCount = signal(0);
+  universeChatSticky = signal(true);
   accessibilityPromptOpen = signal(false);
   accessibilityPromptEnabled = signal(true);
   loadingVisible = signal(true);
@@ -789,16 +1121,50 @@ export class AppComponent implements OnInit, OnDestroy {
   canvasScale = signal(1);
   canvasDraftWidth = signal(1920);
   canvasDraftHeight = signal(1080);
+  phoneActiveDialogId = signal<string | null>(null);
+  private navOpenBeforePhone = true;
+  private lastPhoneMode = false;
+  private lastPhoneAppliedId: string | null = null;
+  private phoneBootChecked = false;
+  private phoneModeReloading = false;
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
+  universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
+  universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
 
   activeDialogs = computed(() => this.dialogService.getActiveDialogs());
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
-  visibleDialogs = computed(() =>
-    this.activeDialogs().filter(
-      (instance) => !this.dialogsHidden() && !instance.stashed && !instance.minimized,
-    ),
-  );
-  stashedDialogs = computed(() => this.activeDialogs().filter((instance) => instance.stashed));
+  phoneMode = computed(() => Boolean(this.auth.preferences().phoneMode));
+  phoneDialogs = computed(() => this.activeDialogs().filter((instance) => !instance.archived));
+  phoneActiveInstance = computed(() => {
+    if (!this.phoneMode()) return null;
+    const list = this.phoneDialogs().filter((instance) => !this.isPhoneStashed(instance));
+    const current = list.find((instance) => instance.id === this.phoneActiveDialogId());
+    const currentVisible = current && !this.isPhoneMinimized(current) ? current : null;
+    if (currentVisible) return currentVisible;
+    return list.find((instance) => !this.isPhoneMinimized(instance)) ?? null;
+  });
+  visibleDialogs = computed(() => {
+    if (this.phoneMode()) {
+      const active = this.phoneActiveInstance();
+      if (!active || this.isPhoneMinimized(active) || this.isPhoneStashed(active)) return [];
+      return [active];
+    }
+    return this.activeDialogs().filter(
+      (instance) =>
+        !this.dialogsHidden() && !instance.stashed && !instance.minimized && !instance.archived,
+    );
+  });
+  stashedDialogs = computed(() => {
+    if (this.phoneMode()) {
+      return this.activeDialogs()
+        .filter((instance) => this.isPhoneStashed(instance) && !instance.archived)
+        .map((instance) => ({
+          ...instance,
+          tileRect: instance.phoneTileRect ?? instance.tileRect,
+        }));
+    }
+    return this.activeDialogs().filter((instance) => instance.stashed && !instance.archived);
+  });
   isOverlayActive = computed(
     () =>
       this.settingsOpen() ||
@@ -809,7 +1175,11 @@ export class AppComponent implements OnInit, OnDestroy {
       this.guestBlocked() ||
       this.loadingVisible() ||
       Boolean(this.cloneTargetId()) ||
-      Boolean(this.moveWorkspaceTargetId()),
+      Boolean(this.archiveTargetId()) ||
+      Boolean(this.moveWorkspaceTargetId()) ||
+      this.universeSwitchConfirmOpen() ||
+      this.phoneModeConfirmOpen() ||
+      this.phoneModeUniversePromptOpen(),
   );
 
   moveWorkspaceInstance = computed(() => {
@@ -854,6 +1224,7 @@ export class AppComponent implements OnInit, OnDestroy {
     const org = this.auth.orgSettings();
     return !org.disableZoomControls && !prefs.hideZoomControls;
   });
+  showCanvasDivider = computed(() => this.showViewportSizingControls() && this.showZoomControls());
   isCanvasLocked = computed(() => this.auth.preferences().lockCanvasSize ?? false);
   canvasDraftDirty = computed(
     () =>
@@ -866,22 +1237,86 @@ export class AppComponent implements OnInit, OnDestroy {
     () => !this.auth.orgSettings().allowGuestLogin && this.auth.actualUser()?.id === 'u_guest',
   );
 
+  universeOwnerId = computed(
+    () => this.auth.session().universeOwnerId ?? this.auth.session().userId ?? null,
+  );
+  currentUserId = computed(() => this.auth.actualUser()?.id ?? null);
+  universesList = computed<UniverseItem[]>(() =>
+    this.currentUserId() ? this.auth.getUniversesForUser(this.currentUserId()!) : [],
+  );
+  currentUniverseName = computed(() => {
+    const userId = this.currentUserId();
+    if (!userId) return '';
+    const active = this.auth.getActiveUniverseId(userId);
+    const found = this.universesList().find((u) => u.id === active);
+    return found?.name ?? '';
+  });
+  canSwitchUniverse = computed(() => this.isUniverseOwner() && this.universesList().length >= 2);
+  workspaceLimit = computed(() => (this.isMainGuest() ? 9 : 12));
+  universePrefs = computed(() => {
+    const ownerId = this.universeOwnerId();
+    return ownerId ? this.auth.getUniversePreferences(ownerId) : null;
+  });
+  universeId = computed(() => this.universePrefs()?.universeId ?? null);
+  multiUserEnabled = computed(() => Boolean(this.universePrefs()?.multiUserEnabled));
+  allowUniverseChat = computed(() => Boolean(this.universePrefs()?.allowUniverseChat));
+  isUniverseOwner = computed(() => {
+    const ownerId = this.universeOwnerId();
+    return Boolean(ownerId && ownerId === this.auth.session().userId);
+  });
+  sessionRole = computed<UserRole>(() => {
+    return (
+      this.auth.session().sessionRole ??
+      this.auth.actualUser()?.role ??
+      this.auth.currentUser()?.role ??
+      'user'
+    );
+  });
+  isLimitedRole = computed(() => ['guest', 'observer', 'invitee'].includes(this.sessionRole()));
+  canOpenSettings = computed(() => !this.isLimitedRole());
+  canEdit = computed(() => {
+    if (!this.multiUserEnabled()) return true;
+    const holder = this.universeEditHolder();
+    if (!holder) return this.isUniverseOwner();
+    return holder.id === this.auth.session().userId;
+  });
+  inviteesOnline = computed(() =>
+    this.universePresence().filter((entry) => entry.role === 'invitee'),
+  );
+  guestCount = computed(
+    () => this.universePresence().filter((entry) => entry.role === 'guest').length,
+  );
+  observerCount = computed(
+    () => this.universePresence().filter((entry) => entry.role === 'observer').length,
+  );
+  hasUniverseParticipants = computed(
+    () => this.inviteesOnline().length > 0 || this.guestCount() > 0 || this.observerCount() > 0,
+  );
+  isMainGuest = computed(() => this.auth.actualUser()?.id === 'u_guest');
+  showUniverseBar = computed(() => this.auth.isLoggedIn() && this.multiUserEnabled());
   previewUserLabel = computed(() => this.auth.currentUser()?.username ?? '');
+  loggedInAsLabel = computed(() => {
+    const role = this.sessionRole();
+    if (role === 'guest') return this.translate.instant('auth.roleGuest');
+    if (role === 'observer') return this.translate.instant('auth.roleObserver');
+    if (role === 'invitee') return this.translate.instant('auth.roleInvitee');
+    return this.auth.currentUser()?.username ?? '';
+  });
   siteTitle = computed(() => this.auth.orgSettings().siteTitle || 'Operator App');
   siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
   visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
   instancesByApp = computed(() => ({
-    kanban: this.dialogService.getAppInstances('kanban'),
-    todo: this.dialogService.getAppInstances('todo'),
-    calculator: this.dialogService.getAppInstances('calculator'),
-    timer: this.dialogService.getAppInstances('timer'),
-    navigator: this.dialogService.getAppInstances('navigator'),
-    notes: this.dialogService.getAppInstances('notes'),
-    stickyNotes: this.dialogService.getAppInstances('stickyNotes'),
-    calendar: this.dialogService.getAppInstances('calendar'),
-    clock: this.dialogService.getAppInstances('clock'),
-    dataTable: this.dialogService.getAppInstances('dataTable'),
+    kanban: this.dialogService.getAppInstances('kanban', { includeArchived: true }),
+    todo: this.dialogService.getAppInstances('todo', { includeArchived: true }),
+    calculator: this.dialogService.getAppInstances('calculator', { includeArchived: true }),
+    timer: this.dialogService.getAppInstances('timer', { includeArchived: true }),
+    navigator: this.dialogService.getAppInstances('navigator', { includeArchived: true }),
+    notes: this.dialogService.getAppInstances('notes', { includeArchived: true }),
+    stickyNotes: this.dialogService.getAppInstances('stickyNotes', { includeArchived: true }),
+    calendar: this.dialogService.getAppInstances('calendar', { includeArchived: true }),
+    clock: this.dialogService.getAppInstances('clock', { includeArchived: true }),
+    dataTable: this.dialogService.getAppInstances('dataTable', { includeArchived: true }),
   }));
   canvasStyle = computed(() => {
     const prefs = this.auth.preferences();
@@ -927,13 +1362,65 @@ export class AppComponent implements OnInit, OnDestroy {
       backgroundPosition: positions.join(', '),
     };
   });
+  effectiveCanvasWidth = computed(() => {
+    if (this.phoneMode()) return this.viewportBounds().width;
+    const scale = this.canvasScale();
+    const viewportWidth = this.viewportBounds().width;
+    const base = this.canvasWidth();
+    if (scale < 1 && viewportWidth > 0) {
+      return Math.max(base, Math.ceil(viewportWidth / scale));
+    }
+    return base;
+  });
+  effectiveCanvasHeight = computed(() => {
+    if (this.phoneMode()) return this.viewportBounds().height;
+    const scale = this.canvasScale();
+    const viewportHeight = this.viewportBounds().height;
+    const base = this.canvasHeight();
+    if (scale < 1 && viewportHeight > 0) {
+      return Math.max(base, Math.ceil(viewportHeight / scale));
+    }
+    return base;
+  });
+  effectiveCanvasScale = computed(() => (this.phoneMode() ? 1 : this.canvasScale()));
+  forceLoggedOut = signal(false);
 
   constructor() {
     this.translate.setDefaultLang('en');
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
+    this.handleLogoutLocation(currentPath, currentSearch);
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/logout')) {
+      this.auth.logout();
+      window.location.replace('/login?loggedOut=1');
+    }
+    this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe((event) => {
+        this.handleLogoutLocation(event.urlAfterRedirects, '');
+        if (!event.urlAfterRedirects.startsWith('/logout')) return;
+        if (this.auth.isLoggedIn()) {
+          this.auth.logout();
+        }
+        this.router.navigateByUrl('/login?loggedOut=1');
+      });
     effect(() => {
       if (typeof document === 'undefined') return;
       document.title = this.siteTitle();
       this.updateFavicon(this.siteLogoEmoji());
+    });
+    effect(() => {
+      if (this.phoneBootChecked) return;
+      if (typeof window === 'undefined') return;
+      if (!this.auth.isLoggedIn()) return;
+      this.phoneBootChecked = true;
+      const prefs = this.auth.preferences();
+      const flagged = this.storage.getItemSync(PHONE_MODE_BOOT_KEY);
+      if (!flagged) return;
+      void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
+      if (prefs.phoneMode) {
+        this.auth.savePreferences({ ...prefs, phoneMode: false });
+      }
     });
     effect(() => {
       const prefs = this.auth.preferences();
@@ -951,14 +1438,46 @@ export class AppComponent implements OnInit, OnDestroy {
       this.applyThemeClasses();
     });
     effect(() => {
+      if (this.auth.isLoggedIn()) {
+        this.forceLoggedOut.set(false);
+      }
+    });
+    effect(() => {
+      if (!this.phoneMode() && !this.showUniverseBar()) return;
+      setTimeout(this.updateCanvasBounds, 0);
+    });
+    effect(() => {
       const actualUser = this.auth.actualUser();
       if (!actualUser) {
         this.accessibilityPromptOpen.set(false);
         return;
       }
-      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id)) return;
+      const universeId = this.auth.getActiveUniverseId(actualUser.id) ?? null;
+      if (this.auth.preferences().accessibilityMode) return;
+      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) return;
       this.accessibilityPromptEnabled.set(false);
       this.accessibilityPromptOpen.set(true);
+    });
+    effect(() => {
+      const enabled = this.phoneMode();
+      if (enabled === this.lastPhoneMode) return;
+      this.lastPhoneMode = enabled;
+      this.handlePhoneModeChange(enabled);
+    });
+    effect(() => {
+      if (!this.phoneMode()) return;
+      const active = this.phoneActiveInstance();
+      if (!active) {
+        this.phoneActiveDialogId.set(null);
+        this.lastPhoneAppliedId = null;
+        return;
+      }
+      if (this.phoneActiveDialogId() !== active.id) {
+        this.phoneActiveDialogId.set(active.id);
+      }
+      if (this.lastPhoneAppliedId !== active.id) {
+        this.lastPhoneAppliedId = active.id;
+      }
     });
     effect(() => {
       if (typeof window === 'undefined') return;
@@ -992,10 +1511,21 @@ export class AppComponent implements OnInit, OnDestroy {
       }, 0);
     });
     effect(() => {
+      if (typeof window === 'undefined') return;
+      if (!this.auth.ready()) return;
+      if (!window.location.pathname.startsWith('/logout')) return;
+      if (this.auth.isLoggedIn()) {
+        this.auth.logout();
+      }
+      this.router.navigateByUrl('/login?loggedOut=1');
+    });
+    effect(() => {
       const userId = this.auth.actualUser()?.id ?? null;
       this.settingsOpen.set(false);
       this.settingsCloseConfirmOpen.set(false);
       this.workspaceMenuOpen.set(false);
+      this.universeMenuOpen.set(false);
+      this.universeSwitchConfirmOpen.set(false);
       this.deleteTargetId.set(null);
       this.cloneTargetId.set(null);
       if (userId) {
@@ -1003,14 +1533,69 @@ export class AppComponent implements OnInit, OnDestroy {
         this.editingWorkspaceName.set('');
       }
     });
+
+    effect(() => {
+      if (typeof window === 'undefined') return;
+      const universeId = this.universeId();
+      const enabled = this.multiUserEnabled();
+      if (!this.auth.isLoggedIn() || !universeId || !enabled) {
+        if (this.universeInterval) {
+          window.clearInterval(this.universeInterval);
+          this.universeInterval = undefined;
+        }
+        this.universePresence.set([]);
+        this.universeChatMessages.set([]);
+        this.universeEditHolder.set(null);
+        return;
+      }
+      this.syncUniverseState();
+      if (!this.universeInterval) {
+        this.universeInterval = window.setInterval(() => {
+          this.syncUniverseState();
+        }, 3000);
+      }
+    });
+
+    effect(() => {
+      if (!this.auth.isLoggedIn()) return;
+      const prefs = this.universePrefs();
+      if (!prefs) return;
+      if (!prefs.multiUserEnabled && this.isLimitedRole()) {
+        this.forceLogoutToMain();
+      }
+      if (!prefs.allowUniverseChat) {
+        this.universeChatOpen.set(false);
+      }
+      const universeId = this.universeId();
+      if (universeId && this.isLimitedRole()) {
+        if (this.auth.consumeUniverseKick(universeId)) {
+          this.forceLogoutToMain();
+        }
+      }
+    });
   }
 
   ngOnInit() {
     if (typeof window === 'undefined') return;
-    const stored = window.localStorage.getItem('op_nav_open');
+    if (window.location.pathname.startsWith('/logout')) {
+      this.auth.logout();
+      window.location.replace('/login?loggedOut=1');
+      return;
+    }
+    this.handleLogoutRoute();
+    const stored = this.storage.getItemSync('op_nav_open');
     if (stored !== null) this.navOpen = stored === 'true';
-    const storedScale = window.localStorage.getItem('op_canvas_scale');
-    if (storedScale) this.canvasScale.set(Number(storedScale) || 1);
+    const storedTopBar = this.storage.getItemSync('op_topbar_open');
+    if (storedTopBar !== null) this.topBarOpen.set(storedTopBar === 'true');
+    const storedWorkspaceBar = this.storage.getItemSync('op_workspace_bar_open');
+    if (storedWorkspaceBar !== null) this.workspaceMenuOpen.set(storedWorkspaceBar === 'true');
+    const storedUniverseBar = this.storage.getItemSync('op_universe_bar_open');
+    if (storedUniverseBar !== null) this.universeBarOpen.set(storedUniverseBar === 'true');
+    const storedScale = this.storage.getItemSync('op_canvas_scale');
+    if (storedScale) {
+      this.canvasScale.set(Number(storedScale) || 1);
+      setTimeout(this.updateCanvasBounds, 0);
+    }
 
     this.timeInterval = window.setInterval(() => {
       this.now.set(new Date());
@@ -1022,6 +1607,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.timeInterval) window.clearInterval(this.timeInterval);
+    if (this.universeInterval) window.clearInterval(this.universeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (typeof window !== 'undefined') {
@@ -1033,12 +1619,6 @@ export class AppComponent implements OnInit, OnDestroy {
     if (typeof document === 'undefined') return;
     const canvas = document.querySelector('#app-canvas');
     const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
-    if (!this.isCanvasLocked() && viewport) {
-      this.syncCanvasToViewport(viewport);
-    }
-    if (canvas instanceof HTMLElement) {
-      this.canvasBounds.set(createFallbackRect(this.canvasWidth(), this.canvasHeight()));
-    }
     if (viewport) {
       this.viewportBounds.set(
         createFallbackRect(
@@ -1047,18 +1627,43 @@ export class AppComponent implements OnInit, OnDestroy {
         ),
       );
     }
+    if (!this.phoneMode() && !this.isCanvasLocked() && viewport) {
+      this.syncCanvasToViewport(viewport);
+    }
+    if (canvas instanceof HTMLElement) {
+      const nextWidth =
+        this.phoneMode() && viewport ? viewport.clientWidth : this.effectiveCanvasWidth();
+      const nextHeight =
+        this.phoneMode() && viewport ? viewport.clientHeight : this.effectiveCanvasHeight();
+      this.canvasBounds.set(createFallbackRect(nextWidth, nextHeight));
+    }
+    if (this.phoneMode()) {
+      this.dialogService.clampAllToBounds(this.viewportBounds(), true);
+    } else {
+      this.dialogService.clampAllToBounds(this.canvasBounds());
+    }
   };
 
   @HostListener('window:pointermove', ['$event'])
   onTilePointerMove(event: PointerEvent) {
     if (this.tileDragState) {
-      const dx = event.clientX - this.tileDragState.startX;
-      const dy = event.clientY - this.tileDragState.startY;
-      this.dialogService.moveTile(
-        this.tileDragState.id,
-        { x: this.tileDragState.origin.x + dx, y: this.tileDragState.origin.y + dy },
-        this.canvasBounds(),
-      );
+      event.preventDefault();
+      const scale = this.phoneMode() ? 1 : this.canvasScale();
+      const dx = (event.clientX - this.tileDragState.startX) / scale;
+      const dy = (event.clientY - this.tileDragState.startY) / scale;
+      if (this.phoneMode()) {
+        this.dialogService.movePhoneTile(
+          this.tileDragState.id,
+          { x: this.tileDragState.origin.x + dx, y: this.tileDragState.origin.y + dy },
+          this.viewportBounds(),
+        );
+      } else {
+        this.dialogService.moveTile(
+          this.tileDragState.id,
+          { x: this.tileDragState.origin.x + dx, y: this.tileDragState.origin.y + dy },
+          this.canvasBounds(),
+        );
+      }
     }
     if (this.panState) {
       const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
@@ -1079,16 +1684,25 @@ export class AppComponent implements OnInit, OnDestroy {
         this.suppressWorkspaceClick = true;
       }
       if (this.workspacePointerState.moved) {
-        const target = document
-          .elementFromPoint(event.clientX, event.clientY)
-          ?.closest('[data-workspace-id]') as HTMLElement | null;
-        if (!target) return;
-        const targetId = target.dataset['workspaceId'] ?? null;
-        if (!targetId) return;
-        const rect = target.getBoundingClientRect();
-        const isLeft = event.clientX < rect.left + rect.width / 2;
-        this.hoverWorkspaceId.set(targetId);
-        this.hoverWorkspaceSide.set(isLeft ? 'left' : 'right');
+        const rows = Array.from(document.querySelectorAll('[data-workspace-id]')) as HTMLElement[];
+        if (!rows.length) return;
+        const positions = rows.map((row) => ({
+          id: row.dataset['workspaceId'] ?? '',
+          rect: row.getBoundingClientRect(),
+        }));
+        let insertIndex = positions.findIndex(
+          (pos) => event.clientX < pos.rect.left + pos.rect.width / 2,
+        );
+        if (insertIndex === -1) insertIndex = positions.length;
+        if (insertIndex >= positions.length) {
+          const last = positions[positions.length - 1];
+          this.hoverWorkspaceId.set(last.id);
+          this.hoverWorkspaceSide.set('right');
+        } else {
+          const target = positions[insertIndex];
+          this.hoverWorkspaceId.set(target.id);
+          this.hoverWorkspaceSide.set('left');
+        }
       }
     }
   }
@@ -1128,18 +1742,33 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
+  @HostListener('window:popstate')
+  onPopState() {
+    this.handleLogoutRoute();
+  }
+
+  private handleLogoutRoute() {
+    if (typeof window === 'undefined') return;
+    if (!window.location.pathname.startsWith('/logout')) return;
+    if (this.auth.isLoggedIn()) {
+      this.auth.logout();
+    }
+    this.router.navigateByUrl('/login?loggedOut=1');
+  }
+
   toggleNav() {
     this.navOpen = !this.navOpen;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_nav_open', String(this.navOpen));
-    }
+    void this.storage.setItem('op_nav_open', String(this.navOpen));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
   floatingSidebarToggleTop() {
     if (!this.topBarOpen()) return 12;
-    const headerHeight = 48;
-    const workspaceHeight = this.workspaceMenuOpen() ? 72 : 0;
+    if (typeof document === 'undefined') return 12 + 48 + (this.workspaceMenuOpen() ? 72 : 0);
+    const headerHeight = document.getElementById('topbar-header')?.offsetHeight ?? 48;
+    const workspaceHeight = this.workspaceMenuOpen()
+      ? (document.getElementById('workspace-bar')?.offsetHeight ?? 72)
+      : 0;
     return 12 + headerHeight + workspaceHeight;
   }
 
@@ -1154,7 +1783,95 @@ export class AppComponent implements OnInit, OnDestroy {
     } else {
       this.topBarOpen.set(true);
     }
+    void this.storage.setItem('op_topbar_open', String(this.topBarOpen()));
+    void this.storage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
     setTimeout(this.updateCanvasBounds, 0);
+  }
+
+  requestPhoneModeToggle(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const nextValue = Boolean(target.checked);
+    target.checked = this.phoneMode();
+    this.pendingPhoneMode.set(nextValue);
+    this.phoneModeConfirmOpen.set(true);
+  }
+
+  confirmPhoneModeToggle() {
+    const nextValue = this.pendingPhoneMode();
+    this.phoneModeConfirmOpen.set(false);
+    this.pendingPhoneMode.set(null);
+    if (nextValue === null) return;
+    this.phoneModeReloading = true;
+    const prefs = this.auth.preferences();
+    this.auth.savePreferences({ ...prefs, phoneMode: nextValue });
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => window.location.reload(), 60);
+    }
+  }
+
+  cancelPhoneModeToggle() {
+    this.phoneModeConfirmOpen.set(false);
+    this.pendingPhoneMode.set(null);
+  }
+
+  private handlePhoneModeChange(enabled: boolean) {
+    if (!this.auth.isLoggedIn()) return;
+    if (this.phoneModeReloading) return;
+    if (this.auth.consumeLoginPhoneModeApplyFlag() && typeof window !== 'undefined') {
+      this.phoneModeReloading = true;
+      window.setTimeout(() => window.location.reload(), 60);
+      return;
+    }
+    this.runLoadingTransition();
+    if (typeof window !== 'undefined') {
+      if (enabled) {
+        void this.storage.setItem(PHONE_MODE_BOOT_KEY, String(Date.now()));
+      } else {
+        void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
+      }
+    }
+    if (enabled) {
+      this.navOpenBeforePhone = this.navOpen;
+      this.navOpen = false;
+      const nextActive = this.pickPhoneActiveInstance();
+      if (nextActive) {
+        this.phoneActiveDialogId.set(nextActive.id);
+      }
+      if (typeof window !== 'undefined') {
+        window.setTimeout(() => {
+          void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
+        }, 500);
+      }
+      setTimeout(this.updateCanvasBounds, 0);
+      return;
+    }
+    this.phoneActiveDialogId.set(null);
+    this.navOpen = this.navOpenBeforePhone;
+    setTimeout(this.updateCanvasBounds, 0);
+  }
+
+  private pickPhoneActiveInstance() {
+    const candidates = this.activeDialogs().filter(
+      (instance) => !instance.archived && !instance.minimized && !instance.stashed,
+    );
+    if (candidates.length) {
+      return candidates.reduce((top, item) => (item.z > top.z ? item : top));
+    }
+    const fallback = this.phoneDialogs();
+    return fallback[0] ?? null;
+  }
+
+  private applyPhoneModeLayout(activeId: string | null) {
+    if (!this.phoneMode()) return;
+    if (activeId) this.dialogService.bringToFront(activeId);
+  }
+
+  private setPhoneActiveInstance(instanceId: string | null, keepNavOpen = false) {
+    if (!this.phoneMode()) return;
+    this.phoneActiveDialogId.set(instanceId);
+    if (this.navOpen && !keepNavOpen) {
+      this.navOpen = false;
+    }
   }
 
   toggleWorkspaceMenu() {
@@ -1165,6 +1882,90 @@ export class AppComponent implements OnInit, OnDestroy {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     this.workspaceMenuOpen.set(!this.workspaceMenuOpen());
+    void this.storage.setItem('op_workspace_bar_open', String(this.workspaceMenuOpen()));
+  }
+
+  toggleUniverseMenu() {
+    if (!this.canSwitchUniverse()) return;
+    if (this.universeMenuOpen()) {
+      this.universeMenuOpen.set(false);
+      return;
+    }
+    if (this.hasUniverseParticipants()) {
+      this.universeMenuPendingOpen.set(true);
+      this.universeSwitchConfirmOpen.set(true);
+      return;
+    }
+    this.universeMenuOpen.set(true);
+  }
+
+  confirmUniverseMenuOpen() {
+    if (!this.universeMenuPendingOpen()) return;
+    this.universeSwitchConfirmOpen.set(false);
+    this.universeMenuPendingOpen.set(false);
+    this.universeMenuOpen.set(true);
+  }
+
+  cancelUniverseMenuConfirm() {
+    this.universeSwitchConfirmOpen.set(false);
+    this.universeMenuPendingOpen.set(false);
+  }
+
+  confirmPhoneModeUniverseSwitch() {
+    const universeId = this.pendingUniverseSwitchId();
+    this.phoneModeUniversePromptOpen.set(false);
+    this.pendingUniverseSwitchId.set(null);
+    if (!universeId) return;
+    this.performUniverseSwitch(universeId, true);
+  }
+
+  cancelPhoneModeUniverseSwitch() {
+    const universeId = this.pendingUniverseSwitchId();
+    this.phoneModeUniversePromptOpen.set(false);
+    this.pendingUniverseSwitchId.set(null);
+    if (!universeId) return;
+    this.performUniverseSwitch(universeId, false);
+  }
+
+  switchUniverse(universeId: string) {
+    if (!this.canSwitchUniverse()) return;
+    const userId = this.currentUserId();
+    if (!userId) return;
+    const activeId = this.auth.getActiveUniverseId(userId);
+    if (!activeId || activeId === universeId) {
+      this.universeMenuOpen.set(false);
+      return;
+    }
+    const targetPrefs = this.auth.getUniversePreferences(userId, universeId);
+    if (targetPrefs && !targetPrefs.universeOpened) {
+      this.performUniverseSwitch(universeId, this.phoneMode());
+      return;
+    }
+    if (this.phoneMode() && targetPrefs && targetPrefs.phoneMode === false) {
+      this.pendingUniverseSwitchId.set(universeId);
+      this.phoneModeUniversePromptOpen.set(true);
+      this.universeMenuOpen.set(false);
+      return;
+    }
+    this.performUniverseSwitch(universeId);
+  }
+
+  private performUniverseSwitch(universeId: string, forcePhoneMode?: boolean) {
+    const userId = this.currentUserId();
+    if (!userId) return;
+    if (this.hasUniverseParticipants()) {
+      const currentUniverseId = this.universeId();
+      if (currentUniverseId) {
+        this.auth.markUniverseKick(currentUniverseId);
+      }
+    }
+    this.runLoadingTransition();
+    this.auth.setActiveUniverseId(userId, universeId);
+    if (forcePhoneMode !== undefined) {
+      const prefs = this.auth.getUniversePreferences(userId, universeId);
+      this.auth.savePreferences({ ...prefs, phoneMode: forcePhoneMode });
+    }
+    this.universeMenuOpen.set(false);
   }
 
   setCanvasMode(event: Event) {
@@ -1185,6 +1986,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   startWorkspaceRename(ws: { id: string; name: string }) {
+    if (!this.canEdit()) return;
     this.editingWorkspaceId.set(ws.id);
     this.editingWorkspaceName.set(ws.name);
     setTimeout(() => {
@@ -1207,11 +2009,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   closeWorkspace(ws: { id: string }) {
+    if (!this.canEdit()) return;
     if (this.dialogService.getWorkspaces().length <= 1) return;
     this.dialogService.closeWorkspace(ws.id);
   }
 
   onWorkspacePointerDown = (id: string, event: PointerEvent) => {
+    if (!this.canEdit()) return;
     if (event.button !== 0) return;
     if (event.detail > 1) return;
     if (this.editingWorkspaceId() === id) {
@@ -1249,6 +2053,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openSettings() {
+    if (!this.canOpenSettings()) return;
     if (typeof document !== 'undefined') {
       const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
       viewport?.scrollTo({ top: 0, left: 0 });
@@ -1259,6 +2064,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   toggleSettings() {
+    if (!this.canOpenSettings()) return;
     if (this.settingsOpen()) {
       this.requestCloseSettings();
     } else {
@@ -1297,6 +2103,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   openApp(appId: AppId) {
+    if (!this.canEdit()) return;
     this.updateCanvasBounds();
     const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
     const viewportBounds = this.viewportBounds();
@@ -1306,22 +2113,53 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     if (result.instance && viewport) {
+      if (this.phoneMode()) {
+        this.phoneDialogs()
+          .filter((instance) => instance.id !== result.instance?.id)
+          .forEach((instance) => this.dialogService.setPhoneMinimized(instance.id, true));
+      }
       const nextX = result.instance.rect.x + viewport.scrollLeft;
       const nextY = result.instance.rect.y + viewport.scrollTop;
-      this.dialogService.moveInstance(
-        result.instance.id,
-        { x: nextX, y: nextY },
-        this.canvasBounds(),
-      );
+      if (this.phoneMode()) {
+        this.dialogService.setPhoneRect(
+          result.instance.id,
+          { x: 0, y: 0, width: viewportBounds.width, height: viewportBounds.height },
+          viewportBounds,
+        );
+        this.dialogService.setPhoneMinimized(result.instance.id, false);
+        this.dialogService.unstashPhoneInstance(result.instance.id);
+      } else {
+        this.dialogService.moveInstance(
+          result.instance.id,
+          { x: nextX, y: nextY },
+          this.canvasBounds(),
+        );
+      }
+      if (this.phoneMode()) {
+        this.setPhoneActiveInstance(result.instance.id, true);
+      }
     }
   }
 
   restoreInstance(instanceId: string) {
-    this.dialogService.restoreInstance(instanceId);
+    if (!this.canEdit()) return;
+    if (this.phoneMode()) {
+      this.phoneDialogs()
+        .filter((instance) => instance.id !== instanceId)
+        .forEach((instance) => this.dialogService.setPhoneMinimized(instance.id, true));
+      this.dialogService.setPhoneMinimized(instanceId, false);
+      this.dialogService.unstashPhoneInstance(instanceId);
+    } else {
+      this.dialogService.restoreInstance(instanceId);
+    }
     this.dialogService.bringToFront(instanceId);
+    if (this.phoneMode()) {
+      this.setPhoneActiveInstance(instanceId);
+    }
   }
 
   duplicateInstance(instanceId: string) {
+    if (!this.canEdit()) return;
     this.cloneTargetId.set(instanceId);
   }
 
@@ -1347,6 +2185,11 @@ export class AppComponent implements OnInit, OnDestroy {
       { x: original.rect.x + 24, y: original.rect.y + 24 },
       this.canvasBounds(),
     );
+    if (original.phoneRect) {
+      this.dialogService.setPhoneRect(nextId, original.phoneRect, this.viewportBounds());
+      this.dialogService.setPhoneMinimized(nextId, false);
+      this.dialogService.unstashPhoneInstance(nextId);
+    }
     await this.cloneAppData(original.appId, original.id, nextId);
     this.cloneTargetId.set(null);
   }
@@ -1357,17 +2200,17 @@ export class AppComponent implements OnInit, OnDestroy {
 
   async cloneAppData(appId: AppId, fromId: string, toId: string) {
     if (appId === 'todo') {
-      await cloneTodos(fromId, toId, this.effectiveUserId());
+      cloneTodoState(this.storage, fromId, toId, this.auth.storageUserKey());
     }
-    if (appId === 'calculator') cloneCalculatorState(fromId, toId);
-    if (appId === 'timer') cloneTimerState(fromId, toId);
-    if (appId === 'navigator') cloneNavigatorState(fromId, toId);
-    if (appId === 'notes') cloneNotesState(fromId, toId);
-    if (appId === 'stickyNotes') cloneStickyNoteState(fromId, toId);
-    if (appId === 'calendar') cloneCalendarState(fromId, toId);
-    if (appId === 'clock') cloneClockState(fromId, toId);
-    if (appId === 'kanban') cloneKanbanState(fromId, toId);
-    if (appId === 'dataTable') cloneDataTableState(fromId, toId);
+    if (appId === 'calculator') cloneCalculatorState(fromId, toId, this.storage);
+    if (appId === 'timer') cloneTimerState(fromId, toId, this.storage);
+    if (appId === 'navigator') cloneNavigatorState(fromId, toId, this.storage);
+    if (appId === 'notes') cloneNotesState(fromId, toId, this.storage);
+    if (appId === 'stickyNotes') cloneStickyNoteState(fromId, toId, this.storage);
+    if (appId === 'calendar') cloneCalendarState(fromId, toId, this.storage);
+    if (appId === 'clock') cloneClockState(fromId, toId, this.storage);
+    if (appId === 'kanban') cloneKanbanState(fromId, toId, this.storage);
+    if (appId === 'dataTable') cloneDataTableState(fromId, toId, this.storage);
   }
 
   private effectiveUserId() {
@@ -1379,41 +2222,95 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   toggleDeleteLock(instanceId: string) {
+    if (!this.canEdit()) return;
     if (this.deleteTargetId()) return;
     this.dialogService.toggleDeleteLock(instanceId);
   }
 
   stashInstance(instanceId: string) {
+    if (!this.canEdit()) return;
+    if (this.phoneMode()) {
+      this.dialogService.stashPhoneInstance(instanceId, this.viewportBounds());
+      this.setPhoneActiveInstance(null);
+      return;
+    }
     this.dialogService.stashInstance(instanceId, this.canvasBounds());
   }
 
   restoreFromStash(instance: { id: string }) {
-    this.dialogService.unstashInstance(instance.id);
-    this.dialogService.bringToFront(instance.id);
+    if (!this.canEdit()) return;
+    if (this.phoneMode()) {
+      this.dialogService.unstashPhoneInstance(instance.id);
+      this.dialogService.setPhoneMinimized(instance.id, false);
+      this.setPhoneActiveInstance(instance.id);
+    } else {
+      this.dialogService.unstashInstance(instance.id);
+      const target = this.activeDialogs().find((dialog) => dialog.id === instance.id);
+      if (target) {
+        const bounds = this.canvasBounds();
+        const nextX = Math.max(0, (bounds.width - target.rect.width) / 2);
+        const nextY = Math.max(0, (bounds.height - target.rect.height) / 2);
+        this.dialogService.moveInstance(instance.id, { x: nextX, y: nextY }, bounds);
+      }
+      this.dialogService.bringToFront(instance.id);
+    }
   }
 
   toggleDialogsHidden() {
+    if (!this.canEdit()) return;
     this.dialogService.toggleWorkspaceHidden(this.dialogService.getActiveWorkspaceId());
   }
 
   onDialogMove(instanceId: string, rect: { x: number; y: number }) {
+    if (this.phoneMode()) {
+      this.dialogService.movePhoneInstance(instanceId, rect, this.viewportBounds());
+      return;
+    }
     this.dialogService.moveInstance(instanceId, rect, this.canvasBounds());
   }
 
   onDialogResize(instanceId: string, rect: { width: number; height: number }) {
+    if (this.phoneMode()) {
+      this.dialogService.resizePhoneInstance(instanceId, rect, this.viewportBounds());
+      return;
+    }
     this.dialogService.resizeInstance(instanceId, rect, this.canvasBounds());
   }
 
   minimizeInstance(instanceId: string) {
+    if (!this.canEdit()) return;
+    if (this.phoneMode()) {
+      this.dialogService.setPhoneMinimized(instanceId, true);
+      const remaining = this.phoneDialogs().filter(
+        (instance) => instance.id !== instanceId && !this.isPhoneMinimized(instance),
+      );
+      const next = remaining[0] ?? null;
+      this.setPhoneActiveInstance(next ? next.id : null);
+      return;
+    }
     this.dialogService.minimizeInstance(instanceId);
   }
 
   toggleMaximize(instanceId: string) {
+    if (!this.canEdit()) return;
+    if (this.phoneMode()) {
+      this.phoneDialogs()
+        .filter((instance) => instance.id !== instanceId)
+        .forEach((instance) => this.dialogService.setPhoneMinimized(instance.id, true));
+      this.dialogService.setPhoneMinimized(instanceId, false);
+      return;
+    }
     this.dialogService.toggleMaximize(instanceId, this.viewportBounds());
   }
 
   confirmDelete(instanceId: string) {
+    if (!this.canEdit()) return;
     this.deleteTargetId.set(instanceId);
+  }
+
+  confirmArchive(instanceId: string) {
+    if (!this.canEdit()) return;
+    this.archiveTargetId.set(instanceId);
   }
 
   deleteConfirmed() {
@@ -1422,11 +2319,24 @@ export class AppComponent implements OnInit, OnDestroy {
     this.deleteTargetId.set(null);
   }
 
+  archiveConfirmed() {
+    const target = this.archiveTargetId();
+    if (target) this.dialogService.archiveInstance(target);
+    this.archiveTargetId.set(null);
+  }
+
+  unarchiveInstance(instanceId: string) {
+    if (!this.canEdit()) return;
+    this.dialogService.unarchiveInstance(instanceId);
+  }
+
   toggleResetMenu() {
+    if (!this.canEdit()) return;
     this.resetMenuOpen.set(!this.resetMenuOpen());
   }
 
   resetDialogs(mode: 'left' | 'middle') {
+    if (!this.canEdit()) return;
     this.dialogService.resetPositions(mode, this.canvasBounds());
     this.resetMenuOpen.set(false);
   }
@@ -1436,20 +2346,74 @@ export class AppComponent implements OnInit, OnDestroy {
     return instances.findIndex((instance) => instance.id === instanceId) + 1;
   }
 
-  instanceLabel(instance: { titleKey: string; titleOverride?: string; id: string; appId: AppId }) {
+  instanceLabel(instance: {
+    titleKey: string;
+    titleOverride?: string;
+    id: string;
+    appId: AppId;
+    instanceNumber?: number;
+  }) {
     if (instance.titleOverride) return instance.titleOverride;
-    return `${this.translate.instant(instance.titleKey)} (${this.instanceIndex(instance.appId, instance.id)})`;
+    const base = this.translate.instant(this.instanceNameKey(instance.appId));
+    const index = instance.instanceNumber ?? this.instanceIndex(instance.appId, instance.id);
+    return `${base} (${index})`;
+  }
+
+  instanceNameKey(appId: AppId) {
+    return `appNames.${appId}`;
   }
 
   instanceIcon(appId: AppId) {
     return APP_REGISTRY[appId]?.icon ?? '📦';
   }
 
+  renderInstance(instance: DialogInstance) {
+    if (!this.phoneMode()) return instance;
+    const bounds = this.viewportBounds();
+    const fallbackWidth =
+      typeof window !== 'undefined' ? Math.max(1, window.innerWidth) : bounds.width;
+    const fallbackHeight =
+      typeof window !== 'undefined' ? Math.max(1, window.innerHeight) : bounds.height;
+    const width = Math.max(0, (bounds.width || fallbackWidth) - 2);
+    const height = this.phoneDialogHeight(bounds.height || fallbackHeight);
+    const phoneRect = instance.phoneRect ?? instance.rect;
+    const useFull = true;
+    return {
+      ...instance,
+      rect: useFull ? { x: 0, y: 0, width, height } : phoneRect,
+      isMaximized: useFull,
+    };
+  }
+
+  private phoneDialogHeight(viewportHeight: number) {
+    const base = Math.max(1, viewportHeight);
+    let barOffset = 0;
+    if (this.showUniverseBar() && this.universeBarOpen() && typeof document !== 'undefined') {
+      const bar = document.querySelector('.universe-bar') as HTMLElement | null;
+      if (bar) {
+        barOffset = bar.offsetHeight || 0;
+      } else {
+        barOffset = Math.round(base * 0.18);
+      }
+    }
+    return Math.max(200, base - barOffset - 8);
+  }
+
+  isPhoneMinimized(instance: DialogInstance) {
+    return Boolean(instance.phoneMinimized);
+  }
+
+  isPhoneStashed(instance: DialogInstance) {
+    return Boolean(instance.phoneStashed);
+  }
+
   instanceHasSettings(appId: AppId) {
     return (
+      appId === 'todo' ||
       appId === 'clock' ||
       appId === 'calculator' ||
       appId === 'kanban' ||
+      appId === 'notes' ||
       appId === 'stickyNotes' ||
       appId === 'dataTable'
     );
@@ -1459,7 +2423,30 @@ export class AppComponent implements OnInit, OnDestroy {
     this.instanceSettings.toggle(instanceId);
   }
 
+  @HostListener('document:pointerdown', ['$event'])
+  onDocumentPointerDown(event: PointerEvent) {
+    const target = event.target as HTMLElement | null;
+    const input = this.workspaceRenameInput()?.nativeElement ?? null;
+    if (
+      this.editingWorkspaceId() &&
+      input &&
+      target &&
+      input !== target &&
+      !input.contains(target)
+    ) {
+      const ws = this.dialogService
+        .getWorkspaces()
+        .find((item) => item.id === this.editingWorkspaceId());
+      if (ws) {
+        this.finishWorkspaceRename(ws);
+      } else {
+        this.cancelWorkspaceRename();
+      }
+    }
+  }
+
   openMoveWorkspace(instanceId: string) {
+    if (!this.canEdit()) return;
     if (this.dialogService.getWorkspaces().length <= 1) return;
     this.moveWorkspaceTargetId.set(instanceId);
   }
@@ -1475,12 +2462,189 @@ export class AppComponent implements OnInit, OnDestroy {
     this.moveWorkspaceTargetId.set(null);
   }
 
+  private syncUniverseState() {
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const session = this.auth.session();
+    if (!session.userId) return;
+    const username =
+      this.auth.actualUser()?.username ??
+      session.sessionUsername ??
+      this.translate.instant('auth.title');
+    const entry: UniversePresenceEntry = {
+      id: session.userId,
+      username,
+      role: this.sessionRole(),
+      ownerId: this.universeOwnerId() ?? '',
+      lastSeen: Date.now(),
+    };
+    this.auth.touchUniversePresence(universeId, entry);
+    this.universePresence.set(this.auth.getUniversePresence(universeId));
+    let holder = this.auth.getUniverseEditHolder(universeId);
+    if (!holder && this.isUniverseOwner()) {
+      const ownerName = this.auth.actualUser()?.username ?? 'Owner';
+      holder = { id: session.userId, username: ownerName, role: this.sessionRole() };
+      this.auth.setUniverseEditHolder(universeId, holder);
+    }
+    this.universeEditHolder.set(holder);
+    if (this.allowUniverseChat()) {
+      const messages = this.auth.getUniverseChat(universeId);
+      const prevCount = this.universeChatLastCount();
+      this.universeChatMessages.set(messages);
+      if (this.universeChatOpen()) {
+        this.universeChatUnread.set(0);
+        this.scrollUniverseChatToBottom();
+      } else if (messages.length > prevCount) {
+        this.universeChatUnread.set(this.universeChatUnread() + (messages.length - prevCount));
+      }
+      this.universeChatLastCount.set(messages.length);
+    } else {
+      this.universeChatMessages.set([]);
+      this.universeChatUnread.set(0);
+      this.universeChatLastCount.set(0);
+    }
+  }
+
+  toggleUniverseBar() {
+    this.universeBarOpen.set(!this.universeBarOpen());
+    void this.storage.setItem('op_universe_bar_open', String(this.universeBarOpen()));
+    setTimeout(this.updateCanvasBounds, 0);
+  }
+
+  universeBarLeft() {
+    if (this.phoneMode()) return 0;
+    return this.navOpen ? RESERVED_SIDEBAR_WIDTH : 0;
+  }
+
+  toggleUniverseChat() {
+    if (!this.allowUniverseChat()) return;
+    this.universeChatOpen.set(!this.universeChatOpen());
+    if (this.universeChatOpen()) {
+      this.universeChatUnread.set(0);
+      this.universeChatLastCount.set(this.universeChatMessages().length);
+      this.syncUniverseState();
+      this.scrollUniverseChatToBottom();
+    }
+  }
+
+  sendUniverseChat() {
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const content = this.universeChatDraft().trim();
+    if (!content) return;
+    const author =
+      this.auth.actualUser()?.username ?? this.auth.session().sessionUsername ?? 'User';
+    const message: UniverseChatMessage = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      author,
+      role: this.sessionRole(),
+      content,
+      createdAt: Date.now(),
+    };
+    const list = this.auth.appendUniverseChat(universeId, message);
+    this.universeChatMessages.set(list);
+    this.universeChatDraft.set('');
+    this.scrollUniverseChatToBottom();
+    queueMicrotask(() => {
+      this.universeChatInput()?.nativeElement?.focus();
+    });
+  }
+
+  onUniverseChatKeydown(event: Event) {
+    const keyEvent = event as KeyboardEvent;
+    if (keyEvent.shiftKey) return;
+    keyEvent.preventDefault();
+    this.sendUniverseChat();
+  }
+
+  onUniverseChatScroll(event: Event) {
+    const target = event.target as HTMLElement;
+    const atBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 6;
+    this.universeChatSticky.set(atBottom);
+  }
+
+  private scrollUniverseChatToBottom() {
+    if (!this.universeChatSticky()) return;
+    setTimeout(() => {
+      const el = this.universeChatScroll()?.nativeElement;
+      if (!el) return;
+      el.scrollTop = el.scrollHeight;
+    }, 0);
+  }
+
+  clearUniverseChat() {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    this.auth.clearUniverseChat(universeId);
+    this.universeChatMessages.set([]);
+  }
+
+  grantEdit(invitee: UniversePresenceEntry) {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const holder: UniverseEditHolder = {
+      id: invitee.id,
+      username: invitee.username,
+      role: invitee.role,
+    };
+    this.auth.setUniverseEditHolder(universeId, holder);
+    this.universeEditHolder.set(holder);
+  }
+
+  takeBackEditPermissions() {
+    if (!this.isUniverseOwner()) return;
+    const universeId = this.universeId();
+    if (!universeId) return;
+    const ownerName = this.auth.actualUser()?.username ?? 'Owner';
+    const holder: UniverseEditHolder = {
+      id: this.auth.session().userId ?? '',
+      username: ownerName,
+      role: this.sessionRole(),
+    };
+    this.auth.setUniverseEditHolder(universeId, holder);
+    this.universeEditHolder.set(holder);
+  }
+
+  private runLoadingTransition() {
+    if (typeof window === 'undefined') return;
+    this.loadingVisible.set(true);
+    this.loadingFading.set(false);
+    if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
+    this.loadingTimeout = window.setTimeout(() => {
+      this.loadingFading.set(true);
+      this.loadingTimeout = window.setTimeout(() => {
+        this.loadingVisible.set(false);
+        this.loadingFading.set(false);
+      }, 120);
+    }, 0);
+  }
+
+  forceLogoutToMain() {
+    this.auth.logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/';
+    }
+  }
+
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
+    if (!this.canEdit()) return;
     this.editingTileId.set(instance.id);
     this.editingTitle.set(this.instanceLabel(instance));
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        const input = document.querySelector(
+          `[data-tile-input="${instance.id}"]`,
+        ) as HTMLInputElement | null;
+        input?.focus();
+        input?.select();
+      }, 0);
+    }
   }
 
   finishRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
+    if (!this.canEdit()) return;
     const next = this.editingTitle().trim();
     if (next) {
       this.dialogService.setTitleOverride(instance.id, next);
@@ -1492,21 +2656,25 @@ export class AppComponent implements OnInit, OnDestroy {
     instance: { id: string; tileRect?: { x: number; y: number } },
     event: PointerEvent,
   ) {
-    if (!instance.tileRect) return;
+    if (!this.canEdit()) return;
+    const activeRect = instance.tileRect;
+    if (!activeRect) return;
     if (event.detail > 1) return;
     const target = event.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'BUTTON')) return;
     if (this.editingTileId() === instance.id) return;
+    event.preventDefault();
     target?.setPointerCapture?.(event.pointerId);
     this.tileDragState = {
       id: instance.id,
       startX: event.clientX,
       startY: event.clientY,
-      origin: { x: instance.tileRect.x, y: instance.tileRect.y },
+      origin: { x: activeRect.x, y: activeRect.y },
     };
   }
 
   startCanvasPan(event: PointerEvent) {
+    if (this.phoneMode()) return;
     if (this.isOverlayActive()) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest('.dialog') || target?.closest('[data-tile]')) return;
@@ -1541,6 +2709,7 @@ export class AppComponent implements OnInit, OnDestroy {
       canvasHeight: height,
       lockCanvasSize: true,
     });
+    this.dialogService.clampAllToBounds(this.canvasBounds());
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -1558,9 +2727,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private setCanvasScale(next: number) {
     this.canvasScale.set(Number(next.toFixed(2)));
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('op_canvas_scale', String(this.canvasScale()));
-    }
+    void this.storage.setItem('op_canvas_scale', String(this.canvasScale()));
     setTimeout(this.updateCanvasBounds, 0);
   }
 
@@ -1595,7 +2762,8 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!actual) return;
     const prefs = this.auth.preferences();
     this.auth.savePreferences({ ...prefs, accessibilityMode: this.accessibilityPromptEnabled() });
-    this.auth.markAccessibilityPromptShown(actual.id);
+    const universeId = this.auth.getActiveUniverseId(actual.id) ?? null;
+    this.auth.markAccessibilityPromptShown(actual.id, universeId);
     this.accessibilityPromptOpen.set(false);
   }
 
@@ -1617,6 +2785,8 @@ export class AppComponent implements OnInit, OnDestroy {
     body.classList.toggle('theme-color-standard', colorTheme === 'standard');
     body.classList.toggle('theme-color-notepad', colorTheme === 'notepad');
     body.classList.toggle('theme-color-ice', colorTheme === 'ice');
+    body.classList.toggle('theme-color-lava', colorTheme === 'lava');
+    body.classList.toggle('theme-color-green', colorTheme === 'green');
     body.classList.toggle('accessibility-on', accessibilityOn);
   }
 
@@ -1687,6 +2857,23 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   logout() {
-    this.auth.logout();
+    this.router.navigateByUrl('/logout');
+  }
+
+  private handleLogoutLocation(path: string, search: string) {
+    if (typeof window === 'undefined') return;
+    const rawPath = path || window.location.pathname;
+    const rawSearch = search || window.location.search;
+    const hasLoggedOut = rawSearch.includes('loggedOut=1');
+    if (rawPath.startsWith('/logout') || hasLoggedOut) {
+      this.auth.logout();
+      void this.storage.removeItem('op_session');
+      this.forceLoggedOut.set(true);
+      if (rawPath.startsWith('/logout')) {
+        this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
+      }
+      return;
+    }
+    this.forceLoggedOut.set(false);
   }
 }

@@ -15,7 +15,7 @@ export interface TableColumn<T = unknown> {
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
       <input
         type="text"
-        [placeholder]="searchPlaceholder"
+        [placeholder]="searchPlaceholder | translate"
         [value]="query()"
         (input)="onSearch($event)"
         style="padding:8px; flex:1; max-width: 320px;"
@@ -88,10 +88,28 @@ export interface TableColumn<T = unknown> {
   `,
 })
 export class SharedTableComponent<T = unknown> {
-  @Input() columns: TableColumn<T>[] = [];
-  @Input() rows: T[] = [];
+  private rowsSignal = signal<T[]>([]);
+  private columnsSignal = signal<TableColumn<T>[]>([]);
+
+  @Input() set columns(value: TableColumn<T>[]) {
+    this.columnsSignal.set(value ?? []);
+  }
+  get columns() {
+    return this.columnsSignal();
+  }
+
+  @Input() set rows(value: T[]) {
+    this.rowsSignal.set(value ?? []);
+    const maxPage = Math.max(1, Math.ceil(this.filteredRows().length / this.pageSize()));
+    if (this.page() > maxPage) {
+      this.page.set(maxPage);
+    }
+  }
+  get rows() {
+    return this.rowsSignal();
+  }
   @Input() actionsTemplate?: TemplateRef<{ $implicit: T }>;
-  @Input() searchPlaceholder = '';
+  @Input() searchPlaceholder = 'table.searchPlaceholder';
   @Input() emptyMessage = '';
   @Input() pageSizeOptions = [5, 10, 20];
   @Input() rowTrack: (row: T, index: number) => string | number = (_, index) => index;
@@ -102,9 +120,9 @@ export class SharedTableComponent<T = unknown> {
 
   filteredRows = computed(() => {
     const query = this.query().trim().toLowerCase();
-    if (!query) return this.rows;
-    return this.rows.filter((row) =>
-      this.columns.some((column) => column.cell(row).toLowerCase().includes(query)),
+    if (!query) return this.rowsSignal();
+    return this.rowsSignal().filter((row) =>
+      this.columnsSignal().some((column) => column.cell(row).toLowerCase().includes(query)),
     );
   });
 

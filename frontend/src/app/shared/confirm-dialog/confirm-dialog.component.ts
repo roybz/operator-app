@@ -1,0 +1,69 @@
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
+
+@Component({
+  selector: 'app-confirm-dialog',
+  standalone: true,
+  imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      .confirm-dialog__panel {
+        width: min(420px, 92vw);
+      }
+
+      :host-context(.phone-mode) .confirm-dialog__panel {
+        width: min(420px, 84vw);
+      }
+    `,
+  ],
+  template: `
+    <div
+      style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3500;"
+      (pointerdown)="canceled.emit()"
+      role="button"
+      tabindex="0"
+      (keydown.enter)="canceled.emit()"
+      (keydown.space)="canceled.emit()"
+    >
+      <div
+        class="confirm-dialog__panel"
+        style="background:var(--color-surface); padding:20px; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.2);"
+        (pointerdown)="$event.stopPropagation()"
+      >
+        <div style="display:flex; justify-content:flex-end;">
+          <button
+            (click)="canceled.emit()"
+            style="border-radius:999px; width:28px; height:28px;"
+            title="{{ 'dialogs.close' | translate }}"
+          >
+            ✕
+          </button>
+        </div>
+        @if (title) {
+          <h3 style="margin:0 0 12px;">{{ title }}</h3>
+        }
+        @if (message) {
+          <p style="margin:5px 0; line-height:24px; white-space:pre-line;">{{ message }}</p>
+        }
+        <ng-content />
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+          @if (showCancel) {
+            <button (click)="canceled.emit()">{{ cancelLabel }}</button>
+          }
+          <button (click)="confirmed.emit()">{{ confirmLabel }}</button>
+        </div>
+      </div>
+    </div>
+  `,
+})
+export class ConfirmDialogComponent {
+  @Input() title = '';
+  @Input() message = '';
+  @Input() confirmLabel = 'Confirm';
+  @Input() cancelLabel = 'Cancel';
+  @Input() showCancel = true;
+
+  @Output() confirmed = new EventEmitter<void>();
+  @Output() canceled = new EventEmitter<void>();
+}

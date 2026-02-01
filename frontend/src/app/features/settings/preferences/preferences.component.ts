@@ -1,16 +1,27 @@
 import { Component, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { SavedCredential, UserPreferences } from '../../../core/auth.service';
+import { UserPreferences } from '../../../core/auth.service';
 import { SettingsDraftService } from '../settings-draft.service';
 
 const LANGUAGE_OPTIONS = [
   { code: 'en', label: 'English' },
+  { code: 'en-US', label: 'English (United States)' },
+  { code: 'en-GB', label: 'English (United Kingdom)' },
+  { code: 'en-CA', label: 'English (Canada)' },
+  { code: 'en-AU', label: 'English (Australia)' },
+  { code: 'en-NZ', label: 'English (New Zealand)' },
   { code: 'es', label: 'Español' },
+  { code: 'es-ES', label: 'Español (España)' },
+  { code: 'es-419', label: 'Español (Latinoamérica)' },
   { code: 'fr', label: 'Français' },
+  { code: 'fr-FR', label: 'Français (France)' },
+  { code: 'fr-CA', label: 'Français (Canada)' },
   { code: 'de', label: 'Deutsch' },
   { code: 'it', label: 'Italiano' },
   { code: 'pt', label: 'Português' },
+  { code: 'pt-PT', label: 'Português (Portugal)' },
+  { code: 'pt-BR', label: 'Português (Brasil)' },
   { code: 'nl', label: 'Nederlands' },
   { code: 'no', label: 'Norsk' },
   { code: 'pl', label: 'Polski' },
@@ -20,6 +31,9 @@ const LANGUAGE_OPTIONS = [
   { code: 'hr', label: 'Hrvatski' },
   { code: 'ru', label: 'Русский' },
   { code: 'uk', label: 'Українська' },
+  { code: 'ga', label: 'Gaeilge' },
+  { code: 'sco', label: 'Scots' },
+  { code: 'cy', label: 'Cymraeg' },
   { code: 'ar', label: 'العربية' },
   { code: 'fa', label: 'فارسی' },
   { code: 'hi', label: 'हिन्दी' },
@@ -90,17 +104,6 @@ const LANGUAGE_OPTIONS = [
         }
 
         <label>
-          {{ 'preferences.maxPersistedApps' | translate }}
-          <input
-            type="number"
-            min="0"
-            max="255"
-            [value]="prefs().maxPersistedApps"
-            (input)="onMaxPersistedChange($event)"
-          />
-        </label>
-
-        <label>
           {{ 'preferences.stickyDefaultMode' | translate }}
           <select
             [value]="prefs().stickyNoteDefaultMode"
@@ -127,6 +130,8 @@ const LANGUAGE_OPTIONS = [
             <option value="standard">{{ 'preferences.themeStandard' | translate }}</option>
             <option value="notepad">{{ 'preferences.themeNotepad' | translate }}</option>
             <option value="ice">{{ 'preferences.themeIce' | translate }}</option>
+            <option value="lava">{{ 'preferences.themeLava' | translate }}</option>
+            <option value="green">{{ 'preferences.themeGreen' | translate }}</option>
           </select>
         </label>
 
@@ -198,68 +203,6 @@ const LANGUAGE_OPTIONS = [
           />
         </label>
       </div>
-
-      <section style="margin-top: 24px;">
-        <h4>{{ 'preferences.credentialsTitle' | translate }}</h4>
-
-        <fieldset disabled style="border:none; padding:0; margin:0; opacity:0.6;">
-          <div style="display:grid; gap:12px; max-width: 520px;">
-            @for (credential of prefs().credentials; track $index; let idx = $index) {
-              <div style="border:1px solid #ddd; padding:12px;">
-                <label
-                  [attr.for]="'credential-label-' + idx"
-                  style="display:block; margin-bottom: 6px;"
-                >
-                  {{ 'preferences.credentialLabel' | translate }}
-                </label>
-                <input
-                  [id]="'credential-label-' + idx"
-                  type="text"
-                  [value]="credential.label"
-                  (input)="updateCredential(credential, 'label', $event)"
-                  style="width:100%; padding:8px;"
-                />
-
-                <label
-                  [attr.for]="'credential-username-' + idx"
-                  style="display:block; margin: 8px 0 6px;"
-                >
-                  {{ 'preferences.credentialUsername' | translate }}
-                </label>
-                <input
-                  [id]="'credential-username-' + idx"
-                  type="text"
-                  [value]="credential.username ?? ''"
-                  (input)="updateCredential(credential, 'username', $event)"
-                  style="width:100%; padding:8px;"
-                />
-
-                <label
-                  [attr.for]="'credential-password-' + idx"
-                  style="display:block; margin: 8px 0 6px;"
-                >
-                  {{ 'preferences.credentialPassword' | translate }}
-                </label>
-                <input
-                  [id]="'credential-password-' + idx"
-                  type="password"
-                  [value]="credential.password ?? ''"
-                  (input)="updateCredential(credential, 'password', $event)"
-                  style="width:100%; padding:8px;"
-                />
-
-                <button style="margin-top: 10px;" (click)="removeCredential(credential)">
-                  {{ 'preferences.credentialDelete' | translate }}
-                </button>
-              </div>
-            }
-          </div>
-
-          <button style="margin-top: 12px;" (click)="addCredential()">
-            {{ 'preferences.credentialAdd' | translate }}
-          </button>
-        </fieldset>
-      </section>
     </section>
   `,
 })
@@ -308,12 +251,6 @@ export class PreferencesSettingsComponent {
     this.save({ ...this.prefs(), timeFormat });
   }
 
-  onMaxPersistedChange(event: Event) {
-    const raw = Number((event.target as HTMLInputElement).value);
-    const maxPersistedApps = Math.min(255, Math.max(0, Number.isFinite(raw) ? raw : 0));
-    this.save({ ...this.prefs(), maxPersistedApps });
-  }
-
   onStickyDefaultModeChange(event: Event) {
     const value = (event.target as HTMLSelectElement).value as 'rich' | 'markdown';
     this.save({ ...this.prefs(), stickyNoteDefaultMode: value });
@@ -329,7 +266,12 @@ export class PreferencesSettingsComponent {
   }
 
   onColorThemeChange(event: Event) {
-    const colorTheme = (event.target as HTMLSelectElement).value as 'standard' | 'notepad' | 'ice';
+    const colorTheme = (event.target as HTMLSelectElement).value as
+      | 'standard'
+      | 'notepad'
+      | 'ice'
+      | 'lava'
+      | 'green';
     this.save({ ...this.prefs(), colorTheme });
   }
 
@@ -388,24 +330,6 @@ export class PreferencesSettingsComponent {
     return this.timeZoneOptions()
       .filter((zone) => zone.toLowerCase().includes(query))
       .slice(0, 200);
-  }
-
-  addCredential() {
-    const next = [...this.prefs().credentials, { label: '' }];
-    this.save({ ...this.prefs(), credentials: next });
-  }
-
-  updateCredential(credential: SavedCredential, key: keyof SavedCredential, event: Event) {
-    const value = (event.target as HTMLInputElement).value;
-    const next = this.prefs().credentials.map((item) =>
-      item === credential ? { ...item, [key]: value } : item,
-    );
-    this.save({ ...this.prefs(), credentials: next });
-  }
-
-  removeCredential(credential: SavedCredential) {
-    const next = this.prefs().credentials.filter((item) => item !== credential);
-    this.save({ ...this.prefs(), credentials: next });
   }
 
   private save(next: UserPreferences) {

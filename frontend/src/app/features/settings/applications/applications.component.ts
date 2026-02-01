@@ -1,19 +1,23 @@
-import { Component, inject, signal, effect } from '@angular/core';
+import { Component, inject, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
+import { ExportGuardService } from '../../../core/export-guard.service';
+import { ImportGuardService } from '../../../core/import-guard.service';
+import { StorageService } from '../../../core/storage/storage.service';
 import { AppId } from '../../dependencies/app-types';
 import { APP_LIST } from '../../dependencies/app-registry';
-import { clearCalculatorState } from '../../applications/calculator/calculator.component';
-import { clearTimerState } from '../../applications/timer/timer.component';
-import { clearNavigatorState } from '../../applications/navigator/navigator.component';
-import { clearNotesState } from '../../applications/notes/notes.component';
-import { clearCalendarState } from '../../applications/calendar/calendar.component';
-import { clearClockState } from '../../applications/clock/clock.component';
-import { clearKanbanState } from '../../applications/kanban/kanban.component';
-import { clearStickyNoteState } from '../../applications/sticky-notes/sticky-notes.component';
-import { clearDataTableState } from '../../applications/data-table/data-table.component';
+import { clearCalculatorState } from '../../applications/default-applications/calculator/calculator.component';
+import { clearTimerState } from '../../applications/default-applications/timer/timer.component';
+import { clearNavigatorState } from '../../applications/default-applications/navigator/navigator.component';
+import { clearNotesState } from '../../applications/default-applications/notes/notes.component';
+import { clearCalendarState } from '../../applications/default-applications/calendar/calendar.component';
+import { clearClockState } from '../../applications/default-applications/clock/clock.component';
+import { clearKanbanState } from '../../applications/default-applications/kanban/kanban.component';
+import { clearStickyNoteState } from '../../applications/default-applications/sticky-notes/sticky-notes.component';
+import { clearDataTableState } from '../../applications/default-applications/data-table/data-table.component';
 import { SettingsDraftService } from '../settings-draft.service';
 
 const APPLICATIONS = APP_LIST;
@@ -21,10 +25,17 @@ const APPLICATIONS = APP_LIST;
 @Component({
   selector: 'app-applications-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
   template: `
     <section>
       <h3>{{ 'settings.applicationsTitle' | translate }}</h3>
+      @if (showUniverseNotice()) {
+        <div
+          style="margin: 8px 0 16px; padding:8px 10px; border:1px dashed var(--color-border); font-size:12px; opacity:0.75;"
+        >
+          {{ 'settings.universeScopeNotice' | translate }}
+        </div>
+      }
 
       <div style="display:grid; gap:12px; max-width: 520px;">
         @for (app of apps; track app.id) {
@@ -72,45 +83,59 @@ const APPLICATIONS = APP_LIST;
             />
           </label>
         </div>
-        @if (importError()) {
-          <div style="color:#b00020;">{{ importError() ?? '' | translate }}</div>
+        @if (importStatus() === 'loading') {
+          <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+        } @else if (importStatus() === 'success') {
+          <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+        } @else if (importStatus() === 'error') {
+          <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
         }
       </div>
 
       @if (confirmAppId()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-          >
-            <p>{{ 'settings.wipeConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="confirmAppId.set(null)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="wipeConfirmed()">
-                {{ 'settings.wipeConfirmButton' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.wipeConfirm' | translate"
+          [confirmLabel]="'settings.wipeConfirmButton' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="wipeConfirmed()"
+          (canceled)="confirmAppId.set(null)"
+        />
       }
 
       @if (resetAllOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
-            <p>{{ 'settings.resetAllConfirm' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-              <button (click)="resetAllOpen.set(false)">{{ 'dialogs.cancel' | translate }}</button>
-              <button (click)="resetAllConfirmed()">
-                {{ 'settings.resetAllConfirmButton' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
+        <app-confirm-dialog
+          [message]="'settings.resetAllConfirm' | translate"
+          [confirmLabel]="'settings.resetAllConfirmButton' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="resetAllConfirmed()"
+          (canceled)="resetAllOpen.set(false)"
+        />
+      }
+      @if (pendingImport()) {
+        <app-confirm-dialog
+          [title]="'dialogs.importTitle' | translate"
+          [message]="'dialogs.importConfirm' | translate"
+          [confirmLabel]="'dialogs.confirm' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmImport()"
+          (canceled)="cancelImport()"
+        />
+      }
+      @if (importLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.importLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="importLimitOpen.set(false)"
+        />
+      }
+      @if (exportLimitOpen()) {
+        <app-confirm-dialog
+          [message]="'dialogs.exportLimit' | translate"
+          [confirmLabel]="'dialogs.ok' | translate"
+          [showCancel]="false"
+          (confirmed)="exportLimitOpen.set(false)"
+        />
       }
     </section>
   `,
@@ -119,12 +144,28 @@ export class ApplicationsSettingsComponent {
   private draft = inject(SettingsDraftService);
   private dialogService = inject(DialogService);
   private auth = inject(AuthService);
+  private importGuard = inject(ImportGuardService);
+  private exportGuard = inject(ExportGuardService);
+  private storage = inject(StorageService);
 
   apps = APPLICATIONS;
   prefs = signal(this.draft.preferences());
   confirmAppId = signal<AppId | null>(null);
   resetAllOpen = signal(false);
-  importError = signal<string | null>(null);
+  pendingImport = signal<{
+    file: File;
+    format: 'json' | 'xml';
+    input: HTMLInputElement;
+  } | null>(null);
+  importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  importMessage = signal<string | null>(null);
+  importLimitOpen = signal(false);
+  exportLimitOpen = signal(false);
+  showUniverseNotice = computed(() => {
+    const ownerId = this.auth.actualUser()?.id ?? null;
+    if (!ownerId) return false;
+    return this.auth.getUniversesForUser(ownerId).length > 1;
+  });
 
   constructor() {
     effect(() => {
@@ -156,15 +197,15 @@ export class ApplicationsSettingsComponent {
     if (!appId) return;
     const removedIds = this.dialogService.wipeAppData(appId);
     removedIds.forEach((id) => {
-      if (appId === 'calculator') clearCalculatorState(id);
-      if (appId === 'timer') clearTimerState(id);
-      if (appId === 'navigator') clearNavigatorState(id);
-      if (appId === 'notes') clearNotesState(id);
-      if (appId === 'stickyNotes') clearStickyNoteState(id);
-      if (appId === 'calendar') clearCalendarState(id);
-      if (appId === 'clock') clearClockState(id);
-      if (appId === 'kanban') clearKanbanState(id);
-      if (appId === 'dataTable') clearDataTableState(id);
+      if (appId === 'calculator') clearCalculatorState(id, this.storage);
+      if (appId === 'timer') clearTimerState(id, this.storage);
+      if (appId === 'navigator') clearNavigatorState(id, this.storage);
+      if (appId === 'notes') clearNotesState(id, this.storage);
+      if (appId === 'stickyNotes') clearStickyNoteState(id, this.storage);
+      if (appId === 'calendar') clearCalendarState(id, this.storage);
+      if (appId === 'clock') clearClockState(id, this.storage);
+      if (appId === 'kanban') clearKanbanState(id, this.storage);
+      if (appId === 'dataTable') clearDataTableState(id, this.storage);
     });
     this.confirmAppId.set(null);
   }
@@ -181,6 +222,10 @@ export class ApplicationsSettingsComponent {
   }
 
   exportData(format: 'json' | 'xml') {
+    if (!this.exportGuard.start()) {
+      this.exportLimitOpen.set(true);
+      return;
+    }
     const userId = this.effectiveUserId();
     const payload = this.collectAppData(userId);
     const text = format === 'xml' ? this.toXml(payload) : JSON.stringify(payload, null, 2);
@@ -192,32 +237,73 @@ export class ApplicationsSettingsComponent {
     link.download = `operator-app-data.${format}`;
     link.click();
     URL.revokeObjectURL(link.href);
+    window.setTimeout(() => this.exportGuard.finish(), 500);
   }
 
   onImportFile(event: Event, format: 'json' | 'xml') {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    this.importError.set(null);
+    const input = event.target as HTMLInputElement;
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+    this.pendingImport.set({ file, format, input });
+  }
+
+  cancelImport() {
+    const pending = this.pendingImport();
+    if (pending) pending.input.value = '';
+    this.pendingImport.set(null);
+    this.importStatus.set('idle');
+    this.importMessage.set(null);
+  }
+
+  confirmImport() {
+    const pending = this.pendingImport();
+    if (!pending) return;
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.importStatus.set('loading');
+    this.importMessage.set('dialogs.importing');
+    this.pendingImport.set(null);
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const text = String(reader.result || '');
-        const payload = format === 'xml' ? this.fromXml(text) : JSON.parse(text);
-        this.applyImportedData(payload);
+        const payload = pending.format === 'xml' ? this.fromXml(text) : JSON.parse(text || '{}');
+        const ok = this.applyImportedData(payload);
+        if (!ok) {
+          this.importStatus.set('error');
+          this.importMessage.set('dialogs.importFailed');
+        } else {
+          this.importStatus.set('success');
+          this.importMessage.set('dialogs.importSuccess');
+        }
       } catch {
-        this.importError.set('settings.importFailed');
+        this.importStatus.set('error');
+        this.importMessage.set('dialogs.importFailed');
+      } finally {
+        pending.input.value = '';
+        this.importGuard.finish();
       }
     };
-    reader.readAsText(file);
+    reader.onerror = () => {
+      this.importStatus.set('error');
+      this.importMessage.set('dialogs.importFailed');
+      pending.input.value = '';
+      this.importGuard.finish();
+    };
+    reader.readAsText(pending.file);
   }
 
   private effectiveUserId() {
-    return this.auth.session().previewUserId ?? this.auth.session().userId ?? 'guest';
+    return this.auth.storageUserKey();
   }
 
   private clearAppStorage(userId: string) {
-    if (typeof window === 'undefined') return;
-    Object.keys(window.localStorage)
+    this.storage
+      .keysSync()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -226,12 +312,12 @@ export class ApplicationsSettingsComponent {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}`))
-      .forEach((key) => window.localStorage.removeItem(key));
+      .forEach((key) => void this.storage.removeItem(key));
   }
 
   private collectAppData(userId: string) {
-    if (typeof window === 'undefined') return { version: 1, userId, entries: [] };
-    const entries = Object.keys(window.localStorage)
+    const entries = this.storage
+      .keysSync()
       .filter(
         (key) =>
           key.startsWith('op_app_state:') ||
@@ -240,7 +326,7 @@ export class ApplicationsSettingsComponent {
           key.startsWith('op_preview_dialog_state_v1:'),
       )
       .filter((key) => key.includes(`:${userId}`))
-      .map((key) => ({ key, value: window.localStorage.getItem(key) ?? '' }));
+      .map((key) => ({ key, value: this.storage.getItemSync(key) ?? '' }));
     return { version: 1, userId, entries };
   }
 
@@ -250,16 +336,16 @@ export class ApplicationsSettingsComponent {
     entries?: { key?: string; value?: string }[];
   }) {
     if (!payload?.entries || !Array.isArray(payload.entries)) {
-      this.importError.set('settings.importFailed');
-      return;
+      return false;
     }
     const userId = this.effectiveUserId();
     payload.entries.forEach((entry) => {
       if (!entry?.key || typeof entry.value !== 'string') return;
       const key = this.rewriteKey(entry.key, payload.userId, userId);
       if (!this.isAllowedKey(key, userId)) return;
-      window.localStorage.setItem(key, entry.value);
+      void this.storage.setItem(key, entry.value);
     });
+    return true;
   }
 
   private rewriteKey(key: string, sourceUserId: string | undefined, targetUserId: string) {

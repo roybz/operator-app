@@ -9,17 +9,16 @@ import packageJson from '../../../../package.json';
   imports: [CommonModule, TranslateModule],
   template: `
     <section style="max-width: 640px;">
-      <h2 style="margin:0;">{{ 'about.title' | translate }}</h2>
-      <p>{{ 'about.line1' | translate }}</p>
-      <div style="font-size: 12px; opacity: 0.7; margin-top: 6px;">v{{ appVersion }}</div>
-      <p>
-        <a href="https://www.linkedin.com/in/roynouneh/" target="_blank" rel="noreferrer">
-          {{ 'about.linkedin' | translate }}
-        </a>
-        ·
-        <a href="https://github.com/roybz/operator-app" target="_blank" rel="noreferrer">
-          {{ 'about.github' | translate }}
-        </a>
+      <p style="line-height:23px;">{{ 'about.line1' | translate }}</p>
+      <div style="font-size: 12px; opacity: 0.7; margin-top: 3px;">v{{ appVersion }}</div>
+      <p style="margin-bottom:0;">
+        <a href="https://github.com/roybz/operator-app" target="_blank" rel="noreferrer">{{
+          'about.github' | translate
+        }}</a>
+        <span> · </span>
+        <a href="https://www.linkedin.com/in/roynouneh/" target="_blank" rel="noreferrer">{{
+          'about.linkedin' | translate
+        }}</a>
       </p>
     </section>
   `,

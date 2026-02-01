@@ -14,6 +14,7 @@ This repository contains a standalone Angular frontend in `frontend/`.
 - `DialogComponent` handles app windows (drag, resize, title editing).
 - `DialogService` stores workspace/dialog state and persistence.
 - `AppPreferencesService` provides app-friendly access to user preferences.
+- `StorageService` provides async persistence via a pluggable `StorageAdapter` (default: localStorage).
 
 ## Conventions
 - Any new UI string goes into all i18n files (English text is acceptable).
@@ -26,6 +27,15 @@ This repository contains a standalone Angular frontend in `frontend/`.
 ## Guest-only mode
 Runtime config lives in `frontend/src/assets/op-config.js`.  
 If `guestModeOnly` is true, the login form is hidden and only guest access is allowed.
+
+## Storage adapters
+- All persistence goes through `StorageService` and `StorageAdapter`.
+- `storageMode: 'local'` (default) uses async localStorage.
+- `storageMode: 'remote'` uses the HTTP adapter in `frontend/src/app/core/storage/remote-storage.adapter.ts`.
+
+## Storage/Backend adapters
+Persistence is async. The adapter is provided in `frontend/src/app/app.config.ts` via `STORAGE_ADAPTER`.
+Swap this to point to a backend adapter if you want server-backed storage.
 
 ## Testing
 - Unit tests: `npm run test:unit`

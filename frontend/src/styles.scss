@@ -48,6 +48,24 @@ body.theme-color-ice {
   --color-accent: #3b82f6;
 }
 
+body.theme-color-lava {
+  --color-bg: #fff1f2;
+  --color-surface: #fff7f7;
+  --color-border: #f5b5b5;
+  --color-text: #3b0a0a;
+  --color-muted: #8f3b3b;
+  --color-accent: #ef4444;
+}
+
+body.theme-color-green {
+  --color-bg: #ecfdf3;
+  --color-surface: #f6fff9;
+  --color-border: #a7f3d0;
+  --color-text: #063d2d;
+  --color-muted: #3c6b57;
+  --color-accent: #22c55e;
+}
+
 body.theme-dark.theme-color-notepad {
   --color-bg: #2a1f0f;
   --color-surface: #362714;
@@ -64,6 +82,24 @@ body.theme-dark.theme-color-ice {
   --color-text: #dbeafe;
   --color-muted: #9bb6cc;
   --color-accent: #60a5fa;
+}
+
+body.theme-dark.theme-color-lava {
+  --color-bg: #2b0a0a;
+  --color-surface: #3a1111;
+  --color-border: #7f2a2a;
+  --color-text: #fde2e2;
+  --color-muted: #f1b5b5;
+  --color-accent: #f97316;
+}
+
+body.theme-dark.theme-color-green {
+  --color-bg: #052e1c;
+  --color-surface: #0b3a26;
+  --color-border: #1f6f4a;
+  --color-text: #d1fae5;
+  --color-muted: #9ad6b3;
+  --color-accent: #34d399;
 }
 
 body.accessibility-on {

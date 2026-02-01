@@ -2,16 +2,25 @@ import { Injectable, effect, inject, signal } from '@angular/core';
 import { AuthService } from './auth.service';
 import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
+import { StorageService } from './storage/storage.service';
 
 export interface DialogInstance {
   id: string;
   appId: AppId;
   titleKey: string;
   titleOverride?: string;
+  instanceNumber?: number;
   rect: DialogRect;
   minimized: boolean;
   stashed: boolean;
+  archived?: boolean;
   tileRect?: DialogRect;
+  phoneRect?: DialogRect;
+  phoneMinimized?: boolean;
+  phoneStashed?: boolean;
+  phoneTileRect?: DialogRect;
+  phoneRestoreRect?: DialogRect;
+  phoneMaximized?: boolean;
   z: number;
   isMaximized: boolean;
   restoreRect?: DialogRect;
@@ -29,12 +38,15 @@ interface DialogState {
   dialogsByWorkspace: Record<string, DialogInstance[]>;
   hiddenWorkspaces: Record<string, boolean>;
   zCounter: number;
+  appCounters: Partial<Record<AppId, number>>;
 }
 
 const STATE_KEY = 'op_dialog_state_v1';
 const PREVIEW_STATE_KEY = 'op_preview_dialog_state_v1';
 
 const TILE_SIZE = { width: 180, height: 80 };
+const PHONE_TILE_SIZE = { width: 140, height: 64 };
+const TILE_PADDING = 12;
 
 @Injectable({ providedIn: 'root' })
 export class DialogService {
@@ -43,6 +55,7 @@ export class DialogService {
   readonly workspaces = this.state.asReadonly();
 
   private auth = inject(AuthService);
+  private storage = inject(StorageService);
 
   constructor() {
     effect(() => {
@@ -53,6 +66,18 @@ export class DialogService {
       }
       this.load();
     });
+    effect(() => {
+      const session = this.auth.session();
+      if (!session.userId && !session.previewUserId) return;
+      const activeId = session.userId ? this.auth.getActiveUniverseId(session.userId) : null;
+      if (activeId) this.load();
+    });
+  }
+
+  async hydrate() {
+    const session = this.auth.session();
+    if (!session.userId && !session.previewUserId) return;
+    this.load();
   }
 
   getWorkspaces() {
@@ -71,8 +96,13 @@ export class DialogService {
     return this.getDialogsForWorkspace(this.getActiveWorkspaceId());
   }
 
-  getAppInstances(appId: AppId) {
-    return this.getActiveDialogs().filter((instance) => instance.appId === appId);
+  getAppInstances(appId: AppId, options?: { includeArchived?: boolean }) {
+    const includeArchived = options?.includeArchived ?? true;
+    return this.getActiveDialogs().filter((instance) => {
+      if (instance.appId !== appId) return false;
+      if (!includeArchived && instance.archived) return false;
+      return true;
+    });
   }
 
   addWorkspace() {
@@ -194,14 +224,23 @@ export class DialogService {
 
     const config = APP_REGISTRY[appId];
     const rect = this.centerRect(config.defaultSize, bounds);
+    const nextNumber = this.nextInstanceNumber(appId);
     const instance: DialogInstance = {
       id: this.uid('dlg'),
       appId,
       titleKey: config.labelKey,
+      instanceNumber: nextNumber,
       rect,
       minimized: false,
       stashed: false,
+      archived: false,
       tileRect: undefined,
+      phoneRect: undefined,
+      phoneMinimized: false,
+      phoneStashed: false,
+      phoneTileRect: undefined,
+      phoneRestoreRect: undefined,
+      phoneMaximized: false,
       deleteLocked: false,
       z: this.state().zCounter + 1,
       isMaximized: false,
@@ -214,10 +253,29 @@ export class DialogService {
     this.state.set({
       ...this.state(),
       zCounter: instance.z,
+      appCounters: {
+        ...(this.state().appCounters ?? {}),
+        [appId]: Math.max(this.state().appCounters?.[appId] ?? 0, nextNumber),
+      },
       dialogsByWorkspace: { ...this.state().dialogsByWorkspace, [workspaceId]: nextDialogs },
     });
     this.persist();
     return { ok: true, instance };
+  }
+
+  private nextInstanceNumber(appId: AppId) {
+    const used = new Set<number>();
+    Object.values(this.state().dialogsByWorkspace).forEach((list) => {
+      list.forEach((instance) => {
+        if (instance.appId !== appId) return;
+        if (typeof instance.instanceNumber === 'number') {
+          used.add(instance.instanceNumber);
+        }
+      });
+    });
+    let next = 1;
+    while (used.has(next)) next += 1;
+    return next;
   }
 
   restoreInstance(instanceId: string) {
@@ -232,12 +290,16 @@ export class DialogService {
     this.updateInstance(instanceId, (instance) => ({ ...instance, minimized: true }));
   }
 
+  setMinimized(instanceId: string, minimized: boolean) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, minimized }));
+  }
+
   stashInstance(instanceId: string, bounds: DOMRect) {
     this.updateInstance(instanceId, (instance) => ({
       ...instance,
       stashed: true,
       minimized: false,
-      tileRect: this.createTileRect(instance, bounds),
+      tileRect: this.createTileRect(instance, bounds, TILE_SIZE),
     }));
   }
 
@@ -245,13 +307,83 @@ export class DialogService {
     this.updateInstance(instanceId, (instance) => ({
       ...instance,
       tileRect: instance.tileRect
-        ? this.clampTileRect({ ...instance.tileRect, ...rect }, bounds)
-        : this.createTileRect(instance, bounds),
+        ? this.clampTileRect({ ...instance.tileRect, ...rect }, bounds, TILE_SIZE)
+        : this.createTileRect(instance, bounds, TILE_SIZE),
     }));
   }
 
   unstashInstance(instanceId: string) {
     this.updateInstance(instanceId, (instance) => ({ ...instance, stashed: false }));
+  }
+
+  setPhoneRect(instanceId: string, rect: DialogRect, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect(rect, bounds),
+    }));
+  }
+
+  movePhoneInstance(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect({ ...(instance.phoneRect ?? instance.rect), ...rect }, bounds),
+    }));
+  }
+
+  resizePhoneInstance(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneRect: this.clampRect({ ...(instance.phoneRect ?? instance.rect), ...rect }, bounds),
+    }));
+  }
+
+  setPhoneMinimized(instanceId: string, minimized: boolean) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, phoneMinimized: minimized }));
+  }
+
+  stashPhoneInstance(instanceId: string, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneStashed: true,
+      phoneMinimized: false,
+      phoneTileRect: this.findAvailableTileRect(bounds, PHONE_TILE_SIZE, true),
+    }));
+  }
+
+  movePhoneTile(instanceId: string, rect: Partial<DialogRect>, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      phoneTileRect: instance.phoneTileRect
+        ? this.clampTileRect({ ...instance.phoneTileRect, ...rect }, bounds, PHONE_TILE_SIZE)
+        : this.findAvailableTileRect(bounds, PHONE_TILE_SIZE, true),
+    }));
+  }
+
+  unstashPhoneInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({ ...instance, phoneStashed: false }));
+  }
+
+  togglePhoneMaximize(instanceId: string, bounds: DOMRect) {
+    this.updateInstance(instanceId, (instance) => {
+      const currentRect = instance.phoneRect ?? instance.rect;
+      if (instance.phoneMaximized) {
+        return {
+          ...instance,
+          phoneMaximized: false,
+          phoneRect: instance.phoneRestoreRect ?? currentRect,
+          phoneRestoreRect: undefined,
+        };
+      }
+      return {
+        ...instance,
+        phoneMaximized: true,
+        phoneRestoreRect: currentRect,
+        phoneRect: this.clampRect(
+          { x: 0, y: 0, width: bounds.width, height: bounds.height },
+          bounds,
+        ),
+      };
+    });
   }
 
   setTitleOverride(instanceId: string, titleOverride: string | null) {
@@ -268,6 +400,24 @@ export class DialogService {
     }));
   }
 
+  archiveInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      archived: true,
+      minimized: false,
+      stashed: false,
+      phoneMinimized: false,
+      phoneStashed: false,
+    }));
+  }
+
+  unarchiveInstance(instanceId: string) {
+    this.updateInstance(instanceId, (instance) => ({
+      ...instance,
+      archived: false,
+    }));
+  }
+
   wipeAppData(appId: AppId) {
     const dialogsByWorkspace: Record<string, DialogInstance[]> = {};
     const removedIds: string[] = [];
@@ -281,9 +431,13 @@ export class DialogService {
     this.state.set({ ...this.state(), dialogsByWorkspace });
     this.persist();
 
-    if (typeof window !== 'undefined' && appId === 'todo') {
+    if (appId === 'todo') {
       removedIds.forEach((id) => {
-        window.localStorage.removeItem(`op_mock_todos:${id}`);
+        const prefix = `op_mock_todos:`;
+        this.storage
+          .keysSync()
+          .filter((key) => key.startsWith(prefix) && key.endsWith(`:${id}`))
+          .forEach((key) => void this.storage.removeItem(key));
       });
     }
     return removedIds;
@@ -342,11 +496,36 @@ export class DialogService {
     });
   }
 
+  clampAllToBounds(bounds: DOMRect, usePhone = false) {
+    const dialogsByWorkspace = this.state().dialogsByWorkspace;
+    const nextDialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    Object.entries(dialogsByWorkspace).forEach(([workspaceId, dialogs]) => {
+      nextDialogsByWorkspace[workspaceId] = dialogs.map((instance) => {
+        if (usePhone) {
+          const phoneRect = instance.phoneRect
+            ? this.clampRect(instance.phoneRect, bounds)
+            : undefined;
+          const phoneTileRect = instance.phoneTileRect
+            ? this.clampTileRect(instance.phoneTileRect, bounds, PHONE_TILE_SIZE)
+            : undefined;
+          return { ...instance, phoneRect, phoneTileRect };
+        }
+        const rect = this.clampRect(instance.rect, bounds);
+        const tileRect = instance.tileRect
+          ? this.clampTileRect(instance.tileRect, bounds, TILE_SIZE)
+          : undefined;
+        return { ...instance, rect, tileRect };
+      });
+    });
+    this.state.set({ ...this.state(), dialogsByWorkspace: nextDialogsByWorkspace });
+    this.persist();
+  }
+
   resetPositions(mode: 'left' | 'middle', bounds: DOMRect) {
     const workspaceId = this.getActiveWorkspaceId();
     const dialogs = this.getDialogsForWorkspace(workspaceId);
     const nextDialogs = dialogs.map((instance) => {
-      if (instance.stashed) return instance;
+      if (instance.stashed || instance.archived) return instance;
       const rect =
         mode === 'left' ? { ...instance.rect, x: 0, y: 0 } : this.centerRect(instance.rect, bounds);
       return { ...instance, rect };
@@ -405,29 +584,80 @@ export class DialogService {
     return { x, y, width, height };
   }
 
-  private createTileRect(instance: DialogInstance, bounds: DOMRect): DialogRect {
-    const centerX = instance.rect.x + instance.rect.width / 2 - TILE_SIZE.width / 2;
-    const centerY = instance.rect.y + instance.rect.height / 2 - TILE_SIZE.height / 2;
+  private createTileRect(
+    instance: DialogInstance,
+    bounds: DOMRect,
+    size: { width: number; height: number },
+    rectOverride?: DialogRect,
+  ): DialogRect {
+    const rect = rectOverride ?? instance.rect;
+    const centerX = rect.x + rect.width / 2 - size.width / 2;
+    const centerY = rect.y + rect.height / 2 - size.height / 2;
     return {
-      x: Math.min(Math.max(centerX, 0), Math.max(0, bounds.width - TILE_SIZE.width)),
-      y: Math.min(Math.max(centerY, 0), Math.max(0, bounds.height - TILE_SIZE.height)),
-      width: TILE_SIZE.width,
-      height: TILE_SIZE.height,
+      x: Math.min(Math.max(centerX, 0), Math.max(0, bounds.width - size.width)),
+      y: Math.min(Math.max(centerY, 0), Math.max(0, bounds.height - size.height)),
+      width: size.width,
+      height: size.height,
     };
   }
 
-  private clampTileRect(rect: DialogRect, bounds: DOMRect): DialogRect {
-    const width = TILE_SIZE.width;
-    const height = TILE_SIZE.height;
+  private clampTileRect(
+    rect: DialogRect,
+    bounds: DOMRect,
+    size: { width: number; height: number },
+  ): DialogRect {
+    const width = size.width;
+    const height = size.height;
     const x = Math.min(Math.max(rect.x, 0), Math.max(0, bounds.width - width));
     const y = Math.min(Math.max(rect.y, 0), Math.max(0, bounds.height - height));
     return { x, y, width, height };
   }
 
+  private findAvailableTileRect(
+    bounds: DOMRect,
+    size: { width: number; height: number },
+    usePhone: boolean,
+  ): DialogRect {
+    const existing = Object.values(this.state().dialogsByWorkspace)
+      .flat()
+      .map((instance) => (usePhone ? instance.phoneTileRect : instance.tileRect))
+      .filter((rect): rect is DialogRect => Boolean(rect));
+    const maxX = Math.max(TILE_PADDING, bounds.width - size.width - TILE_PADDING);
+    const maxY = Math.max(TILE_PADDING, bounds.height - size.height - TILE_PADDING);
+    for (let y = TILE_PADDING; y <= maxY; y += size.height + TILE_PADDING) {
+      for (let x = TILE_PADDING; x <= maxX; x += size.width + TILE_PADDING) {
+        const candidate = { x, y, width: size.width, height: size.height };
+        const overlap = existing.some(
+          (rect) =>
+            x < rect.x + rect.width &&
+            x + size.width > rect.x &&
+            y < rect.y + rect.height &&
+            y + size.height > rect.y,
+        );
+        if (!overlap) return candidate;
+      }
+    }
+    return {
+      x: TILE_PADDING,
+      y: TILE_PADDING,
+      width: size.width,
+      height: size.height,
+    };
+  }
+
   private load() {
-    if (typeof window === 'undefined') return;
     const userKey = this.userStorageKey();
-    const raw = window.localStorage.getItem(userKey);
+    let raw = this.getRaw(userKey);
+    if (!raw) {
+      const legacyKey = this.legacyUserStorageKey();
+      if (legacyKey) {
+        const legacy = this.getRaw(legacyKey);
+        if (legacy) {
+          this.setRaw(userKey, legacy);
+          raw = legacy;
+        }
+      }
+    }
     if (!raw) {
       this.state.set(this.defaultState());
       this.persist();
@@ -443,27 +673,54 @@ export class DialogService {
   }
 
   private persist() {
-    if (typeof window === 'undefined') return;
     const userKey = this.userStorageKey();
-    window.localStorage.setItem(userKey, JSON.stringify(this.state()));
+    this.setRaw(userKey, JSON.stringify(this.state()));
   }
 
   private userStorageKey() {
     const base =
       this.auth.isPreviewing() && !this.auth.previewPersist() ? PREVIEW_STATE_KEY : STATE_KEY;
-    const userId = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id ?? 'anon';
+    const userKey = this.auth.storageUserKey();
+    return `${base}:${userKey}`;
+  }
+
+  private legacyUserStorageKey() {
+    const base =
+      this.auth.isPreviewing() && !this.auth.previewPersist() ? PREVIEW_STATE_KEY : STATE_KEY;
+    const session = this.auth.session();
+    const userId = session.previewUserId ?? session.userId ?? null;
+    if (!userId) return null;
     return `${base}:${userId}`;
   }
 
   resetForUser(userId: string) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.removeItem(`${STATE_KEY}:${userId}`);
-    window.localStorage.removeItem(`${PREVIEW_STATE_KEY}:${userId}`);
+    this.keys()
+      .filter((key) => key.startsWith(`${STATE_KEY}:${userId}`))
+      .forEach((key) => this.removeKey(key));
+    this.keys()
+      .filter((key) => key.startsWith(`${PREVIEW_STATE_KEY}:${userId}`))
+      .forEach((key) => this.removeKey(key));
     const activeUser = this.auth.currentUser()?.id ?? this.auth.actualUser()?.id;
     if (activeUser === userId) {
       this.state.set(this.defaultState());
       this.persist();
     }
+  }
+
+  private getRaw(key: string) {
+    return this.storage.getItemSync(key);
+  }
+
+  private setRaw(key: string, value: string) {
+    void this.storage.setItem(key, value);
+  }
+
+  private removeKey(key: string) {
+    void this.storage.removeItem(key);
+  }
+
+  private keys() {
+    return this.storage.keysSync();
   }
 
   private defaultState(): DialogState {
@@ -474,6 +731,7 @@ export class DialogService {
       dialogsByWorkspace: { [workspaceId]: [] },
       hiddenWorkspaces: {},
       zCounter: 0,
+      appCounters: {},
     };
   }
 
@@ -483,15 +741,38 @@ export class DialogService {
 
   private normalizeState(state: DialogState): DialogState {
     const dialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    const appCounters: Partial<Record<AppId, number>> = { ...(state.appCounters ?? {}) };
     Object.entries(state.dialogsByWorkspace ?? {}).forEach(([workspaceId, dialogs]) => {
       dialogsByWorkspace[workspaceId] = dialogs.map((instance) => ({
         ...instance,
         titleKey: instance.titleKey ?? APP_REGISTRY[instance.appId]?.labelKey ?? 'apps.todo',
         titleOverride: instance.titleOverride ?? undefined,
+        instanceNumber:
+          instance.instanceNumber ??
+          (() => {
+            const next = (appCounters[instance.appId] ?? 0) + 1;
+            appCounters[instance.appId] = next;
+            return next;
+          })(),
         stashed: instance.stashed ?? false,
+        archived: instance.archived ?? false,
         tileRect: instance.tileRect,
+        phoneRect: instance.phoneRect,
+        phoneMinimized: instance.phoneMinimized ?? false,
+        phoneStashed: instance.phoneStashed ?? false,
+        phoneTileRect: instance.phoneTileRect,
+        phoneRestoreRect: instance.phoneRestoreRect,
+        phoneMaximized: instance.phoneMaximized ?? false,
         deleteLocked: instance.deleteLocked ?? false,
       }));
+      dialogsByWorkspace[workspaceId].forEach((instance) => {
+        if (instance.instanceNumber !== undefined) {
+          appCounters[instance.appId] = Math.max(
+            appCounters[instance.appId] ?? 0,
+            instance.instanceNumber,
+          );
+        }
+      });
     });
     return {
       ...state,
@@ -500,6 +781,7 @@ export class DialogService {
       activeWorkspaceId: state.activeWorkspaceId || this.defaultState().activeWorkspaceId,
       hiddenWorkspaces: state.hiddenWorkspaces ?? {},
       zCounter: state.zCounter ?? 0,
+      appCounters,
     };
   }
 }
