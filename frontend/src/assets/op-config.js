@@ -4,4 +4,5 @@ window.__OP_CONFIG__ = {
   storageApiBaseUrl: '',
   mockMode: true,
   guestModeOnly: true,
+  debugPerf: false,
 };

@@ -28,11 +28,13 @@ This repository contains a standalone Angular frontend in `frontend/`.
   - `features/dependencies/app-registry.ts`
   - any UI lists that render app entries.
 - Prefer `features/dependencies/` for shared app-level utilities to keep apps portable.
+- Long-running processes (timers/sync/background loops) should live in services keyed by `universeId` with explicit start/stop, not inside UI component lifecycle hooks.
 
 ## Guest-only mode
 
 Runtime config lives in `frontend/src/assets/op-config.js`.  
 If `guestModeOnly` is true, the login form is hidden and only guest access is allowed.
+`debugPerf` can be enabled for switch lifecycle/perf instrumentation (or overridden via localStorage `op_debug_perf` = `1`/`0`).
 
 ## Storage adapters
 
@@ -50,6 +52,7 @@ Swap this to point to a backend adapter if you want server-backed storage.
 - Unit tests: `npm run test:unit`
 - Lint: `npm run lint`
 - E2E: `npm run test:e2e`
+- You can explicitly request: "run checks and report results"; run `test:unit`, `lint`, and `build`, then summarize pass/fail and notable warnings/errors.
 - Add or update focused service tests when changing cross-cutting state logic:
   - `core/dialog.service.spec.ts` for workspace/dialog state transitions.
   - `core/auth.service.spec.ts` for login preference/session synchronization flows.

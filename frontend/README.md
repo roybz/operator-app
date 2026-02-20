@@ -54,6 +54,32 @@ ng e2e
 
 Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
+## Debug Lifecycle/Perf Instrumentation
+
+Lifecycle/perf instrumentation for Universe and Workspace switching is available in debug mode and is OFF by default.
+
+- Config flag: `frontend/src/assets/op-config.js` -> `debugPerf: false`
+- Local override:
+  - Enable: `localStorage.setItem('op_debug_perf', '1')`
+  - Disable: `localStorage.setItem('op_debug_perf', '0')`
+  - Reset to config default: `localStorage.removeItem('op_debug_perf')`
+
+When enabled, console summary lines are emitted per switch action:
+
+- `[Perf][UniverseSwitch] duration=... mounts=... destroys=... hostMounts=... hostDestroys=... dialogsBefore=... dialogsAfter=...`
+- `[Perf][WorkspaceSwitch] duration=... mounts=... destroys=... hostMounts=... hostDestroys=... dialogsBefore=... dialogsAfter=...`
+
+Implementation references:
+
+- `frontend/src/app/core/debug-perf.service.ts`
+- `frontend/src/app/app.ts`
+- `frontend/src/app/shared/dialog/dialog.component.ts`
+
+Long-running process rule:
+
+- Keep long-running process features (timers/sync/background loops) in `universeId`-keyed services/stores with explicit start/stop.
+- UI components may mount/unmount freely without owning the process lifecycle.
+
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
