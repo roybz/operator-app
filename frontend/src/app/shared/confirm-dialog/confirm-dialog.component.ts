@@ -10,10 +10,26 @@ import { TranslateModule } from '@ngx-translate/core';
     `
       .confirm-dialog__panel {
         width: min(420px, 92vw);
+        box-sizing: border-box;
       }
 
       :host-context(.phone-mode) .confirm-dialog__panel {
-        width: min(420px, 84vw);
+        width: min(420px, calc(96vw - 12px));
+      }
+
+      .confirm-dialog__close {
+        border-radius: 999px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+
+      .confirm-dialog__actions button {
+        padding: 5px 6px;
+        border-radius: 3px;
       }
     `,
   ],
@@ -33,11 +49,11 @@ import { TranslateModule } from '@ngx-translate/core';
       >
         <div style="display:flex; justify-content:flex-end;">
           <button
+            class="confirm-dialog__close"
             (click)="canceled.emit()"
-            style="border-radius:999px; width:28px; height:28px;"
             title="{{ 'dialogs.close' | translate }}"
           >
-            ✕
+            &#215;
           </button>
         </div>
         @if (title) {
@@ -47,7 +63,10 @@ import { TranslateModule } from '@ngx-translate/core';
           <p style="margin:5px 0; line-height:24px; white-space:pre-line;">{{ message }}</p>
         }
         <ng-content />
-        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+        <div
+          class="confirm-dialog__actions"
+          style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;"
+        >
           @if (showCancel) {
             <button (click)="canceled.emit()">{{ cancelLabel }}</button>
           }

@@ -11,6 +11,57 @@ export interface UniverseItem {
   selector: 'app-top-bar',
   standalone: true,
   imports: [CommonModule, TranslateModule],
+  styles: [
+    `
+      .square-btn {
+        padding: 5px 6px;
+        border-radius: 3px;
+      }
+
+      .universe-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 6px;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 180px;
+        z-index: 1401;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+      }
+
+      .universe-menu__item {
+        text-align: left;
+        padding: 6px 8px;
+        border-radius: 6px;
+      }
+
+      .universe-menu__item--active {
+        font-weight: 600;
+      }
+
+      :host-context(.phone-mode) .universe-menu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        margin-top: 0;
+        width: min(460px, 92vw);
+        padding: 12px;
+        border-radius: 12px;
+      }
+
+      :host-context(.phone-mode) .universe-menu__item {
+        padding: 10px 12px;
+        font-size: 16px;
+      }
+    `,
+  ],
   template: `
     <header
       id="topbar-header"
@@ -83,10 +134,11 @@ export interface UniverseItem {
               {{ currentUniverseName }}
             </span>
             <button
+              class="square-btn"
               (click)="toggleUniverseMenu.emit()"
-              style="margin-left:6px; font-size:10px; padding:2px 6px;"
+              style="margin-left:6px; font-size:10px;"
             >
-              ▼
+              &#9662;
             </button>
             @if (universeMenuOpen) {
               <div
@@ -97,15 +149,12 @@ export interface UniverseItem {
                 (keydown.enter)="closeUniverseMenu.emit()"
                 (keydown.space)="closeUniverseMenu.emit()"
               ></div>
-              <div
-                style="position:absolute; top:100%; left:0; margin-top:6px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:6px; min-width:180px; z-index:1401; box-shadow:0 12px 24px rgba(0,0,0,0.18);"
-                (pointerdown)="$event.stopPropagation()"
-              >
+              <div class="universe-menu" (pointerdown)="$event.stopPropagation()">
                 @for (u of universes; track u.id) {
                   <button
+                    class="universe-menu__item"
+                    [class.universe-menu__item--active]="u.id === activeUniverseId"
                     (click)="switchUniverse.emit(u.id)"
-                    [disabled]="u.id === activeUniverseId"
-                    style="text-align:left; padding:6px 8px; border-radius:6px;"
                   >
                     {{ u.name }}
                   </button>
@@ -118,7 +167,9 @@ export interface UniverseItem {
 
       @if (phoneMode) {
         <div style="width:100%; display:flex; align-items:center; justify-content:space-between;">
-          <button (click)="toggleNav.emit()" style="font-size:22px; padding:10px 12px;">☰</button>
+          <button class="square-btn" (click)="toggleNav.emit()" style="font-size:22px;">
+            &#9776;
+          </button>
           <div style="display:flex; align-items:center; gap:12px; justify-content:flex-end;">
             @if (showTime) {
               <div style="font-size:14px; opacity:0.8; white-space:nowrap;">
@@ -126,6 +177,8 @@ export interface UniverseItem {
               </div>
             }
             <button
+              class="square-btn"
+              data-workspace-toggle="true"
               (click)="toggleWorkspaceMenu.emit()"
               [style.boxShadow]="
                 workspaceMenuOpen
@@ -135,7 +188,9 @@ export interface UniverseItem {
             >
               {{ 'workspaces.button' | translate }}
             </button>
-            <button (click)="toggleTopBar.emit()">{{ 'topbar.collapse' | translate }}</button>
+            <button class="square-btn" (click)="toggleTopBar.emit()">
+              {{ 'topbar.collapse' | translate }}
+            </button>
           </div>
         </div>
       } @else {
@@ -149,6 +204,8 @@ export interface UniverseItem {
             </div>
           }
           <button
+            class="square-btn"
+            data-workspace-toggle="true"
             (click)="toggleWorkspaceMenu.emit()"
             [style.boxShadow]="
               workspaceMenuOpen
@@ -158,7 +215,9 @@ export interface UniverseItem {
           >
             {{ 'workspaces.button' | translate }}
           </button>
-          <button (click)="toggleTopBar.emit()">{{ 'topbar.collapse' | translate }}</button>
+          <button class="square-btn" (click)="toggleTopBar.emit()">
+            {{ 'topbar.collapse' | translate }}
+          </button>
         </div>
       }
     </header>

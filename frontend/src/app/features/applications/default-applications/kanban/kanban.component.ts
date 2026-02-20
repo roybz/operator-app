@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   Input,
+  OnDestroy,
   OnInit,
   ViewChild,
   computed,
@@ -12,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
+import { LongPressDirective } from '../../../../shared/long-press/long-press.directive';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
@@ -88,7 +90,7 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
 @Component({
   selector: 'app-kanban',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent, LongPressDirective],
   styles: [
     `
       :host {
@@ -99,19 +101,23 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
       .kanban-board {
         display: flex;
         gap: 12px;
-        overflow: auto;
+        overflow-x: auto;
+        overflow-y: hidden;
+        min-width: 0;
+        max-width: 100%;
         flex: 1;
       }
       .kanban-board--left {
-        box-shadow: inset 8px 0 8px -8px rgba(0, 0, 0, 0.2);
+        box-shadow: inset 10px 0 12px -10px color-mix(in srgb, var(--color-accent) 42%, transparent);
       }
       .kanban-board--right {
-        box-shadow: inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+        box-shadow: inset -10px 0 12px -10px
+          color-mix(in srgb, var(--color-accent) 42%, transparent);
       }
       .kanban-board--left.kanban-board--right {
         box-shadow:
-          inset 8px 0 8px -8px rgba(0, 0, 0, 0.2),
-          inset -8px 0 8px -8px rgba(0, 0, 0, 0.2);
+          inset 10px 0 12px -10px color-mix(in srgb, var(--color-accent) 42%, transparent),
+          inset -10px 0 12px -10px color-mix(in srgb, var(--color-accent) 42%, transparent);
       }
 
       :host-context(.phone-mode) .kanban-board {
@@ -123,15 +129,65 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
         min-width: 220px !important;
       }
 
+      .kanban-column--target {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 68%, transparent);
+      }
+
       :host-context(.phone-mode) .kanban-shell {
         padding: 12px;
+      }
+
+      :host-context(.phone-mode) .kanban-card {
+        touch-action: none;
+      }
+
+      .kanban-card {
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        padding: 8px;
+        background: var(--color-surface);
+        cursor: grab;
+        position: relative;
+      }
+
+      .kanban-card__edit {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        opacity: 0.35;
+        transition: opacity 120ms ease;
+        padding: 2px 5px;
+        border-radius: 4px;
+      }
+
+      .kanban-card:hover .kanban-card__edit {
+        opacity: 1;
+      }
+
+      .kanban-card--ghosted {
+        opacity: 0.2;
+      }
+
+      .kanban-touch-ghost {
+        position: fixed;
+        pointer-events: none;
+        z-index: 4500;
+        max-width: min(260px, 80vw);
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        padding: 8px 10px;
+        font-weight: 600;
       }
     `,
   ],
   template: `
     <div class="kanban-shell" style="display:flex; flex-direction:column; gap:12px; height:100%;">
       @if (settingsOpen()) {
-        <div style="display:flex; flex-direction:column; gap:12px;">
+        <div
+          style="display:flex; flex-direction:column; gap:12px; background:color-mix(in srgb, var(--color-surface) 85%, var(--color-border)); border-radius:8px; padding:10px;"
+        >
           <div style="display:flex; align-items:center; justify-content:space-between;">
             <h3 style="margin:0;">{{ 'kanban.settingsTitle' | translate }}</h3>
             <button (click)="closeSettings()">{{ 'kanban.closeSettings' | translate }}</button>
@@ -202,10 +258,14 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
           class="kanban-board"
           [class.kanban-board--left]="scrollShadows().left"
           [class.kanban-board--right]="scrollShadows().right"
+          [style.overflowX]="touchDragState() ? 'hidden' : 'auto'"
+          [style.touchAction]="touchDragState() ? 'none' : null"
           (scroll)="updateScrollShadows($event)"
         >
           @for (column of activeBoard().columns; track column.id) {
             <section
+              [attr.data-column-id]="column.id"
+              [class.kanban-column--target]="touchDropColumnId() === column.id"
               style="flex:1; min-width:220px; border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;"
               (dragover)="onColumnDragOver($event)"
               (drop)="onDrop(column.id, $event)"
@@ -237,22 +297,41 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
                     (click)="requestRemoveColumn(column.id)"
                     title="{{ 'kanban.removeColumn' | translate }}"
                   >
-                    −
+                    &#8722;
                   </button>
                 </div>
               </div>
               <div style="display:flex; flex-direction:column; gap:8px;">
                 @for (cardId of column.cardIds; track cardId) {
                   <div
-                    draggable="true"
+                    class="kanban-card"
+                    [class.kanban-card--ghosted]="touchDragState()?.cardId === cardId"
+                    [style.touchAction]="shouldUseTouchDrag() ? 'none' : null"
+                    [draggable]="!shouldUseTouchDrag()"
+                    (pointerdown)="onCardPointerDown($event)"
+                    (pointermove)="onCardPointerMove($event)"
+                    (pointerup)="onCardPointerEnd($event)"
+                    (pointercancel)="onCardPointerEnd($event)"
                     (dragstart)="onDragStart(column.id, cardId, $event)"
+                    (dragend)="onDragEnd()"
+                    appLongPress
+                    [longPressEnabled]="shouldUseTouchDrag()"
+                    [longPressDelay]="180"
+                    [longPressMoveTolerance]="28"
+                    (longPress)="onCardLongPress(column.id, cardId, $event)"
                     (click)="selectCard(column.id, cardId)"
                     (keydown.enter)="selectCard(column.id, cardId)"
                     (keydown.space)="$event.preventDefault(); selectCard(column.id, cardId)"
                     tabindex="0"
                     role="button"
-                    style="border:1px solid var(--color-border); border-radius:6px; padding:8px; background:var(--color-surface); cursor:grab;"
                   >
+                    <button
+                      class="kanban-card__edit"
+                      (click)="openCardDetails(column.id, cardId); $event.stopPropagation()"
+                      title="{{ 'kanban.cardDetails' | translate }}"
+                    >
+                      &#9998;
+                    </button>
                     <div style="font-weight:600;">{{ card(cardId).title }}</div>
                     @if (card(cardId).labels.length) {
                       <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
@@ -277,6 +356,16 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
             </section>
           }
         </div>
+
+        @if (touchDragState()) {
+          <div
+            class="kanban-touch-ghost"
+            [style.left.px]="touchDragState()!.x - touchDragState()!.offsetX"
+            [style.top.px]="touchDragState()!.y - touchDragState()!.offsetY"
+          >
+            {{ card(touchDragState()!.cardId).title }}
+          </div>
+        }
 
         @if (selectedCard()) {
           <div style="border-top:1px solid var(--color-border); padding-top:12px;">
@@ -330,7 +419,7 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
                         (input)="updateChecklistText(item.id, $event)"
                         style="flex:1;"
                       />
-                      <button (click)="removeChecklist(item.id)">×</button>
+                      <button (click)="removeChecklist(item.id)">&#215;</button>
                     </label>
                   }
                 </div>
@@ -403,7 +492,7 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
     }
   `,
 })
-export class KanbanComponent implements OnInit, AfterViewInit {
+export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
   @ViewChild('boardScroll') boardScroll?: ElementRef<HTMLDivElement>;
   private host = inject(ElementRef);
@@ -422,6 +511,16 @@ export class KanbanComponent implements OnInit, AfterViewInit {
   });
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
   dragState: { cardId: string; fromColumnId: string } | null = null;
+  touchDragState = signal<{
+    cardId: string;
+    fromColumnId: string;
+    pointerId: number;
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
+  touchDropColumnId = signal<string | null>(null);
   editingBoard = signal(false);
   boardNameDraft = signal('');
   editingColumnId = signal<string | null>(null);
@@ -435,6 +534,12 @@ export class KanbanComponent implements OnInit, AfterViewInit {
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
   scrollShadows = signal({ left: false, right: false });
+  private suppressNextCardClick = false;
+  private cardPanState: {
+    pointerId: number;
+    lastX: number;
+    lastY: number;
+  } | null = null;
 
   ngOnInit() {
     const userId = this.prefs.userId();
@@ -477,6 +582,10 @@ export class KanbanComponent implements OnInit, AfterViewInit {
     }
   }
 
+  ngOnDestroy() {
+    this.cleanupTouchDrag();
+  }
+
   closeSettings() {
     this.instanceSettings.close(this.instanceId);
   }
@@ -489,34 +598,31 @@ export class KanbanComponent implements OnInit, AfterViewInit {
 
   updateScrollShadows(eventOrTarget: Event | HTMLDivElement) {
     const target =
-      eventOrTarget instanceof Event
+      this.boardScroll?.nativeElement ??
+      (eventOrTarget instanceof Event
         ? (eventOrTarget.target as HTMLDivElement | null)
-        : eventOrTarget;
+        : eventOrTarget);
     if (!target) return;
-    const maxScroll = Math.max(0, target.scrollWidth - target.clientWidth);
-    const canScroll = maxScroll > 1;
-    const atLeft = target.scrollLeft <= 1;
-    const atRight = target.scrollLeft >= maxScroll - 1;
-    const showLeft = canScroll && !atLeft;
-    const showRight = canScroll && !atRight;
+    const { showLeft, showRight } = this.computeScrollShadowState(target);
     this.scrollShadows.set({ left: showLeft, right: showRight });
     const dialogBody = this.host.nativeElement
       .closest('.dialog')
-      ?.querySelector('.dialog__body--phone, .dialog__body');
-    if (dialogBody) {
-      dialogBody.style.setProperty(
-        '--phone-scroll-shadow-left',
-        showLeft
-          ? 'inset 14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
-          : 'inset 2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
-      );
-      dialogBody.style.setProperty(
-        '--phone-scroll-shadow-right',
-        showRight
-          ? 'inset -14px 0 14px -10px color-mix(in srgb, var(--color-accent) 55%, transparent)'
-          : 'inset -2px 0 2px -2px color-mix(in srgb, var(--color-accent) 40%, transparent)',
-      );
-    }
+      ?.querySelector('.dialog__body--phone, .dialog__body') as HTMLElement | null;
+    if (!dialogBody) return;
+    dialogBody.style.setProperty('--phone-scroll-shadow-left', 'none');
+    dialogBody.style.setProperty('--phone-scroll-shadow-right', 'none');
+  }
+
+  private computeScrollShadowState(target: HTMLDivElement) {
+    const maxLeft = Math.max(0, target.scrollWidth - target.clientWidth);
+    const scrollLeft = Math.max(0, Math.min(maxLeft, target.scrollLeft));
+    const canScroll = maxLeft > 0.5;
+    const atLeft = scrollLeft <= 0.5;
+    const atRight = maxLeft - scrollLeft <= 0.5;
+    return {
+      showLeft: canScroll && !atLeft,
+      showRight: canScroll && !atRight,
+    };
   }
 
   card(cardId: string) {
@@ -617,10 +723,15 @@ export class KanbanComponent implements OnInit, AfterViewInit {
       column.id === columnId ? { ...column, cardIds: [...column.cardIds, cardId] } : column,
     );
     const nextBoard = { ...board, columns, cards: { ...board.cards, [cardId]: card } };
-    this.updateBoard(nextBoard, cardId, columnId);
+    this.updateBoard(nextBoard, null, null);
   }
 
   selectCard(columnId: string, cardId: string) {
+    if (this.touchDragState()) return;
+    if (this.suppressNextCardClick) {
+      this.suppressNextCardClick = false;
+      return;
+    }
     this.state.set({ ...this.state(), selectedCardId: cardId, selectedColumnId: columnId });
     this.persistState();
   }
@@ -700,9 +811,21 @@ export class KanbanComponent implements OnInit, AfterViewInit {
   onDrop(targetColumnId: string, event: DragEvent) {
     event.preventDefault();
     if (!this.dragState) return;
-    const { cardId, fromColumnId } = this.dragState;
-    if (fromColumnId === targetColumnId) return;
+    this.moveDraggedCard(targetColumnId);
+  }
+
+  onDragEnd() {
+    this.dragState = null;
+  }
+
+  private moveDraggedCard(targetColumnId: string) {
+    if (!this.dragState) return;
+    const { cardId } = this.dragState;
     const board = this.activeBoard();
+    const fromColumnId =
+      board.columns.find((column) => column.cardIds.includes(cardId))?.id ??
+      this.dragState.fromColumnId;
+    if (fromColumnId === targetColumnId) return;
     const columns = board.columns.map((column) => {
       if (column.id === fromColumnId) {
         return { ...column, cardIds: column.cardIds.filter((id) => id !== cardId) };
@@ -713,13 +836,142 @@ export class KanbanComponent implements OnInit, AfterViewInit {
       return column;
     });
     const nextBoard = { ...board, columns };
-    this.updateBoard(nextBoard, cardId, targetColumnId);
+    this.updateBoard(nextBoard);
     this.dragState = null;
+  }
+
+  onCardLongPress(columnId: string, cardId: string, event: PointerEvent) {
+    if (!this.shouldUseTouchDrag()) return;
+    const target = event.target as HTMLElement | null;
+    const cardEl = target?.closest('.kanban-card') as HTMLElement | null;
+    if (!cardEl) return;
+    this.dragState = { cardId, fromColumnId: columnId };
+    this.touchDragState.set({
+      cardId,
+      fromColumnId: columnId,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: 18,
+      offsetY: 18,
+    });
+    this.touchDropColumnId.set(columnId);
+    this.suppressNextCardClick = true;
+    window.addEventListener('pointermove', this.onTouchDragMove, { passive: false });
+    window.addEventListener('pointerup', this.onTouchDragEnd);
+    window.addEventListener('pointercancel', this.onTouchDragEnd);
+    event.preventDefault();
+  }
+
+  private onTouchDragMove = (event: PointerEvent) => {
+    const state = this.touchDragState();
+    if (!state || event.pointerId !== state.pointerId) return;
+    event.preventDefault();
+    this.touchDragState.set({
+      ...state,
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+    const column = target?.closest('[data-column-id]') as HTMLElement | null;
+    this.touchDropColumnId.set(column?.getAttribute('data-column-id') ?? null);
+    this.autoScrollWhileDragging(event.clientX);
+  };
+
+  private onTouchDragEnd = (event: PointerEvent) => {
+    const state = this.touchDragState();
+    if (!state || event.pointerId !== state.pointerId) return;
+    const targetColumnId = this.touchDropColumnId();
+    if (targetColumnId && this.dragState) {
+      this.moveDraggedCard(targetColumnId);
+    } else {
+      this.dragState = null;
+    }
+    this.cleanupTouchDrag();
+  };
+
+  private cleanupTouchDrag() {
+    this.touchDragState.set(null);
+    this.touchDropColumnId.set(null);
+    window.removeEventListener('pointermove', this.onTouchDragMove);
+    window.removeEventListener('pointerup', this.onTouchDragEnd);
+    window.removeEventListener('pointercancel', this.onTouchDragEnd);
+  }
+
+  onCardPointerDown(event: PointerEvent) {
+    if (!this.shouldUseTouchDrag()) return;
+    if (event.pointerType === 'mouse') return;
+    this.cardPanState = {
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+  }
+
+  onCardPointerMove(event: PointerEvent) {
+    if (!this.shouldUseTouchDrag()) return;
+    if (event.pointerType === 'mouse') return;
+    if (!this.cardPanState || this.cardPanState.pointerId !== event.pointerId) return;
+    if (this.touchDragState()) return;
+    const board = this.boardScroll?.nativeElement;
+    if (!board) return;
+    const dx = event.clientX - this.cardPanState.lastX;
+    const dy = event.clientY - this.cardPanState.lastY;
+    this.cardPanState.lastX = event.clientX;
+    this.cardPanState.lastY = event.clientY;
+    if (Math.abs(dx) < 0.5 || Math.abs(dx) < Math.abs(dy)) return;
+    const maxLeft = Math.max(0, board.scrollWidth - board.clientWidth);
+    const next = Math.max(0, Math.min(maxLeft, board.scrollLeft - dx));
+    if (next === board.scrollLeft) return;
+    board.scrollLeft = next;
+    this.updateScrollShadows(board);
+    event.preventDefault();
+  }
+
+  onCardPointerEnd(event: PointerEvent) {
+    if (!this.cardPanState || this.cardPanState.pointerId !== event.pointerId) return;
+    this.cardPanState = null;
+  }
+
+  private autoScrollWhileDragging(pointerX: number) {
+    const board = this.boardScroll?.nativeElement;
+    if (!board) return;
+    const rect = board.getBoundingClientRect();
+    const edge = 52;
+    let delta = 0;
+    if (pointerX < rect.left + edge) {
+      delta = -Math.ceil((rect.left + edge - pointerX) / 7);
+    } else if (pointerX > rect.right - edge) {
+      delta = Math.ceil((pointerX - (rect.right - edge)) / 7);
+    }
+    if (!delta) return;
+    const maxLeft = Math.max(0, board.scrollWidth - board.clientWidth);
+    const next = Math.max(0, Math.min(maxLeft, board.scrollLeft + delta * 3));
+    if (next === board.scrollLeft) return;
+    board.scrollLeft = next;
+    this.updateScrollShadows(board);
+  }
+
+  shouldUseTouchDrag() {
+    if (typeof window === 'undefined') return false;
+    const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+    const hasTouchPoints = (navigator.maxTouchPoints ?? 0) > 0;
+    return this.isPhoneMode() || coarse || hasTouchPoints;
   }
 
   closeCardDetails() {
     this.state.set({ ...this.state(), selectedCardId: null, selectedColumnId: null });
     this.persistState();
+  }
+
+  openCardDetails(columnId: string, cardId: string) {
+    this.selectCard(columnId, cardId);
+  }
+
+  isPhoneMode() {
+    if (typeof document === 'undefined') return false;
+    const hostEl = this.host.nativeElement as HTMLElement;
+    return Boolean(hostEl.closest('.phone-mode') || document.body.classList.contains('phone-mode'));
   }
 
   startColumnRename(column: KanbanColumn) {
@@ -845,8 +1097,9 @@ export class KanbanComponent implements OnInit, AfterViewInit {
     this.state.set({
       ...this.state(),
       boards,
-      selectedCardId: selectedCardId ?? this.state().selectedCardId,
-      selectedColumnId: selectedColumnId ?? this.state().selectedColumnId,
+      selectedCardId: selectedCardId === undefined ? this.state().selectedCardId : selectedCardId,
+      selectedColumnId:
+        selectedColumnId === undefined ? this.state().selectedColumnId : selectedColumnId,
     });
     this.persistState();
   }

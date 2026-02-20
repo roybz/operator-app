@@ -7,6 +7,7 @@ import { Directive, EventEmitter, HostListener, Input, Output } from '@angular/c
 export class LongPressDirective {
   @Input() longPressDelay = 550;
   @Input() longPressEnabled = true;
+  @Input() longPressMoveTolerance = 8;
   @Output() longPress = new EventEmitter<PointerEvent>();
 
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -17,7 +18,7 @@ export class LongPressDirective {
   @HostListener('pointerdown', ['$event'])
   onPointerDown(event: PointerEvent) {
     if (!this.longPressEnabled) return;
-    if (event.button !== 0) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     this.active = true;
     this.startX = event.clientX;
     this.startY = event.clientY;
@@ -34,7 +35,7 @@ export class LongPressDirective {
     if (!this.active) return;
     const dx = Math.abs(event.clientX - this.startX);
     const dy = Math.abs(event.clientY - this.startY);
-    if (dx > 8 || dy > 8) {
+    if (dx > this.longPressMoveTolerance || dy > this.longPressMoveTolerance) {
       this.cancel();
     }
   }

@@ -205,6 +205,8 @@ import { LongPressDirective } from '../long-press/long-press.directive';
         padding: 8px 12px;
       }
       .dialog__body--phone {
+        overflow-x: hidden;
+        overflow-y: auto;
         padding-bottom: 8px;
         box-shadow: var(--phone-scroll-shadow-left, none), var(--phone-scroll-shadow-right, none);
       }
