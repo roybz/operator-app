@@ -56,6 +56,7 @@ import { cloneDataTableState } from './features/applications/default-application
 import { cloneTodoState } from './features/applications/default-applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
 import { StorageService } from './core/storage/storage.service';
+import { DebugPerfService } from './core/debug-perf.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -1079,6 +1080,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly settingsDraft = inject(SettingsDraftService);
   readonly instanceSettings = inject(InstanceSettingsService);
   readonly storage = inject(StorageService);
+  private readonly debugPerf = inject(DebugPerfService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1611,6 +1613,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.debugPerf.markDialogHostInit();
     if (typeof window === 'undefined') return;
     if (window.location.pathname.startsWith('/logout')) {
       this.auth.logout();
@@ -1641,6 +1644,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.debugPerf.markDialogHostDestroy();
     if (this.timeInterval) window.clearInterval(this.timeInterval);
     if (this.universeInterval) window.clearInterval(this.universeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
@@ -1989,6 +1993,12 @@ export class AppComponent implements OnInit, OnDestroy {
   private performUniverseSwitch(universeId: string, forcePhoneMode?: boolean) {
     const userId = this.currentUserId();
     if (!userId) return;
+    const fromUniverseId = this.auth.getActiveUniverseId(userId);
+    const token = this.debugPerf.startSwitch('UniverseSwitch', this.activeDialogs().length, {
+      fromUniverseId,
+      toUniverseId: universeId,
+      forcedPhoneMode: forcePhoneMode ?? null,
+    });
     if (this.hasUniverseParticipants()) {
       const currentUniverseId = this.universeId();
       if (currentUniverseId) {
@@ -2003,6 +2013,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.auth.setLoginPhoneModePreference(forcePhoneMode);
     }
     this.universeMenuOpen.set(false);
+    this.debugPerf.completeSwitch(token, () => this.activeDialogs().length);
   }
 
   setCanvasMode(event: Event) {
@@ -2070,7 +2081,14 @@ export class AppComponent implements OnInit, OnDestroy {
 
   onWorkspaceClick = (id: string) => {
     if (this.suppressWorkspaceClick) return;
+    const fromWorkspaceId = this.dialogService.getActiveWorkspaceId();
+    const token = this.debugPerf.startSwitch('WorkspaceSwitch', this.activeDialogs().length, {
+      fromWorkspaceId,
+      toWorkspaceId: id,
+      sameWorkspace: fromWorkspaceId === id,
+    });
     this.dialogService.switchWorkspace(id);
+    this.debugPerf.completeSwitch(token, () => this.activeDialogs().length);
     if (this.phoneMode()) {
       this.cancelWorkspaceRename();
       this.workspaceMenuOpen.set(false);

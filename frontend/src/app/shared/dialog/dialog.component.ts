@@ -1,8 +1,18 @@
-import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  HostListener,
+  Input,
+  OnDestroy,
+  OnInit,
+  Output,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { DialogInstance } from '../../core/dialog.service';
 import { LongPressDirective } from '../long-press/long-press.directive';
+import { DebugPerfService } from '../../core/debug-perf.service';
 
 @Component({
   selector: 'app-dialog',
@@ -259,7 +269,7 @@ import { LongPressDirective } from '../long-press/long-press.directive';
     `,
   ],
 })
-export class DialogComponent {
+export class DialogComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instance!: DialogInstance;
   @Input({ required: true }) bounds!: DOMRect;
   @Input() disabled = false;
@@ -283,10 +293,19 @@ export class DialogComponent {
   @Output() settings = new EventEmitter<void>();
   @Output() moveWorkspace = new EventEmitter<void>();
 
+  private debugPerf = inject(DebugPerfService);
   private dragStart?: { x: number; y: number; left: number; top: number };
   private resizeStart?: { x: number; y: number; width: number; height: number };
   isEditingTitle = false;
   titleDraft = '';
+
+  ngOnInit() {
+    this.debugPerf.markDialogInit();
+  }
+
+  ngOnDestroy() {
+    this.debugPerf.markDialogDestroy();
+  }
 
   onPointerDown(event: PointerEvent) {
     if (this.disabled) {
