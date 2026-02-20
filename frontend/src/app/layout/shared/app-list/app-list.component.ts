@@ -205,7 +205,7 @@ export interface AppGroup {
       .app-list__footer {
         position: sticky;
         bottom: 0;
-        background: var(--color-surface);
+        background: transparent;
         padding: 14px 0 10px;
         min-height: var(--app-list-footer-height);
       }

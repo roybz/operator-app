@@ -164,7 +164,9 @@
       "text": "Text",
       "url": "URL"
     },
-    "wipeInstance": "Wipe instance data"
+    "wipeInstance": "Wipe instance data",
+    "deleteRowConfirm": "Delete this row? This cannot be undone.",
+    "deleteColumnConfirm": "Delete this column? Values in this column will be removed and cannot be recovered."
   },
   "dialogs": {
     "actions": "Actions",
@@ -541,7 +543,8 @@
     "universesTitle": "Universes",
     "updateLink": "Update link",
     "wipeAll": "Wipe all universes",
-    "wipeAllConfirm": "Are you sure you want to wipe all universes and their data?"
+    "wipeAllConfirm": "Are you sure you want to wipe all universes and their data?",
+    "chatClearConfirm": "Clear all universe chat messages forever? This cannot be undone."
   },
   "universe.phoneModePrompt": "This universe last opened in desktop mode. Switch it to phone mode for this session?",
   "users": {

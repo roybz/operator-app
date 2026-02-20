@@ -2,6 +2,12 @@ import { Component, Input, OnInit, effect, inject, signal } from '@angular/core'
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import {
+  buildInstanceStorageKey,
+  clearInstanceScopedState,
+  cloneInstanceScopedState,
+  persistInstanceState,
+} from '../../../dependencies/instance-state-storage';
 import { StorageService } from '../../../../core/storage/storage.service';
 
 interface NavigatorTab {
@@ -22,33 +28,15 @@ const STORAGE_PREFIX = 'op_app_state:navigator';
 // Temporarily disabled to prevent iframe navigation misuse.
 const NAVIGATION_DISABLED = true;
 
-const storageKey = (userId: string, instanceId: string) =>
-  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
-
 export function clearNavigatorState(instanceId: string, storage: StorageService) {
-  stateStore.delete(instanceId);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => void storage.removeItem(key));
+  clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 }
 
 export function cloneNavigatorState(fromId: string, toId: string, storage: StorageService) {
-  const stored = stateStore.get(fromId);
-  if (!stored) return;
-  stateStore.set(toId, {
+  cloneInstanceScopedState(stateStore, STORAGE_PREFIX, fromId, toId, storage, (stored) => ({
     ...stored,
     tabs: stored.tabs.map((tab) => ({ ...tab, history: [...tab.history] })),
-  });
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
-    .forEach((key) => {
-      const value = storage.getItemSync(key);
-      if (value === null) return;
-      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
-      void storage.setItem(nextKey, value);
-    });
+  }));
 }
 
 const createTab = (url: string): NavigatorTab => ({
@@ -156,7 +144,9 @@ export class NavigatorComponent implements OnInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    const raw = this.storage.getItemSync(
+      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
+    );
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as NavigatorState;
@@ -264,7 +254,7 @@ export class NavigatorComponent implements OnInit {
 
   private persistState() {
     const userId = this.prefs.userId();
-    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
   }
 
   safeUrl(url?: string): SafeResourceUrl {

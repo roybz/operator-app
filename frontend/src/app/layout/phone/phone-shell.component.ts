@@ -12,10 +12,11 @@ import { AppId } from '../../features/dependencies/app-types';
   template: `
     @if (navOpen) {
       <div
-        style="position:fixed; inset:0; background:var(--color-overlay); z-index:1500;"
+        style="position:fixed; inset:0; background:var(--color-overlay); z-index:2200; touch-action:none; overscroll-behavior:contain;"
         role="button"
         tabindex="0"
         (click)="toggleNav.emit()"
+        (touchmove)="$event.preventDefault()"
         (keydown.enter)="toggleNav.emit()"
         (keydown.space)="toggleNav.emit()"
       ></div>
@@ -23,14 +24,15 @@ import { AppId } from '../../features/dependencies/app-types';
     <aside
       [style.width]="navOpen ? '90vw' : '0'"
       [style.padding]="navOpen ? '16px' : '0'"
-      [style.overflow]="'hidden'"
-      style="position:fixed; top:0; left:0; bottom:0; z-index:1501; background:var(--color-surface); box-shadow:0 12px 24px rgba(0,0,0,0.2); display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box;"
+      [style.overflowX]="'hidden'"
+      [style.overflowY]="navOpen ? 'auto' : 'hidden'"
+      style="position:fixed; top:0; left:0; bottom:0; z-index:2201; background:var(--color-surface); box-shadow:0 12px 24px rgba(0,0,0,0.2); display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box; overscroll-behavior:contain;"
     >
       @if (navOpen) {
-        <div style="display:flex; flex-direction:column; height:100%; min-height:0;">
+        <div style="display:flex; flex-direction:column; flex:1; min-height:0;">
           <button
             (click)="toggleNav.emit()"
-            style="margin-bottom: 8px; padding:10px 12px; font-size:16px;"
+            style="margin-bottom: 8px; padding:10px 12px; font-size:16px; border-radius:5px;"
           >
             {{ 'nav.collapse' | translate }}
           </button>
@@ -52,13 +54,22 @@ import { AppId } from '../../features/dependencies/app-types';
             />
           </div>
           <div style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
-            <button (click)="toggleSettings.emit()" style="padding:10px 12px; font-size:16px;">
+            <button
+              (click)="toggleSettings.emit()"
+              style="padding:10px 12px; font-size:16px; border-radius:5px;"
+            >
               {{ 'nav.settings' | translate }}
             </button>
-            <button (click)="openLicense.emit()" style="padding:10px 12px; font-size:16px;">
+            <button
+              (click)="openLicense.emit()"
+              style="padding:10px 12px; font-size:16px; border-radius:5px;"
+            >
               {{ 'nav.license' | translate }}
             </button>
-            <button (click)="logout.emit()" style="padding:10px 12px; font-size:16px;">
+            <button
+              (click)="logout.emit()"
+              style="padding:10px 12px; font-size:16px; border-radius:5px;"
+            >
               {{ 'nav.logout' | translate }}
             </button>
           </div>

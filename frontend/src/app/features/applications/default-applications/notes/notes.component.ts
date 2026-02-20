@@ -3,6 +3,12 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import {
+  buildInstanceStorageKey,
+  clearInstanceScopedState,
+  cloneInstanceScopedState,
+  persistInstanceState,
+} from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
@@ -42,15 +48,8 @@ interface NotesState {
 const stateStore = new Map<string, NotesState>();
 const STORAGE_PREFIX = 'op_app_state:notes';
 
-const storageKey = (userId: string, instanceId: string) =>
-  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
-
 export function clearNotesState(instanceId: string, storage: StorageService) {
-  stateStore.delete(instanceId);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => void storage.removeItem(key));
+  clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 }
 
 export function cloneNotesState(fromId: string, toId: string, storage: StorageService) {
@@ -63,22 +62,13 @@ export function cloneNotesState(fromId: string, toId: string, storage: StorageSe
     }
     return copy;
   };
-  stateStore.set(toId, {
+  cloneInstanceScopedState(stateStore, STORAGE_PREFIX, fromId, toId, storage, (stored) => ({
     ...stored,
     root: cloneTree(stored.root),
     archiveRoot: cloneTree(stored.archiveRoot),
     selectedId: null,
     selectedIds: [],
-  });
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
-    .forEach((key) => {
-      const value = storage.getItemSync(key);
-      if (value === null) return;
-      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
-      void storage.setItem(nextKey, value);
-    });
+  }));
 }
 
 const createFolder = (name: string, parentId?: string, locked = false): NoteNode => ({
@@ -550,7 +540,9 @@ export class NotesComponent implements OnInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    const raw = this.storage.getItemSync(
+      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
+    );
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as NotesState & { sidebarOpen?: boolean };
@@ -623,7 +615,7 @@ export class NotesComponent implements OnInit {
 
   private persistState() {
     const userId = this.prefs.userId();
-    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
   }
 
   activeRoot() {

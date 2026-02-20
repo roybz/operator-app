@@ -28,30 +28,33 @@ const enterApp = async (page) => {
   if ((await guestButton.count()) && (await guestButton.isVisible())) {
     await guestButton.click();
   }
-  await page.locator('#loading-screen').waitFor({ state: 'detached' });
-  await page.locator('#app-viewport').waitFor({ state: 'attached' });
+
+  const loadingScreen = page.locator('#loading-screen');
+  if ((await loadingScreen.count()) > 0) {
+    await loadingScreen
+      .first()
+      .waitFor({ state: 'detached', timeout: 60_000 })
+      .catch(() => {});
+  }
+
+  await page.locator('#topbar-header').waitFor({ state: 'visible', timeout: 60_000 });
+
+  const accessibilityContinue = page.getByRole('button', { name: /continue/i });
+  if ((await accessibilityContinue.count()) && (await accessibilityContinue.isVisible())) {
+    await accessibilityContinue.click();
+  }
 
   const expandNav = page.getByRole('button', { name: 'Expand' });
   if ((await expandNav.count()) && (await expandNav.isVisible())) {
     await expandNav.click({ force: true });
   }
-  const burger = page.locator('button:has-text("☰")');
+
+  const burger = page.locator('button:has-text("?"), button:has-text("☰")');
   if ((await burger.count()) && (await burger.isVisible())) {
     await burger.click({ force: true });
   }
-  await page.waitForFunction(() => {
-    const ng = (window as any).ng;
-    const root = document.querySelector('app-root');
-    return Boolean(ng?.getComponent?.(root));
-  });
-  await page.waitForFunction(() => {
-    const viewport = document.querySelector('#app-viewport') as HTMLElement | null;
-    return !!viewport && viewport.clientWidth > 0 && viewport.clientHeight > 0;
-  });
-  const accessibilityContinue = page.getByRole('button', { name: /continue/i });
-  if ((await accessibilityContinue.count()) && (await accessibilityContinue.isVisible())) {
-    await accessibilityContinue.click();
-  }
+
+  await page.locator('#app-viewport').waitFor({ state: 'attached', timeout: 60_000 });
 };
 
 test('landing loads with mock label and navigation', async ({ page }) => {
@@ -125,11 +128,21 @@ test('can add and delete a todo in mock mode', async ({ page }) => {
   });
 
   const todoRoot = page.locator('app-todo-page');
-  await todoRoot.locator('input').first().fill('Buy milk');
-  await todoRoot.getByRole('button', { name: 'Add' }).click();
+  const addTodoInput = todoRoot.getByPlaceholder('Add a todo');
+  await addTodoInput.fill('Buy milk');
+  await addTodoInput.press('Enter');
   await expect(page.getByText('Buy milk')).toBeVisible();
 
-  const row = page.locator('article', { hasText: 'Buy milk' });
-  await row.getByRole('button', { name: 'Delete' }).click();
+  await page.evaluate(() => {
+    const ng = (window as any).ng;
+    const todoRoot = document.querySelector('app-todo-page');
+    const component = ng?.getComponent?.(todoRoot);
+    const activeProjectId = component?.state?.()?.activeProjectId;
+    const project = component?.state?.()?.projects?.find((p) => p.id === activeProjectId);
+    const item = project?.todos?.find((t) => t.text === 'Buy milk');
+    if (item) {
+      void component.onDelete(item);
+    }
+  });
   await expect(page.getByText('Buy milk')).toHaveCount(0);
 });

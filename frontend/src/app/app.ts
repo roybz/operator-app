@@ -124,6 +124,11 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         opacity: 1;
       }
 
+      .square-btn {
+        padding: 5px 6px;
+        border-radius: 3px;
+      }
+
       .workspace-chip {
         transition:
           transform 120ms ease,
@@ -293,6 +298,13 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         min-height: 64px;
         resize: vertical;
       }
+
+      .universe-chat__send {
+        min-height: 34px;
+        min-width: 80px;
+        padding: 6px 10px;
+        font-size: 14px;
+      }
     `,
   ],
   template: `
@@ -327,8 +339,10 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             id="phone-collapsed-bar"
             style="position:sticky; top:0; z-index:1300; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:6px 10px; display:flex; align-items:center; justify-content:space-between;"
           >
-            <button (click)="toggleNav()" style="font-size:22px; padding:8px 10px;">☰</button>
-            <button (click)="toggleTopBar()">{{ 'topbar.expand' | translate }}</button>
+            <button class="square-btn" (click)="toggleNav()" style="font-size:22px;">☰</button>
+            <button class="square-btn" (click)="toggleTopBar()">
+              {{ 'topbar.expand' | translate }}
+            </button>
           </div>
         }
         @if (topBarOpen()) {
@@ -514,7 +528,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (!topBarOpen()) {
             <button
               (click)="toggleTopBar()"
-              class="floating-control"
+              class="floating-control square-btn"
               style="right:12px;"
               [style.top.px]="floatingTopBarToggleTop()"
             >
@@ -524,7 +538,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (!navOpen && !phoneMode()) {
             <button
               (click)="toggleNav()"
-              class="floating-control"
+              class="floating-control square-btn"
               style="left:12px;"
               [style.top.px]="floatingSidebarToggleTop()"
             >
@@ -532,7 +546,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             </button>
             <button
               (click)="toggleDialogsHidden()"
-              class="floating-control"
+              class="floating-control square-btn"
               style="left:92px;"
               [style.top.px]="floatingSidebarToggleTop()"
               [disabled]="settingsOpen() || !canEdit()"
@@ -546,11 +560,11 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           @if (phoneMode() && !topBarOpen()) {
             <button
               (click)="toggleNav()"
-              class="floating-control"
+              class="floating-control square-btn"
               style="left:12px;"
               [style.top.px]="floatingTopBarToggleTop()"
             >
-              ☰
+              &#9776;
             </button>
           }
           <div
@@ -679,7 +693,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
 
           @if (settingsOpen()) {
             <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
               (pointerdown)="requestCloseSettings()"
               role="button"
               tabindex="0"
@@ -698,7 +712,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   style="position:sticky; top:24px; float:right; border-radius:999px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"
                   title="{{ 'dialogs.close' | translate }}"
                 >
-                  ✕
+                  &#215;
                 </button>
                 <div
                   style="position:sticky; top:24px; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:5;"
@@ -723,7 +737,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
           }
           @if (licenseOpen()) {
             <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
+              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
               (pointerdown)="licenseOpen.set(false)"
               role="button"
               tabindex="0"
@@ -878,26 +892,26 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                 </div>
               }
               @if (isUniverseOwner() && universeEditHolder()?.id !== auth.session().userId) {
-                <button (click)="takeBackEditPermissions()">
+                <button class="square-btn" (click)="takeBackEditPermissions()">
                   {{ 'universe.takeBackEdit' | translate }}
                 </button>
               }
               @if (allowUniverseChat()) {
-                <button (click)="toggleUniverseChat()">
+                <button class="square-btn" (click)="toggleUniverseChat()">
                   {{ 'universe.openChat' | translate }}
                   @if (universeChatUnread() > 0) {
                     <span>({{ universeChatUnread() }})</span>
                   }
                 </button>
               }
-              <button (click)="toggleUniverseBar()" style="margin-left:auto;">
+              <button class="square-btn" (click)="toggleUniverseBar()" style="margin-left:auto;">
                 {{ 'universe.collapseBar' | translate }}
               </button>
             </div>
           </div>
         } @else {
           <button
-            class="floating-control"
+            class="floating-control square-btn"
             style="right:12px; bottom:12px;"
             (click)="toggleUniverseBar()"
           >
@@ -912,7 +926,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             style="display:flex; justify-content:space-between; align-items:center; padding:12px 12px 0;"
           >
             <h4 style="margin:0;">{{ 'universe.chatTitle' | translate }}</h4>
-            <button (click)="universeChatOpen.set(false)">✕</button>
+            <button class="square-btn" (click)="universeChatOpen.set(false)">&#9866;</button>
           </div>
           <div
             class="universe-chat__messages"
@@ -937,16 +951,33 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
               (keydown.enter)="onUniverseChatKeydown($event)"
               [placeholder]="'universe.chatPlaceholder' | translate"
             ></textarea>
-            <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <div style="display:flex; justify-content:space-between; gap:8px;">
               @if (isUniverseOwner()) {
-                <button (click)="clearUniverseChat()">
+                <button
+                  class="square-btn"
+                  (click)="requestClearUniverseChat()"
+                  [disabled]="!universeChatMessages().length"
+                  [style.opacity]="universeChatMessages().length ? 1 : 0.5"
+                >
                   {{ 'universe.chatClear' | translate }}
                 </button>
               }
-              <button (click)="sendUniverseChat()">{{ 'universe.chatSend' | translate }}</button>
+              <button class="square-btn universe-chat__send" (click)="sendUniverseChat()">
+                {{ 'universe.chatSend' | translate }}
+              </button>
             </div>
           </div>
         </div>
+      }
+
+      @if (clearUniverseChatConfirmOpen()) {
+        <app-confirm-dialog
+          [message]="'universe.chatClearConfirm' | translate"
+          [confirmLabel]="'universe.chatClear' | translate"
+          [cancelLabel]="'dialogs.cancel' | translate"
+          (confirmed)="confirmClearUniverseChat()"
+          (canceled)="clearUniverseChatConfirmOpen.set(false)"
+        />
       }
 
       @if (deleteTargetId()) {
@@ -1091,6 +1122,7 @@ export class AppComponent implements OnInit, OnDestroy {
   pendingUniverseSwitchId = signal<string | null>(null);
   universeBarOpen = signal(true);
   universeChatOpen = signal(false);
+  clearUniverseChatConfirmOpen = signal(false);
   universeChatDraft = signal('');
   universePresence = signal<UniversePresenceEntry[]>([]);
   universeChatMessages = signal<UniverseChatMessage[]>([]);
@@ -1179,7 +1211,8 @@ export class AppComponent implements OnInit, OnDestroy {
       Boolean(this.moveWorkspaceTargetId()) ||
       this.universeSwitchConfirmOpen() ||
       this.phoneModeConfirmOpen() ||
-      this.phoneModeUniversePromptOpen(),
+      this.phoneModeUniversePromptOpen() ||
+      this.clearUniverseChatConfirmOpen(),
   );
 
   moveWorkspaceInstance = computed(() => {
@@ -1420,6 +1453,7 @@ export class AppComponent implements OnInit, OnDestroy {
       void this.storage.removeItem(PHONE_MODE_BOOT_KEY);
       if (prefs.phoneMode) {
         this.auth.savePreferences({ ...prefs, phoneMode: false });
+        this.auth.setLoginPhoneModePreference(false);
       }
     });
     effect(() => {
@@ -1528,6 +1562,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.universeSwitchConfirmOpen.set(false);
       this.deleteTargetId.set(null);
       this.cloneTargetId.set(null);
+      this.clearUniverseChatConfirmOpen.set(false);
       if (userId) {
         this.editingWorkspaceId.set(null);
         this.editingWorkspaceName.set('');
@@ -1804,6 +1839,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.phoneModeReloading = true;
     const prefs = this.auth.preferences();
     this.auth.savePreferences({ ...prefs, phoneMode: nextValue });
+    this.auth.setLoginPhoneModePreference(nextValue);
     if (typeof window !== 'undefined') {
       window.setTimeout(() => window.location.reload(), 60);
     }
@@ -1964,6 +2000,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (forcePhoneMode !== undefined) {
       const prefs = this.auth.getUniversePreferences(userId, universeId);
       this.auth.savePreferences({ ...prefs, phoneMode: forcePhoneMode });
+      this.auth.setLoginPhoneModePreference(forcePhoneMode);
     }
     this.universeMenuOpen.set(false);
   }
@@ -2034,6 +2071,11 @@ export class AppComponent implements OnInit, OnDestroy {
   onWorkspaceClick = (id: string) => {
     if (this.suppressWorkspaceClick) return;
     this.dialogService.switchWorkspace(id);
+    if (this.phoneMode()) {
+      this.cancelWorkspaceRename();
+      this.workspaceMenuOpen.set(false);
+      void this.storage.setItem('op_workspace_bar_open', 'false');
+    }
   };
 
   private updateFavicon(emoji: string) {
@@ -2426,6 +2468,15 @@ export class AppComponent implements OnInit, OnDestroy {
   @HostListener('document:pointerdown', ['$event'])
   onDocumentPointerDown(event: PointerEvent) {
     const target = event.target as HTMLElement | null;
+    const workspaceBar =
+      typeof document !== 'undefined' ? document.getElementById('workspace-bar') : null;
+    const clickedWorkspaceToggle = Boolean(target?.closest('[data-workspace-toggle="true"]'));
+    const insideWorkspaceBar = Boolean(target && workspaceBar?.contains(target));
+    if (this.workspaceMenuOpen() && !insideWorkspaceBar && !clickedWorkspaceToggle) {
+      this.workspaceMenuOpen.set(false);
+      this.cancelWorkspaceRename();
+      void this.storage.setItem('op_workspace_bar_open', 'false');
+    }
     const input = this.workspaceRenameInput()?.nativeElement ?? null;
     if (
       this.editingWorkspaceId() &&
@@ -2578,6 +2629,17 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!universeId) return;
     this.auth.clearUniverseChat(universeId);
     this.universeChatMessages.set([]);
+  }
+
+  requestClearUniverseChat() {
+    if (!this.isUniverseOwner()) return;
+    if (!this.universeChatMessages().length) return;
+    this.clearUniverseChatConfirmOpen.set(true);
+  }
+
+  confirmClearUniverseChat() {
+    this.clearUniverseChatConfirmOpen.set(false);
+    this.clearUniverseChat();
   }
 
   grantEdit(invitee: UniversePresenceEntry) {

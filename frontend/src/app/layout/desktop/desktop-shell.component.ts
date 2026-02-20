@@ -15,17 +15,21 @@ import { StorageService } from '../../core/storage/storage.service';
       [style.width]="navOpen ? '267px' : '0'"
       [style.padding]="navOpen ? '16px' : '0'"
       [style.borderRight]="navOpen ? 'none' : 'none'"
-      [style.overflow]="'hidden'"
+      [style.overflowX]="'hidden'"
+      [style.overflowY]="navOpen ? 'auto' : 'hidden'"
       style="display:flex; flex-direction:column; gap:16px; transition:width 180ms ease; box-sizing:border-box; height:100%; max-height:100%;"
     >
       @if (navOpen) {
-        <div style="display:flex; flex-direction:column; height:100%; min-height:0;">
-          <button (click)="toggleNav.emit()" style="margin-bottom: 8px;">
+        <div style="display:flex; flex-direction:column; flex:1; min-height:0;">
+          <button
+            (click)="toggleNav.emit()"
+            style="margin-bottom: 8px; padding:5px 6px; border-radius:3px;"
+          >
             {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
           </button>
           <button
             (click)="toggleDialogsHidden.emit()"
-            style="margin-bottom: 8px;"
+            style="margin-bottom: 8px; padding:5px 6px; border-radius:3px;"
             [disabled]="settingsOpen || !canEdit"
             [style.opacity]="settingsOpen || !canEdit ? 0.5 : 1"
           >
@@ -36,7 +40,7 @@ import { StorageService } from '../../core/storage/storage.service';
               (click)="toggleResetMenu.emit()"
               [disabled]="settingsOpen || !canEdit"
               [style.opacity]="settingsOpen || !canEdit ? 0.5 : 1"
-              style="width:100%;"
+              style="width:100%; padding:5px 6px; border-radius:3px;"
             >
               {{ 'dialogs.reset' | translate }}
             </button>
@@ -46,6 +50,7 @@ import { StorageService } from '../../core/storage/storage.service';
                   (click)="resetLeft.emit()"
                   [disabled]="settingsOpen || !canEdit"
                   [style.opacity]="settingsOpen || !canEdit ? 0.5 : 1"
+                  style="padding:5px 6px; border-radius:3px;"
                 >
                   {{ 'dialogs.resetLeft' | translate }}
                 </button>
@@ -53,6 +58,7 @@ import { StorageService } from '../../core/storage/storage.service';
                   (click)="resetMiddle.emit()"
                   [disabled]="settingsOpen || !canEdit"
                   [style.opacity]="settingsOpen || !canEdit ? 0.5 : 1"
+                  style="padding:5px 6px; border-radius:3px;"
                 >
                   {{ 'dialogs.resetMiddle' | translate }}
                 </button>
@@ -76,7 +82,7 @@ import { StorageService } from '../../core/storage/storage.service';
             />
           </div>
           <div
-            style="position:fixed; bottom:22px; left:16px; width:246px; display:flex; flex-direction:column; gap:8px;"
+            style="margin-top:12px; width:100%; display:flex; flex-direction:column; gap:8px; padding-top:8px; border-top:1px solid var(--color-border);"
           >
             <div style="display:flex; align-items:center; gap:4px;">
               <span style="font-size:14px;">{{ 'canvas.display' | translate }}</span>
@@ -150,6 +156,7 @@ import { StorageService } from '../../core/storage/storage.service';
                     (click)="resetZoom.emit()"
                     [disabled]="settingsOpen"
                     [style.opacity]="settingsOpen ? 0.5 : 1"
+                    style="padding:5px 6px; border-radius:3px;"
                   >
                     {{ 'canvas.originalScale' | translate }}
                   </button>
@@ -157,6 +164,7 @@ import { StorageService } from '../../core/storage/storage.service';
                     (click)="zoomOut.emit()"
                     [disabled]="settingsOpen"
                     [style.opacity]="settingsOpen ? 0.5 : 1"
+                    style="padding:5px 6px; border-radius:3px;"
                   >
                     {{ 'canvas.zoomOut' | translate }}
                   </button>
@@ -164,6 +172,7 @@ import { StorageService } from '../../core/storage/storage.service';
                     (click)="zoomIn.emit()"
                     [disabled]="settingsOpen"
                     [style.opacity]="settingsOpen ? 0.5 : 1"
+                    style="padding:5px 6px; border-radius:3px;"
                   >
                     {{ 'canvas.zoomIn' | translate }}
                   </button>
@@ -175,11 +184,16 @@ import { StorageService } from '../../core/storage/storage.service';
               [disabled]="!canOpenSettings"
               [style.opacity]="!canOpenSettings ? 0.5 : 1"
               [style.cursor]="!canOpenSettings ? 'not-allowed' : 'pointer'"
+              style="padding:5px 6px; border-radius:3px;"
             >
               {{ 'nav.settings' | translate }}
             </button>
-            <button (click)="openLicense.emit()">{{ 'nav.license' | translate }}</button>
-            <button (click)="logout.emit()">{{ 'nav.logout' | translate }}</button>
+            <button (click)="openLicense.emit()" style="padding:5px 6px; border-radius:3px;">
+              {{ 'nav.license' | translate }}
+            </button>
+            <button (click)="logout.emit()" style="padding:5px 6px; border-radius:3px;">
+              {{ 'nav.logout' | translate }}
+            </button>
           </div>
         </div>
       }
@@ -205,7 +219,7 @@ export class DesktopShellComponent implements OnInit {
   @Input() showZoomControls = false;
   @Input() showCanvasDivider = false;
   @Input() canOpenSettings = true;
-  displayOptionsOpen = true;
+  displayOptionsOpen = false;
   displayOptionsHovered = false;
   private storage = inject(StorageService);
 
@@ -243,7 +257,7 @@ export class DesktopShellComponent implements OnInit {
 
   private readDisplayOptions() {
     const raw = this.storage.getItemSync('op_display_options_open');
-    if (raw === null) return true;
+    if (raw === null) return false;
     return raw === '1';
   }
 }
