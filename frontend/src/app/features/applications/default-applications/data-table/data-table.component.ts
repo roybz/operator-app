@@ -13,10 +13,17 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import {
+  buildInstanceStorageKey,
+  clearInstanceScopedState,
+  cloneInstanceScopedState,
+  persistInstanceState,
+} from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
 export type ColumnType = 'text' | 'number' | 'date' | 'emoji' | 'image' | 'url' | 'boolean';
 
@@ -49,30 +56,19 @@ interface DataTableState {
 const STORAGE_PREFIX = 'op_app_state:data_table';
 const stateStore = new Map<string, DataTableState>();
 
-const storageKey = (userId: string, instanceId: string) =>
-  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
-
 export const clearDataTableState = (instanceId: string, storage: StorageService) => {
-  stateStore.delete(instanceId);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => void storage.removeItem(key));
+  clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 };
 
 export const cloneDataTableState = (fromId: string, toId: string, storage: StorageService) => {
-  const stored = stateStore.get(fromId);
-  if (!stored) return;
-  stateStore.set(toId, JSON.parse(JSON.stringify(stored)) as DataTableState);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
-    .forEach((key) => {
-      const value = storage.getItemSync(key);
-      if (value === null) return;
-      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
-      void storage.setItem(nextKey, value);
-    });
+  cloneInstanceScopedState(
+    stateStore,
+    STORAGE_PREFIX,
+    fromId,
+    toId,
+    storage,
+    (stored) => JSON.parse(JSON.stringify(stored)) as DataTableState,
+  );
 };
 
 const columnTypes: ColumnType[] = ['text', 'number', 'date', 'emoji', 'image', 'url', 'boolean'];
@@ -178,6 +174,12 @@ const uid = (prefix: string) =>
         width: 100%;
         padding: 4px 6px;
         border-radius: 4px;
+      }
+
+      .data-table-editable--cell {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
       }
 
       .data-table-editable:hover {
@@ -369,7 +371,7 @@ const uid = (prefix: string) =>
                           />
                         } @else {
                           <button
-                            class="data-table-editable"
+                            class="data-table-editable data-table-editable--cell"
                             (click)="startCellEdit(row.id, column.id)"
                             [title]="cellValue(row, column.id) || ''"
                           >
@@ -486,7 +488,9 @@ export class DataTableComponent implements OnInit, AfterViewInit {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    const raw = this.storage.getItemSync(
+      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
+    );
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as DataTableState;
@@ -758,7 +762,7 @@ export class DataTableComponent implements OnInit, AfterViewInit {
         ? (eventOrTarget.target as HTMLDivElement | null)
         : eventOrTarget);
     if (!target) return;
-    const { showLeft, showRight } = this.computeScrollShadowState(target);
+    const { showLeft, showRight } = computeHorizontalScrollShadowState(target);
     this.scrollShadows.set({ left: showLeft, right: showRight });
     const dialogBody = this.host.nativeElement
       .closest('.dialog')
@@ -766,18 +770,6 @@ export class DataTableComponent implements OnInit, AfterViewInit {
     if (!dialogBody) return;
     dialogBody.style.setProperty('--phone-scroll-shadow-left', 'none');
     dialogBody.style.setProperty('--phone-scroll-shadow-right', 'none');
-  }
-
-  private computeScrollShadowState(target: HTMLDivElement) {
-    const maxLeft = Math.max(0, target.scrollWidth - target.clientWidth);
-    const scrollLeft = Math.max(0, Math.min(maxLeft, target.scrollLeft));
-    const canScroll = maxLeft > 0.5;
-    const atLeft = scrollLeft <= 0.5;
-    const atRight = maxLeft - scrollLeft <= 0.5;
-    return {
-      showLeft: canScroll && !atLeft,
-      showRight: canScroll && !atRight,
-    };
   }
 
   cellValue(row: DataRow, columnId: string) {
@@ -920,6 +912,6 @@ export class DataTableComponent implements OnInit, AfterViewInit {
 
   private persistState() {
     const userId = this.prefs.userId();
-    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
   }
 }

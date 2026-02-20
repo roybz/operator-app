@@ -15,10 +15,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { LongPressDirective } from '../../../../shared/long-press/long-press.directive';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import {
+  buildInstanceStorageKey,
+  clearInstanceScopedState,
+  cloneInstanceScopedState,
+  persistInstanceState,
+} from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
 interface ChecklistItem {
   id: string;
@@ -58,33 +65,22 @@ interface KanbanState {
 const stateStore = new Map<string, KanbanState>();
 const STORAGE_PREFIX = 'op_app_state:kanban';
 
-const storageKey = (userId: string, instanceId: string) =>
-  `${STORAGE_PREFIX}:${userId}:${instanceId}`;
-
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
 export function clearKanbanState(instanceId: string, storage: StorageService) {
-  stateStore.delete(instanceId);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${instanceId}`))
-    .forEach((key) => void storage.removeItem(key));
+  clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 }
 
 export function cloneKanbanState(fromId: string, toId: string, storage: StorageService) {
-  const stored = stateStore.get(fromId);
-  if (!stored) return;
-  stateStore.set(toId, JSON.parse(JSON.stringify(stored)) as KanbanState);
-  storage
-    .keysSync()
-    .filter((key) => key.startsWith(`${STORAGE_PREFIX}:`) && key.endsWith(`:${fromId}`))
-    .forEach((key) => {
-      const value = storage.getItemSync(key);
-      if (value === null) return;
-      const nextKey = key.replace(`:${fromId}`, `:${toId}`);
-      void storage.setItem(nextKey, value);
-    });
+  cloneInstanceScopedState(
+    stateStore,
+    STORAGE_PREFIX,
+    fromId,
+    toId,
+    storage,
+    (stored) => JSON.parse(JSON.stringify(stored)) as KanbanState,
+  );
 }
 
 @Component({
@@ -543,7 +539,9 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit() {
     const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(storageKey(userId, this.instanceId));
+    const raw = this.storage.getItemSync(
+      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
+    );
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as KanbanState;
@@ -603,7 +601,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
         ? (eventOrTarget.target as HTMLDivElement | null)
         : eventOrTarget);
     if (!target) return;
-    const { showLeft, showRight } = this.computeScrollShadowState(target);
+    const { showLeft, showRight } = computeHorizontalScrollShadowState(target);
     this.scrollShadows.set({ left: showLeft, right: showRight });
     const dialogBody = this.host.nativeElement
       .closest('.dialog')
@@ -611,18 +609,6 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!dialogBody) return;
     dialogBody.style.setProperty('--phone-scroll-shadow-left', 'none');
     dialogBody.style.setProperty('--phone-scroll-shadow-right', 'none');
-  }
-
-  private computeScrollShadowState(target: HTMLDivElement) {
-    const maxLeft = Math.max(0, target.scrollWidth - target.clientWidth);
-    const scrollLeft = Math.max(0, Math.min(maxLeft, target.scrollLeft));
-    const canScroll = maxLeft > 0.5;
-    const atLeft = scrollLeft <= 0.5;
-    const atRight = maxLeft - scrollLeft <= 0.5;
-    return {
-      showLeft: canScroll && !atLeft,
-      showRight: canScroll && !atRight,
-    };
   }
 
   card(cardId: string) {
@@ -1248,6 +1234,6 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private persistState() {
     const userId = this.prefs.userId();
-    void this.storage.setItem(storageKey(userId, this.instanceId), JSON.stringify(this.state()));
+    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
   }
 }
