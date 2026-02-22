@@ -5,6 +5,7 @@ import { StorageAdapter, STORAGE_ADAPTER } from './storage-adapter';
 export class StorageService {
   private cache = new Map<string, string>();
   private hydrated = false;
+  private lastLocalMutationAt = 0;
   private adapter = inject<StorageAdapter>(STORAGE_ADAPTER);
 
   async hydrate() {
@@ -26,6 +27,12 @@ export class StorageService {
       }
     }
     this.hydrated = true;
+  }
+
+  async hydrateAndDetectChanges() {
+    const before = this.cacheSignature();
+    await this.hydrate();
+    return before !== this.cacheSignature();
   }
 
   getItem(key: string) {
@@ -66,15 +73,25 @@ export class StorageService {
 
   async setItem(key: string, value: string) {
     this.cache.set(key, value);
+    this.lastLocalMutationAt = Date.now();
     await this.adapter.setItem(key, value);
   }
 
   async removeItem(key: string) {
     this.cache.delete(key);
+    this.lastLocalMutationAt = Date.now();
     await this.adapter.removeItem(key);
   }
 
   keysSync() {
     return Array.from(this.cache.keys());
+  }
+
+  getLastLocalMutationAt() {
+    return this.lastLocalMutationAt;
+  }
+
+  private cacheSignature() {
+    return JSON.stringify(Array.from(this.cache.entries()).sort(([a], [b]) => a.localeCompare(b)));
   }
 }

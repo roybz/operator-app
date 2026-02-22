@@ -57,6 +57,7 @@ import { cloneTodoState } from './features/applications/default-applications/tod
 import { InstanceSettingsService } from './core/instance-settings.service';
 import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
+import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -1081,6 +1082,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly instanceSettings = inject(InstanceSettingsService);
   readonly storage = inject(StorageService);
   private readonly debugPerf = inject(DebugPerfService);
+  private readonly realtimeSync = inject(RealtimeSyncService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1161,6 +1163,10 @@ export class AppComponent implements OnInit, OnDestroy {
   private lastPhoneAppliedId: string | null = null;
   private phoneBootChecked = false;
   private phoneModeReloading = false;
+  private remoteSyncInterval?: number;
+  private remoteSyncInFlight = false;
+  private remoteSyncReloadPending = false;
+  private lastRealtimeEventSeq = 0;
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
@@ -1594,6 +1600,40 @@ export class AppComponent implements OnInit, OnDestroy {
     });
 
     effect(() => {
+      if (typeof window === 'undefined') return;
+      const shouldSync = this.auth.isLoggedIn() && this.auth.usesExternalAuth();
+      if (!shouldSync) {
+        if (this.remoteSyncInterval) {
+          window.clearInterval(this.remoteSyncInterval);
+          this.remoteSyncInterval = undefined;
+        }
+        this.remoteSyncInFlight = false;
+        this.remoteSyncReloadPending = false;
+        this.realtimeSync.stop();
+        return;
+      }
+      void this.realtimeSync.start();
+      void this.pollRemoteStorageChanges();
+      if (!this.remoteSyncInterval) {
+        this.remoteSyncInterval = window.setInterval(() => {
+          void this.pollRemoteStorageChanges();
+        }, 3000);
+      }
+    });
+
+    effect(() => {
+      if (typeof window === 'undefined') return;
+      const event = this.realtimeSync.lastEvent();
+      if (!event) return;
+      if (event.seq <= this.lastRealtimeEventSeq) return;
+      this.lastRealtimeEventSeq = event.seq;
+      const type = String(event.payload.type || '');
+      if (type === 'storage.invalidate' || type === 'storage.changed' || type === 'invalidate') {
+        void this.pollRemoteStorageChanges();
+      }
+    });
+
+    effect(() => {
       if (!this.auth.isLoggedIn()) return;
       const prefs = this.universePrefs();
       if (!prefs) return;
@@ -1649,8 +1689,29 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.universeInterval) window.clearInterval(this.universeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
+    if (this.remoteSyncInterval) window.clearInterval(this.remoteSyncInterval);
+    this.realtimeSync.stop();
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.updateCanvasBounds);
+    }
+  }
+
+  private async pollRemoteStorageChanges() {
+    if (typeof window === 'undefined') return;
+    if (this.remoteSyncInFlight || this.remoteSyncReloadPending) return;
+    if (!this.auth.isLoggedIn() || !this.auth.usesExternalAuth()) return;
+    this.remoteSyncInFlight = true;
+    try {
+      const changed = await this.storage.hydrateAndDetectChanges();
+      if (!changed) return;
+      const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
+      if (recentLocalWrite) return;
+      this.remoteSyncReloadPending = true;
+      window.location.reload();
+    } catch {
+      // Ignore transient network/auth issues and retry on next interval.
+    } finally {
+      this.remoteSyncInFlight = false;
     }
   }
 
