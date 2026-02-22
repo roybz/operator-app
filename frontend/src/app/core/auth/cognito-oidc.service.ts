@@ -117,6 +117,7 @@ export class CognitoOidcService {
     authorize.searchParams.set('state', state);
     authorize.searchParams.set('code_challenge_method', 'S256');
     authorize.searchParams.set('code_challenge', challenge);
+    authorize.searchParams.set('prompt', 'login');
     window.location.assign(authorize.toString());
   }
 
