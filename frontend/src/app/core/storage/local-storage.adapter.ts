@@ -11,6 +11,14 @@ export class LocalStorageAdapter implements StorageAdapter {
     window.localStorage.setItem(key, value);
   }
 
+  async getItems(keys: string[]) {
+    const out: Record<string, string | null> = {};
+    for (const key of keys) {
+      out[key] = await this.getItem(key);
+    }
+    return out;
+  }
+
   async removeItem(key: string) {
     if (typeof window === 'undefined') return;
     window.localStorage.removeItem(key);

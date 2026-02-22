@@ -10,6 +10,15 @@ export class StorageService {
   async hydrate() {
     const keys = await this.adapter.keys();
     this.cache.clear();
+    if (this.adapter.getItems) {
+      const values = await this.adapter.getItems(keys);
+      for (const key of keys) {
+        const value = values[key] ?? null;
+        if (value !== null) this.cache.set(key, value);
+      }
+      this.hydrated = true;
+      return;
+    }
     for (const key of keys) {
       const value = await this.adapter.getItem(key);
       if (value !== null) {

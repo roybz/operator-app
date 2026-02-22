@@ -1,7 +1,7 @@
 {
   "name": "operator-app",
-  "version": "0.0.1-016",
-  "guestModeOnly": true,
+  "version": "0.0.2",
+  "guestModeOnly": false,
   "license": "MIT",
   "scripts": {
     "ng": "ng",
