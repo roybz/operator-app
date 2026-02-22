@@ -118,7 +118,7 @@ import packageJson from '../../../../package.json';
         >
           {{ 'universe.returnToMainLogin' | translate }}
         </button>
-      } @else if (guestModeOnlyFlag) {
+      } @else if (guestModeOnlyFlag()) {
         @if (allowGuest()) {
           <button
             type="button"
@@ -139,42 +139,52 @@ import packageJson from '../../../../package.json';
           </label>
         }
       } @else {
-        <form (submit)="onSubmit($event)">
-          <label for="login-username" style="display:block; margin: 12px 0 6px;">
-            {{ 'auth.username' | translate }}
-          </label>
-          <input
-            id="login-username"
-            #usernameInput
-            type="text"
-            [value]="username()"
-            (input)="username.set(usernameInput.value)"
-            style="width:100%; padding:10px;"
-          />
-
-          <label for="login-password" style="display:block; margin: 12px 0 6px;">
-            {{ 'auth.password' | translate }}
-          </label>
-          <input
-            id="login-password"
-            #passwordInput
-            type="password"
-            [value]="password()"
-            (input)="password.set(passwordInput.value)"
-            style="width:100%; padding:10px;"
-          />
-
-          @if (error()) {
-            <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
-          }
-
-          <button type="submit" style="margin-top: 16px; padding: 10px 14px;">
+        @if (externalAuthEnabled()) {
+          <button
+            type="button"
+            style="margin-top: 20px; padding: 10px 14px;"
+            (click)="startSecureSignIn()"
+          >
             {{ 'auth.signIn' | translate }}
           </button>
-          <p style="margin-top: 10px; font-size:12px; opacity:0.7;">
-            {{ 'auth.lockoutWarning' | translate }}
-          </p>
-        </form>
+        } @else {
+          <form (submit)="onSubmit($event)">
+            <label for="login-username" style="display:block; margin: 12px 0 6px;">
+              {{ 'auth.username' | translate }}
+            </label>
+            <input
+              id="login-username"
+              #usernameInput
+              type="text"
+              [value]="username()"
+              (input)="username.set(usernameInput.value)"
+              style="width:100%; padding:10px;"
+            />
+
+            <label for="login-password" style="display:block; margin: 12px 0 6px;">
+              {{ 'auth.password' | translate }}
+            </label>
+            <input
+              id="login-password"
+              #passwordInput
+              type="password"
+              [value]="password()"
+              (input)="password.set(passwordInput.value)"
+              style="width:100%; padding:10px;"
+            />
+
+            @if (error()) {
+              <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
+            }
+
+            <button type="submit" style="margin-top: 16px; padding: 10px 14px;">
+              {{ 'auth.signIn' | translate }}
+            </button>
+            <p style="margin-top: 10px; font-size:12px; opacity:0.7;">
+              {{ 'auth.lockoutWarning' | translate }}
+            </p>
+          </form>
+        }
 
         @if (allowGuest()) {
           <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
@@ -273,8 +283,9 @@ export class LoginComponent {
   resetGuest = signal(false);
   confirmResetOpen = signal(false);
   phoneMode = signal(false);
-  guestModeOnlyFlag = packageJson.guestModeOnly === true;
-  allowGuest = computed(() => this.guestModeOnlyFlag || this.auth.orgSettings().allowGuestLogin);
+  guestModeOnlyFlag = computed(() => this.auth.guestModeOnly());
+  allowGuest = computed(() => this.guestModeOnlyFlag() || this.auth.orgSettings().allowGuestLogin);
+  externalAuthEnabled = computed(() => this.auth.usesExternalAuth() && !this.universeLogin());
   universeLogin = computed(() => Boolean(this.auth.universeContext()));
   universeName = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
@@ -347,6 +358,11 @@ export class LoginComponent {
     }
     this.auth.applyLoginPhoneModePreference();
     this.router.navigateByUrl('/');
+  }
+
+  async startSecureSignIn() {
+    this.error.set(null);
+    await this.auth.startExternalLogin();
   }
 
   async onInviteeSubmit(event: Event) {

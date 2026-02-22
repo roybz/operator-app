@@ -17,25 +17,25 @@ import { APP_INITIALIZER } from '@angular/core';
 import { AuthService } from './core/auth.service';
 import { DialogService } from './core/dialog.service';
 import { StorageService } from './core/storage/storage.service';
+import { CognitoOidcService } from './core/auth/cognito-oidc.service';
+import { getOpConfig } from './core/op-config';
 
 export function httpLoaderFactory(http: HttpClient) {
   return new TranslateHttpLoader(http, '/assets/i18n/', '.json');
 }
 
-const resolveOpConfig = () => {
-  const globalConfig = (globalThis as { __OP_CONFIG__?: Record<string, unknown> }).__OP_CONFIG__;
-  return globalConfig ?? {};
-};
-
-const resolveStorageAdapter = () => {
-  const config = resolveOpConfig();
+const resolveStorageAdapter = (cognitoOidc: CognitoOidcService) => {
+  const config = getOpConfig();
   const storageMode = config['storageMode'];
   if (storageMode !== 'remote') return new LocalStorageAdapter();
   const baseUrl = String(config['storageApiBaseUrl'] ?? config['apiBaseUrl'] ?? '').replace(
     /\/$/,
     '',
   );
-  return new RemoteStorageAdapter(baseUrl);
+  return new RemoteStorageAdapter(baseUrl, {
+    accessTokenProvider: () => cognitoOidc.getAccessToken(),
+    localFallback: new LocalStorageAdapter(),
+  });
 };
 
 export const appConfig: ApplicationConfig = {
@@ -54,13 +54,19 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
-    { provide: STORAGE_ADAPTER, useFactory: resolveStorageAdapter },
+    { provide: STORAGE_ADAPTER, useFactory: resolveStorageAdapter, deps: [CognitoOidcService] },
     {
       provide: APP_INITIALIZER,
       multi: true,
-      deps: [StorageService, AuthService, DialogService],
-      useFactory: (storage: StorageService, auth: AuthService, dialog: DialogService) => {
+      deps: [CognitoOidcService, StorageService, AuthService, DialogService],
+      useFactory: (
+        cognitoOidc: CognitoOidcService,
+        storage: StorageService,
+        auth: AuthService,
+        dialog: DialogService,
+      ) => {
         return async () => {
+          await cognitoOidc.completeRedirectIfNeeded();
           await storage.hydrate();
           await auth.hydrate();
           await dialog.hydrate();

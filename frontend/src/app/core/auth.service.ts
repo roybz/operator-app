@@ -4,6 +4,7 @@ import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
 import packageJson from '../../../package.json';
 import { StorageService } from './storage/storage.service';
+import { CognitoOidcService } from './auth/cognito-oidc.service';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -276,6 +277,7 @@ export class AuthService {
 
   private translate = inject(TranslateService);
   private storage = inject(StorageService);
+  private cognitoOidc = inject(CognitoOidcService);
 
   constructor() {
     this.updateUniverseContextFromLocation();
@@ -283,11 +285,16 @@ export class AuthService {
 
   async hydrate() {
     await this.loadFromStorage();
+    this.applyExternalAuthSession();
     this.updateUniverseContextFromLocation();
     this.readySignal.set(true);
   }
 
   async login(username: string, password: string): Promise<{ ok: boolean; message?: string }> {
+    if (this.usesExternalAuth()) {
+      await this.cognitoOidc.startLogin();
+      return { ok: false };
+    }
     if (this.guestModeOnly()) {
       return { ok: false, message: 'auth.error.guestOnly' };
     }
@@ -371,6 +378,7 @@ export class AuthService {
   }
 
   logout() {
+    const hadExternalAuth = this.usesExternalAuth();
     const session = this.sessionSignal();
     const universeId = session.universeId ?? null;
     if (universeId && session.userId) {
@@ -386,6 +394,25 @@ export class AuthService {
       universeId: null,
     });
     this.persistSession();
+    if (hadExternalAuth) {
+      this.cognitoOidc.clearSession();
+    }
+  }
+
+  usesExternalAuth(): boolean {
+    return this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();
+  }
+
+  canUsePasswordLogin(): boolean {
+    return !this.usesExternalAuth();
+  }
+
+  async startExternalLogin() {
+    await this.cognitoOidc.startLogin();
+  }
+
+  startExternalLogout() {
+    this.cognitoOidc.startLogout();
   }
 
   async createUser(input: { username: string; password: string; role: UserRole }): Promise<{
@@ -997,6 +1024,56 @@ export class AuthService {
       key.startsWith('op_preview_dialog_state_v1:');
     if (!allowed) return false;
     return key.includes(`:${userId}:`);
+  }
+
+  private applyExternalAuthSession() {
+    if (!this.usesExternalAuth()) return;
+    const profile = this.cognitoOidc.getProfile();
+    if (!profile) return;
+    if (!this.usersSignal().some((user) => user.id === profile.sub)) {
+      this.usersSignal.set([
+        ...this.usersSignal(),
+        {
+          id: profile.sub,
+          username: profile.username,
+          password: '',
+          role: 'admin',
+        },
+      ]);
+      this.persistUsers();
+    }
+    if (!this.getUniversesForUser(profile.sub).length) {
+      const universeId = this.createUniverseId();
+      const universeName = 'Universe';
+      this.universesSignal.set({
+        ...this.universesSignal(),
+        [profile.sub]: [{ id: universeId, name: universeName }],
+      });
+      this.activeUniverseSignal.set({ ...this.activeUniverseSignal(), [profile.sub]: universeId });
+      this.prefsSignal.set({
+        ...this.prefsSignal(),
+        [this.universeKey(profile.sub, universeId)]: {
+          ...this.defaultPreferences(),
+          universeId,
+          universeName,
+        },
+      });
+      this.persistUniverses();
+      this.persistActiveUniverses();
+      this.persistPrefs();
+    }
+    const session = this.sessionSignal();
+    const activeUniverseId = this.getActiveUniverseId(profile.sub);
+    this.sessionSignal.set({
+      userId: profile.sub,
+      previewUserId: null,
+      previewPersist: false,
+      sessionRole: 'admin',
+      sessionUsername: profile.username,
+      universeOwnerId: null,
+      universeId: activeUniverseId ?? session.universeId ?? null,
+    });
+    this.persistSession();
   }
 
   private async loadFromStorage() {

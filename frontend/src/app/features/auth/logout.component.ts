@@ -15,11 +15,16 @@ export class LogoutComponent implements OnInit {
 
   ngOnInit() {
     const wasLoggedIn = this.auth.isLoggedIn();
+    const externalAuth = this.auth.usesExternalAuth();
     if (wasLoggedIn) {
       this.auth.logout();
     }
     if (wasLoggedIn) {
       void this.storage.removeItem('op_session');
+    }
+    if (externalAuth) {
+      this.auth.startExternalLogout();
+      return;
     }
     const url = wasLoggedIn ? '/login?loggedOut=1' : '/login';
     if (typeof window !== 'undefined') {
