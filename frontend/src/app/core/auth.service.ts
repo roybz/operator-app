@@ -1105,6 +1105,7 @@ export class AuthService {
       universeId: activeUniverseId ?? session.universeId ?? null,
     });
     this.persistSession();
+    this.applyLoginPhoneModePreference();
   }
 
   private async loadFromStorage() {
@@ -1569,7 +1570,6 @@ export class AuthService {
   }
 
   getDefaultPhoneMode() {
-    if (typeof window !== 'undefined' && window.innerWidth <= 1024) return true;
     return this.isPhoneDevice();
   }
 
