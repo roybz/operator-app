@@ -1,4 +1,13 @@
-import { Component, HostListener, Input, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  HostListener,
+  Input,
+  OnInit,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -17,6 +26,9 @@ import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+
+const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
 
 @Component({
   selector: 'app-todo-page',
@@ -489,12 +501,32 @@ export class TodoPageComponent implements OnInit {
   private readonly importGuard = inject(ImportGuardService);
   private readonly exportGuard = inject(ExportGuardService);
   private readonly storage = inject(StorageService);
+  private readonly remoteConflict = inject(RemoteConflictService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private lastRemoteStorageChangeSeq = 0;
+  private editFocusCount = 0;
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event) return;
+      if (event.seq <= this.lastRemoteStorageChangeSeq) return;
+      this.lastRemoteStorageChangeSeq = event.seq;
+      const key = this.instanceStorageKey();
+      if (!this.instanceId || !event.keys.includes(key)) return;
+      if (this.isLocallyEditing()) {
+        this.remoteConflict.queue([key], 'dirty');
+        return;
+      }
+      void this.reload({ suppressNormalizationPersist: true });
+    });
+  }
 
   async ngOnInit() {
     await this.reload();
   }
 
-  async reload() {
+  async reload(options?: { suppressNormalizationPersist?: boolean }) {
     this.err.set(null);
     this.loading.set(true);
     try {
@@ -503,7 +535,7 @@ export class TodoPageComponent implements OnInit {
       this.todos.set(this.activeProject(nextState)?.todos ?? []);
       const collapsed = nextState.subtaskCollapsed ?? {};
       this.subtaskCollapsed.set(collapsed);
-      this.syncSubtaskCollapse(this.activeProject(nextState)?.todos ?? []);
+      this.syncSubtaskCollapse(this.activeProject(nextState)?.todos ?? [], options);
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     } finally {
@@ -979,7 +1011,7 @@ export class TodoPageComponent implements OnInit {
     return this.subtaskCollapsed()[todoId] ?? true;
   }
 
-  private syncSubtaskCollapse(todos: Todo[]) {
+  private syncSubtaskCollapse(todos: Todo[], options?: { suppressNormalizationPersist?: boolean }) {
     const next = { ...this.subtaskCollapsed() };
     let changed = false;
     todos.forEach((todo) => {
@@ -993,7 +1025,29 @@ export class TodoPageComponent implements OnInit {
       const current = this.state();
       const updated = { ...current, subtaskCollapsed: next };
       this.state.set(updated);
-      saveTodoState(this.storage, this.instanceId, this.prefs.userId(), updated);
+      if (!options?.suppressNormalizationPersist) {
+        saveTodoState(this.storage, this.instanceId, this.prefs.userId(), updated);
+      }
+    }
+  }
+
+  @HostListener('focusin', ['$event'])
+  onFocusIn(event: FocusEvent) {
+    const target = event.target as HTMLElement | null;
+    if (!target || !this.host.nativeElement.contains(target)) return;
+    if (!this.isEditableTarget(target)) return;
+    this.editFocusCount += 1;
+    this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  @HostListener('focusout', ['$event'])
+  onFocusOut(event: FocusEvent) {
+    const target = event.target as HTMLElement | null;
+    if (!target || !this.host.nativeElement.contains(target)) return;
+    if (!this.isEditableTarget(target)) return;
+    this.editFocusCount = Math.max(0, this.editFocusCount - 1);
+    if (!this.isLocallyEditing()) {
+      this.remoteConflict.clearDirty(this.instanceStorageKey());
     }
   }
 
@@ -1150,5 +1204,23 @@ export class TodoPageComponent implements OnInit {
         if (todo && sub) this.finishSubtaskEdit(todo.id, sub);
       }
     }
+  }
+
+  private instanceStorageKey() {
+    return `${TODO_STATE_STORAGE_KEY}:${this.prefs.userId()}:${this.instanceId || ''}`;
+  }
+
+  private isLocallyEditing() {
+    return Boolean(this.editFocusCount > 0 || this.editingId() || this.editingSubtaskId());
+  }
+
+  private isEditableTarget(target: HTMLElement) {
+    if (target.isContentEditable) return true;
+    if (target instanceof HTMLTextAreaElement) return true;
+    if (target instanceof HTMLInputElement) {
+      const type = (target.type || 'text').toLowerCase();
+      return !['checkbox', 'radio', 'button', 'submit', 'file', 'color'].includes(type);
+    }
+    return false;
   }
 }

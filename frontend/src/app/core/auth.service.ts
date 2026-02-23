@@ -158,6 +158,7 @@ const DEFAULT_ADMIN_HASH =
 const LOGIN_SECURITY_KEY = 'op_login_security';
 const LOGIN_PHONE_MODE_KEY = 'op_login_phone_mode';
 const LOGIN_PHONE_MODE_APPLY_KEY = 'op_login_phone_mode_apply';
+const DEVICE_UI_PREFS_KEY = 'op_device_ui_prefs_v1';
 const SUPPORTED_LANGUAGES = [
   'af',
   'am',
@@ -578,6 +579,9 @@ export class AuthService {
     if (!effectiveId) return;
     const universeId = this.getActiveUniverseId(effectiveId) ?? prefs.universeId;
     const key = this.universeKey(effectiveId, universeId || this.createUniverseId());
+    if (this.usesExternalAuth()) {
+      this.setDevicePhoneModePreferenceFor(effectiveId, prefs.phoneMode);
+    }
     const currentName = universeId
       ? this.getUniversesForUser(effectiveId).find((u) => u.id === universeId)?.name
       : undefined;
@@ -595,6 +599,12 @@ export class AuthService {
       ...prefs,
       universeId: universeId ?? prefs.universeId,
       universeName: safeName,
+      ...(this.usesExternalAuth()
+        ? {
+            phoneMode:
+              this.prefsSignal()[key]?.phoneMode ?? this.defaultPreferences().phoneMode,
+          }
+        : {}),
     };
 
     if (this.isPreviewing() && !this.previewPersist()) {
@@ -639,6 +649,12 @@ export class AuthService {
     if (!this.isLoggedIn()) return;
     const pref = this.getLoginPhoneModePreference();
     if (pref === null) return;
+    if (this.usesExternalAuth()) {
+      const effectiveId = this.effectiveUserId();
+      if (!effectiveId) return;
+      this.setDevicePhoneModePreferenceFor(effectiveId, pref);
+      return;
+    }
     const prefs = this.preferences();
     if (prefs.phoneMode === pref) return;
     void this.storage.setItem(LOGIN_PHONE_MODE_APPLY_KEY, String(Date.now()));
@@ -685,7 +701,23 @@ export class AuthService {
       merged.hideViewportSizingControls = legacyHide;
       merged.hideZoomControls = legacyHide;
     }
+    if (this.usesExternalAuth()) {
+      const localPhoneMode = this.getDevicePhoneModePreferenceFor(userId);
+      merged.phoneMode = localPhoneMode ?? this.getDefaultPhoneMode();
+    }
     return merged;
+  }
+
+  private getDevicePhoneModePreferenceFor(userId: string) {
+    const raw = this.safeJson<Record<string, { phoneMode?: boolean }>>(DEVICE_UI_PREFS_KEY, {});
+    const phoneMode = raw[userId]?.phoneMode;
+    return typeof phoneMode === 'boolean' ? phoneMode : null;
+  }
+
+  private setDevicePhoneModePreferenceFor(userId: string, enabled: boolean) {
+    const raw = this.safeJson<Record<string, { phoneMode?: boolean }>>(DEVICE_UI_PREFS_KEY, {});
+    raw[userId] = { ...(raw[userId] ?? {}), phoneMode: Boolean(enabled) };
+    this.persist(DEVICE_UI_PREFS_KEY, raw);
   }
 
   private effectiveUserId(): string | null {

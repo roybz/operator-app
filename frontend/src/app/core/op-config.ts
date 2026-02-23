@@ -11,6 +11,8 @@ export interface OpRuntimeConfig {
   apiBaseUrl?: string;
   storageMode?: 'local' | 'remote';
   storageApiBaseUrl?: string;
+  realtimeEnabled?: boolean;
+  realtimeWsUrl?: string;
   mockMode?: boolean;
   guestModeOnly?: boolean;
   debugPerf?: boolean;

@@ -2,6 +2,8 @@ window.__OP_CONFIG__ = {
   apiBaseUrl: 'https://4j8meghx2i.execute-api.us-east-1.amazonaws.com',
   storageMode: 'remote', // 'local' | 'remote'
   storageApiBaseUrl: 'https://4j8meghx2i.execute-api.us-east-1.amazonaws.com',
+  realtimeEnabled: true,
+  realtimeWsUrl: 'wss://kor4dh9vtl.execute-api.us-east-1.amazonaws.com/prod',
   mockMode: true,
   guestModeOnly: false,
   debugPerf: false,

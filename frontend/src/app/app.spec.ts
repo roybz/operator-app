@@ -10,6 +10,8 @@ import { AppComponent } from './app';
 import { STORAGE_ADAPTER } from './core/storage/storage-adapter';
 import { LocalStorageAdapter } from './core/storage/local-storage.adapter';
 import { StorageService } from './core/storage/storage.service';
+import { RemoteConflictService } from './core/realtime/remote-conflict.service';
+import { vi } from 'vitest';
 
 type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean; guestModeOnly?: boolean } };
 
@@ -95,5 +97,89 @@ describe('App', () => {
 
     expect(fixture.componentInstance.siteTitle()).toContain('Operator App');
     expect(fixture.componentInstance.loadingVisible()).toBe(false);
+  });
+
+  it('suppresses one rebroadcasted remote-change event after forced apply', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      storage: StorageService;
+      auth: { isLoggedIn: () => boolean; usesExternalAuth: () => boolean };
+      applyRemoteStorageChange: (keys: string[]) => Promise<void>;
+      suppressRemoteChangeSignature: string | null;
+      suppressRemoteChangeUntil: number;
+      lastStorageRemoteChangeSeq: number;
+    };
+    const storage = TestBed.inject(StorageService);
+    const applySpy = vi.spyOn(app, 'applyRemoteStorageChange').mockResolvedValue();
+    vi.spyOn(app.auth, 'isLoggedIn').mockReturnValue(true);
+    vi.spyOn(app.auth, 'usesExternalAuth').mockReturnValue(true);
+
+    app.suppressRemoteChangeSignature = 'a|b';
+    app.suppressRemoteChangeUntil = Date.now() + 5_000;
+    app.lastStorageRemoteChangeSeq = 0;
+
+    storage.lastRemoteChange.set({ seq: 1, keys: ['b', 'a'] });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(applySpy).not.toHaveBeenCalled();
+    expect(app.suppressRemoteChangeSignature).toBeNull();
+    expect(app.suppressRemoteChangeUntil).toBe(0);
+  });
+
+  it('queues then auto-applies deferred remote conflict when idle', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      remoteConflictPending: () => { keys: string[] } | null;
+      remoteConflictBannerVisible: { set: (v: boolean) => void; (): boolean };
+      remoteConflict: RemoteConflictService;
+      storage: StorageService;
+      applyRemoteStorageChange: (keys: string[], options?: { force?: boolean }) => Promise<void>;
+      tryAutoApplyDeferredRemoteConflict: () => Promise<void>;
+      suppressRemoteChangeSignature: string | null;
+      suppressRemoteChangeUntil: number;
+    };
+    const storage = TestBed.inject(StorageService);
+    const remoteConflict = TestBed.inject(RemoteConflictService);
+    const emitSpy = vi.spyOn(storage, 'emitRemoteChange');
+    const applySpy = vi.spyOn(app, 'applyRemoteStorageChange').mockResolvedValue();
+
+    remoteConflict.queue(['x', 'a'], 'dirty');
+    app.remoteConflictBannerVisible.set(true);
+    vi.spyOn(storage, 'getLastLocalMutationAt').mockReturnValue(0);
+
+    await app.tryAutoApplyDeferredRemoteConflict();
+
+    expect(applySpy).toHaveBeenCalledWith(['a', 'x'], { force: true });
+    expect(emitSpy).toHaveBeenCalledWith(['a', 'x']);
+    expect(app.remoteConflictPending()).toBeNull();
+    expect(app.remoteConflictBannerVisible()).toBe(false);
+    expect(app.suppressRemoteChangeSignature).toBe('a|x');
+    expect(app.suppressRemoteChangeUntil).toBeGreaterThan(Date.now() - 1000);
+  });
+
+  it('keeps deferred remote conflict pending while local writes are still recent', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      remoteConflictPending: () => { keys: string[] } | null;
+      remoteConflict: RemoteConflictService;
+      storage: StorageService;
+      applyRemoteStorageChange: (keys: string[], options?: { force?: boolean }) => Promise<void>;
+      tryAutoApplyDeferredRemoteConflict: () => Promise<void>;
+      scheduleDeferredRemoteApply: () => void;
+    };
+    const storage = TestBed.inject(StorageService);
+    const remoteConflict = TestBed.inject(RemoteConflictService);
+    const applySpy = vi.spyOn(app, 'applyRemoteStorageChange').mockResolvedValue();
+    const rescheduleSpy = vi.spyOn(app, 'scheduleDeferredRemoteApply').mockImplementation(() => {});
+
+    remoteConflict.queue(['busy-key'], 'recent-local-write');
+    vi.spyOn(storage, 'getLastLocalMutationAt').mockReturnValue(Date.now());
+
+    await app.tryAutoApplyDeferredRemoteConflict();
+
+    expect(applySpy).not.toHaveBeenCalled();
+    expect(rescheduleSpy).toHaveBeenCalled();
+    expect(app.remoteConflictPending()?.keys).toEqual(['busy-key']);
   });
 });
