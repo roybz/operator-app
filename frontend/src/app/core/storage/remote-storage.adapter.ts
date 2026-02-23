@@ -163,6 +163,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
 
   private async canUseRemote() {
     if (!this.baseUrl) return false;
+    if (this.isTestModeEnabled()) return false;
     const token = await this.options.accessTokenProvider?.();
     return Boolean(token);
   }
@@ -170,6 +171,18 @@ export class RemoteStorageAdapter implements StorageAdapter {
   private async authHeaders(headers: Record<string, string> = {}) {
     const token = await this.options.accessTokenProvider?.();
     return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+  }
+
+  private isTestModeEnabled() {
+    if (typeof localStorage === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem('op_org_settings');
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as { testModeEnabled?: boolean };
+      return Boolean(parsed.testModeEnabled);
+    } catch {
+      return false;
+    }
   }
 
   private byteLength(value: string) {

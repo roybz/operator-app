@@ -601,8 +601,7 @@ export class AuthService {
       universeName: safeName,
       ...(this.usesExternalAuth()
         ? {
-            phoneMode:
-              this.prefsSignal()[key]?.phoneMode ?? this.defaultPreferences().phoneMode,
+            phoneMode: this.prefsSignal()[key]?.phoneMode ?? this.defaultPreferences().phoneMode,
           }
         : {}),
     };
@@ -1451,11 +1450,15 @@ export class AuthService {
   }
 
   private persistOrgSettings() {
+    this.mirrorOrgSettingsForRuntimeGuards(this.orgSettingsSignal());
     this.persist(ORG_SETTINGS_KEY, this.orgSettingsSignal());
   }
 
   private persist(key: string, value: unknown) {
-    void this.storage.setJson(key, value);
+    void this.storage.setJson(key, value).catch((error) => {
+      if (this.shouldIgnorePersistConflict(key, error)) return;
+      throw error;
+    });
   }
 
   private persistLoginSecurity() {
@@ -2066,6 +2069,31 @@ export class AuthService {
 
   private universeGuestCounterKey(universeId: string) {
     return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
+  }
+
+  private shouldIgnorePersistConflict(key: string, error: unknown) {
+    if (!this.isUniverseEphemeralKey(key)) return false;
+    if (!(error instanceof Error)) return false;
+    const maybeCode = (error as Error & { code?: unknown }).code;
+    const code = typeof maybeCode === 'string' ? maybeCode : '';
+    const message = String(error.message || '');
+    return code === 'version_conflict' || message.includes('version_conflict');
+  }
+
+  private isUniverseEphemeralKey(key: string) {
+    return (
+      key.startsWith(`${UNIVERSE_PRESENCE_KEY}:`) ||
+      key.startsWith(`${UNIVERSE_GUEST_COUNTER_KEY}:`)
+    );
+  }
+
+  private mirrorOrgSettingsForRuntimeGuards(value: OrgSettings) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(value));
+    } catch {
+      // Ignore browser storage failures; async storage remains source of truth.
+    }
   }
 
   markUniverseKick(universeId: string) {

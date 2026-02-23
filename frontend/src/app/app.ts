@@ -1131,7 +1131,8 @@ export class AppComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
-    return !backendConnected || this.auth.orgSettings().testModeEnabled;
+    const isGuest = this.auth.actualUser()?.id === 'u_guest';
+    return isGuest || !backendConnected || this.auth.orgSettings().testModeEnabled;
   });
   navOpen = true;
   editingWorkspaceId = signal<string | null>(null);
