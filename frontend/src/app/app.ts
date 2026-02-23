@@ -1165,8 +1165,9 @@ export class AppComponent implements OnInit, OnDestroy {
   private phoneModeReloading = false;
   private remoteSyncInterval?: number;
   private remoteSyncInFlight = false;
-  private remoteSyncReloadPending = false;
+  private remoteSyncApplyPending = false;
   private lastRealtimeEventSeq = 0;
+  private lastStorageRemoteChangeSeq = 0;
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
@@ -1608,7 +1609,7 @@ export class AppComponent implements OnInit, OnDestroy {
           this.remoteSyncInterval = undefined;
         }
         this.remoteSyncInFlight = false;
-        this.remoteSyncReloadPending = false;
+        this.remoteSyncApplyPending = false;
         this.realtimeSync.stop();
         return;
       }
@@ -1630,7 +1631,20 @@ export class AppComponent implements OnInit, OnDestroy {
       const type = String(event.payload.type || '');
       if (type === 'storage.invalidate' || type === 'storage.changed' || type === 'invalidate') {
         void this.pollRemoteStorageChanges();
+        return;
       }
+      if (type === 'presence.changed') {
+        // Reuse existing presence refresh logic; harmless if current view doesn't use it.
+        this.syncUniverseState();
+      }
+    });
+
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event) return;
+      if (event.seq <= this.lastStorageRemoteChangeSeq) return;
+      this.lastStorageRemoteChangeSeq = event.seq;
+      void this.applyRemoteStorageChange(event.keys);
     });
 
     effect(() => {
@@ -1698,20 +1712,54 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private async pollRemoteStorageChanges() {
     if (typeof window === 'undefined') return;
-    if (this.remoteSyncInFlight || this.remoteSyncReloadPending) return;
+    if (this.remoteSyncInFlight || this.remoteSyncApplyPending) return;
     if (!this.auth.isLoggedIn() || !this.auth.usesExternalAuth()) return;
     this.remoteSyncInFlight = true;
     try {
-      const changed = await this.storage.hydrateAndDetectChanges();
-      if (!changed) return;
+      const changedKeys = await this.storage.hydrateAndGetChangedKeys();
+      if (changedKeys.length === 0) return;
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       if (recentLocalWrite) return;
-      this.remoteSyncReloadPending = true;
-      window.location.reload();
+      this.remoteSyncApplyPending = true;
     } catch {
       // Ignore transient network/auth issues and retry on next interval.
     } finally {
       this.remoteSyncInFlight = false;
+    }
+  }
+
+  private async applyRemoteStorageChange(changedKeys: string[]) {
+    if (!changedKeys.length) return;
+    const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
+    if (recentLocalWrite) {
+      this.remoteSyncApplyPending = false;
+      return;
+    }
+    try {
+      const shouldRefreshAuth = changedKeys.some((key) =>
+        [
+          'op_users',
+          'op_session',
+          'op_prefs',
+          'op_preview_prefs',
+          'op_org_settings',
+          'op_universes',
+          'op_active_universe',
+          'op_invitees',
+        ].includes(key),
+      );
+      const shouldRefreshDialogs = changedKeys.some(
+        (key) =>
+          key.startsWith('op_dialog_state_v1:') || key.startsWith('op_preview_dialog_state_v1:'),
+      );
+      if (shouldRefreshAuth) {
+        await this.auth.hydrate();
+      }
+      if (shouldRefreshDialogs || shouldRefreshAuth) {
+        await this.dialogService.hydrate();
+      }
+    } finally {
+      this.remoteSyncApplyPending = false;
     }
   }
 

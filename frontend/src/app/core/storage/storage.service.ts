@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { StorageAdapter, STORAGE_ADAPTER } from './storage-adapter';
 
 @Injectable({ providedIn: 'root' })
@@ -6,7 +6,9 @@ export class StorageService {
   private cache = new Map<string, string>();
   private hydrated = false;
   private lastLocalMutationAt = 0;
+  private remoteChangeSeq = 0;
   private adapter = inject<StorageAdapter>(STORAGE_ADAPTER);
+  readonly lastRemoteChange = signal<{ seq: number; keys: string[] } | null>(null);
 
   async hydrate() {
     const keys = await this.adapter.keys();
@@ -30,9 +32,25 @@ export class StorageService {
   }
 
   async hydrateAndDetectChanges() {
-    const before = this.cacheSignature();
+    const before = new Map(this.cache);
     await this.hydrate();
-    return before !== this.cacheSignature();
+    const changedKeys = this.computeChangedKeys(before, this.cache);
+    if (changedKeys.length > 0) {
+      this.remoteChangeSeq += 1;
+      this.lastRemoteChange.set({ seq: this.remoteChangeSeq, keys: changedKeys });
+    }
+    return changedKeys.length > 0;
+  }
+
+  async hydrateAndGetChangedKeys() {
+    const before = new Map(this.cache);
+    await this.hydrate();
+    const changedKeys = this.computeChangedKeys(before, this.cache);
+    if (changedKeys.length > 0) {
+      this.remoteChangeSeq += 1;
+      this.lastRemoteChange.set({ seq: this.remoteChangeSeq, keys: changedKeys });
+    }
+    return changedKeys;
   }
 
   getItem(key: string) {
@@ -93,5 +111,16 @@ export class StorageService {
 
   private cacheSignature() {
     return JSON.stringify(Array.from(this.cache.entries()).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  private computeChangedKeys(before: Map<string, string>, after: Map<string, string>) {
+    const changed = new Set<string>();
+    for (const [key, value] of before.entries()) {
+      if (!after.has(key) || after.get(key) !== value) changed.add(key);
+    }
+    for (const [key, value] of after.entries()) {
+      if (!before.has(key) || before.get(key) !== value) changed.add(key);
+    }
+    return Array.from(changed).sort();
   }
 }

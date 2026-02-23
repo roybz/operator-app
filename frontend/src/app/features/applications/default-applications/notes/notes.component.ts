@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, Input, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
@@ -537,37 +537,24 @@ export class NotesComponent implements OnInit {
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
+  private lastRemoteStorageChangeSeq = 0;
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event) return;
+      if (event.seq <= this.lastRemoteStorageChangeSeq) return;
+      this.lastRemoteStorageChangeSeq = event.seq;
+      const userId = this.prefs.userId();
+      const key = buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId || '');
+      if (!this.instanceId || !event.keys.includes(key)) return;
+      if (this.richFocused()) return;
+      this.reloadFromStorage({ persistNormalized: false });
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as NotesState & { sidebarOpen?: boolean };
-        const sidebarDesktop =
-          parsed.sidebarOpenDesktop ?? parsed.sidebarOpen ?? this.state().sidebarOpenDesktop;
-        const sidebarPhone =
-          parsed.sidebarOpenPhone ??
-          (this.isPhoneMode() && !parsed.phoneSidebarInit
-            ? false
-            : (parsed.sidebarOpen ?? this.state().sidebarOpenPhone));
-        const next = {
-          ...parsed,
-          sidebarOpenDesktop: sidebarDesktop,
-          sidebarOpenPhone: sidebarPhone,
-          phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
-        };
-        this.state.set(next);
-        stateStore.set(this.instanceId, next);
-        this.persistState();
-        this.syncRichSnapshot();
-        return;
-      } catch {
-        // ignore malformed stored data
-      }
-    }
+    if (this.reloadFromStorage({ persistNormalized: true })) return;
     const stored = stateStore.get(this.instanceId);
     if (stored) {
       const nextStored = this.cloneState(stored);
@@ -605,6 +592,37 @@ export class NotesComponent implements OnInit {
     stateStore.set(this.instanceId, next);
     this.persistState();
     this.syncRichSnapshot();
+  }
+
+  private reloadFromStorage(options?: { persistNormalized?: boolean }) {
+    const userId = this.prefs.userId();
+    const raw = this.storage.getItemSync(buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId));
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as NotesState & { sidebarOpen?: boolean };
+      const sidebarDesktop =
+        parsed.sidebarOpenDesktop ?? parsed.sidebarOpen ?? this.state().sidebarOpenDesktop;
+      const sidebarPhone =
+        parsed.sidebarOpenPhone ??
+        (this.isPhoneMode() && !parsed.phoneSidebarInit
+          ? false
+          : (parsed.sidebarOpen ?? this.state().sidebarOpenPhone));
+      const next = {
+        ...parsed,
+        sidebarOpenDesktop: sidebarDesktop,
+        sidebarOpenPhone: sidebarPhone,
+        phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+      };
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      if (options?.persistNormalized) {
+        this.persistState();
+      }
+      this.syncRichSnapshot();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private commit(next: NotesState) {
