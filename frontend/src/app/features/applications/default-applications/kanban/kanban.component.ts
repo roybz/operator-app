@@ -2,11 +2,13 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  HostListener,
   Input,
   OnDestroy,
   OnInit,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -25,6 +27,7 @@ import { InstanceSettingsService } from '../../../../core/instance-settings.serv
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
 import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
 interface ChecklistItem {
@@ -499,6 +502,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   state = signal<KanbanState>({
     boards: [],
     activeBoardId: '',
@@ -536,22 +540,27 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     lastX: number;
     lastY: number;
   } | null = null;
+  private lastRemoteStorageChangeSeq = 0;
+  private editFocusCount = 0;
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event) return;
+      if (event.seq <= this.lastRemoteStorageChangeSeq) return;
+      this.lastRemoteStorageChangeSeq = event.seq;
+      const key = this.instanceStorageKey();
+      if (!this.instanceId || !event.keys.includes(key)) return;
+      if (this.isLocallyEditing()) {
+        this.remoteConflict.queue([key], 'dirty');
+        return;
+      }
+      this.reloadFromStorage();
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as KanbanState;
-        this.state.set(parsed);
-        stateStore.set(this.instanceId, parsed);
-        return;
-      } catch {
-        // ignore malformed stored data
-      }
-    }
+    if (this.reloadFromStorage()) return;
 
     const stored = stateStore.get(this.instanceId);
     if (stored) {
@@ -569,6 +578,26 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
     this.persistState();
+  }
+
+  @HostListener('focusin', ['$event'])
+  onFocusIn(event: FocusEvent) {
+    const target = event.target as HTMLElement | null;
+    if (!target || !this.host.nativeElement.contains(target)) return;
+    if (!this.isEditableTarget(target)) return;
+    this.editFocusCount += 1;
+    this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  @HostListener('focusout', ['$event'])
+  onFocusOut(event: FocusEvent) {
+    const target = event.target as HTMLElement | null;
+    if (!target || !this.host.nativeElement.contains(target)) return;
+    if (!this.isEditableTarget(target)) return;
+    this.editFocusCount = Math.max(0, this.editFocusCount - 1);
+    if (!this.isLocallyEditing()) {
+      this.remoteConflict.clearDirty(this.instanceStorageKey());
+    }
   }
 
   ngAfterViewInit() {
@@ -1235,5 +1264,41 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   private persistState() {
     const userId = this.prefs.userId();
     persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as KanbanState;
+      this.state.set(parsed);
+      stateStore.set(this.instanceId, parsed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private isLocallyEditing() {
+    return Boolean(
+      this.editFocusCount > 0 ||
+      this.editingBoard() ||
+      this.editingColumnId() ||
+      this.touchDragState(),
+    );
+  }
+
+  private isEditableTarget(target: HTMLElement) {
+    if (target.isContentEditable) return true;
+    if (target instanceof HTMLTextAreaElement) return true;
+    if (target instanceof HTMLInputElement) {
+      const type = (target.type || 'text').toLowerCase();
+      return !['checkbox', 'radio', 'button', 'submit', 'file', 'color', 'date'].includes(type);
+    }
+    return false;
   }
 }

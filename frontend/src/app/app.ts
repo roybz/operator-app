@@ -360,7 +360,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         [class.phone-mode]="phoneMode()"
         style="position:relative; display:flex; flex-direction:column;"
       >
-        @if (remoteConflictPending()) {
+        @if (remoteConflictBannerVisible() && remoteConflictPending()) {
           <div class="remote-conflict-banner" role="status" aria-live="polite">
             <div style="font-weight:600;">Remote changes are waiting</div>
             <div style="font-size:12px; line-height:1.35;">
@@ -1213,10 +1213,15 @@ export class AppComponent implements OnInit, OnDestroy {
   private remoteSyncApplyPending = false;
   private lastRealtimeEventSeq = 0;
   private lastStorageRemoteChangeSeq = 0;
+  private deferredRemoteApplyTimer?: number;
+  private deferredRemoteApplyBannerTimer?: number;
+  private suppressRemoteChangeSignature: string | null = null;
+  private suppressRemoteChangeUntil = 0;
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
   remoteConflictPending = this.remoteConflict.pending.asReadonly();
+  remoteConflictBannerVisible = signal(false);
 
   activeDialogs = computed(() => this.dialogService.getActiveDialogs());
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
@@ -1656,6 +1661,9 @@ export class AppComponent implements OnInit, OnDestroy {
         }
         this.remoteSyncInFlight = false;
         this.remoteSyncApplyPending = false;
+        this.clearDeferredRemoteApplyTimers();
+        this.remoteConflict.clearPending();
+        this.remoteConflictBannerVisible.set(false);
         this.realtimeSync.stop();
         return;
       }
@@ -1690,10 +1698,21 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!event) return;
       if (event.seq <= this.lastStorageRemoteChangeSeq) return;
       this.lastStorageRemoteChangeSeq = event.seq;
+      const signature = this.changedKeysSignature(event.keys);
+      if (
+        this.suppressRemoteChangeSignature &&
+        this.suppressRemoteChangeSignature === signature &&
+        Date.now() < this.suppressRemoteChangeUntil
+      ) {
+        this.suppressRemoteChangeSignature = null;
+        this.suppressRemoteChangeUntil = 0;
+        return;
+      }
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(event.keys);
       if (dirtyOverlap || recentLocalWrite) {
         this.remoteConflict.queue(event.keys, dirtyOverlap ? 'dirty' : 'recent-local-write');
+        this.scheduleDeferredRemoteApply();
         this.remoteSyncApplyPending = false;
         return;
       }
@@ -1757,6 +1776,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (this.remoteSyncInterval) window.clearInterval(this.remoteSyncInterval);
+    this.clearDeferredRemoteApplyTimers();
     this.realtimeSync.stop();
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.updateCanvasBounds);
@@ -1819,14 +1839,71 @@ export class AppComponent implements OnInit, OnDestroy {
 
   dismissRemoteConflict() {
     this.remoteConflict.clearPending();
+    this.remoteConflictBannerVisible.set(false);
+    this.clearDeferredRemoteApplyTimers();
   }
 
   async applyPendingRemoteConflict() {
     const pending = this.remoteConflictPending();
     if (!pending?.keys?.length) return;
+    this.clearDeferredRemoteApplyTimers();
+    this.remoteConflictBannerVisible.set(false);
     this.remoteConflict.clearPending();
     await this.applyRemoteStorageChange(pending.keys, { force: true });
+    this.suppressRemoteChangeSignature = this.changedKeysSignature(pending.keys);
+    this.suppressRemoteChangeUntil = Date.now() + 2000;
     this.storage.emitRemoteChange(pending.keys);
+  }
+
+  private scheduleDeferredRemoteApply() {
+    if (typeof window === 'undefined') return;
+    if (this.deferredRemoteApplyTimer) return;
+    if (!this.deferredRemoteApplyBannerTimer) {
+      this.deferredRemoteApplyBannerTimer = window.setTimeout(() => {
+        this.deferredRemoteApplyBannerTimer = undefined;
+        if (this.remoteConflictPending()) {
+          this.remoteConflictBannerVisible.set(true);
+        }
+      }, 12000);
+    }
+    this.deferredRemoteApplyTimer = window.setTimeout(() => {
+      this.deferredRemoteApplyTimer = undefined;
+      void this.tryAutoApplyDeferredRemoteConflict();
+    }, 750);
+  }
+
+  private async tryAutoApplyDeferredRemoteConflict() {
+    const pending = this.remoteConflictPending();
+    if (!pending?.keys?.length) return;
+    const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 2000;
+    const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(pending.keys);
+    if (recentLocalWrite || dirtyOverlap) {
+      this.scheduleDeferredRemoteApply();
+      return;
+    }
+    this.clearDeferredRemoteApplyTimers();
+    this.remoteConflictBannerVisible.set(false);
+    this.remoteConflict.clearPending();
+    await this.applyRemoteStorageChange(pending.keys, { force: true });
+    this.suppressRemoteChangeSignature = this.changedKeysSignature(pending.keys);
+    this.suppressRemoteChangeUntil = Date.now() + 2000;
+    this.storage.emitRemoteChange(pending.keys);
+  }
+
+  private clearDeferredRemoteApplyTimers() {
+    if (typeof window === 'undefined') return;
+    if (this.deferredRemoteApplyTimer) {
+      window.clearTimeout(this.deferredRemoteApplyTimer);
+      this.deferredRemoteApplyTimer = undefined;
+    }
+    if (this.deferredRemoteApplyBannerTimer) {
+      window.clearTimeout(this.deferredRemoteApplyBannerTimer);
+      this.deferredRemoteApplyBannerTimer = undefined;
+    }
+  }
+
+  private changedKeysSignature(keys: string[]) {
+    return [...keys].sort().join('|');
   }
 
   updateCanvasBounds = () => {
