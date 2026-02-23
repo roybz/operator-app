@@ -171,7 +171,9 @@ describe('App', () => {
     const storage = TestBed.inject(StorageService);
     const remoteConflict = TestBed.inject(RemoteConflictService);
     const applySpy = vi.spyOn(app, 'applyRemoteStorageChange').mockResolvedValue();
-    const rescheduleSpy = vi.spyOn(app, 'scheduleDeferredRemoteApply').mockImplementation(() => {});
+    const rescheduleSpy = vi.spyOn(app, 'scheduleDeferredRemoteApply').mockImplementation(() => {
+      // test stub
+    });
 
     remoteConflict.queue(['busy-key'], 'recent-local-write');
     vi.spyOn(storage, 'getLastLocalMutationAt').mockReturnValue(Date.now());
