@@ -13,6 +13,7 @@ import { InstanceSettingsService } from '../../../../core/instance-settings.serv
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -512,6 +513,7 @@ export class NotesComponent implements OnInit {
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -548,7 +550,10 @@ export class NotesComponent implements OnInit {
       const userId = this.prefs.userId();
       const key = buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId || '');
       if (!this.instanceId || !event.keys.includes(key)) return;
-      if (this.richFocused()) return;
+      if (this.richFocused()) {
+        this.remoteConflict.queue([key], 'dirty');
+        return;
+      }
       this.reloadFromStorage({ persistNormalized: false });
     });
   }
@@ -596,7 +601,9 @@ export class NotesComponent implements OnInit {
 
   private reloadFromStorage(options?: { persistNormalized?: boolean }) {
     const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId));
+    const raw = this.storage.getItemSync(
+      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
+    );
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as NotesState & { sidebarOpen?: boolean };
@@ -796,13 +803,20 @@ export class NotesComponent implements OnInit {
 
   startRichEdit() {
     this.richFocused.set(true);
+    this.remoteConflict.markDirty(this.instanceStorageKey());
     this.syncRichSnapshot();
   }
 
   finishRichEdit() {
     this.richFocused.set(false);
+    this.remoteConflict.clearDirty(this.instanceStorageKey());
     this.commit({ ...this.state() });
     this.syncRichSnapshot();
+  }
+
+  private instanceStorageKey() {
+    const userId = this.prefs.userId();
+    return buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId || '');
   }
 
   onRichInput(event: Event) {

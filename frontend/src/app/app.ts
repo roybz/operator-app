@@ -58,6 +58,7 @@ import { InstanceSettingsService } from './core/instance-settings.service';
 import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
 import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
+import { RemoteConflictService } from './core/realtime/remote-conflict.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -129,6 +130,29 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       .square-btn {
         padding: 5px 6px;
         border-radius: 3px;
+      }
+
+      .remote-conflict-banner {
+        position: fixed;
+        right: 12px;
+        top: 12px;
+        z-index: 3100;
+        max-width: min(520px, calc(100vw - 24px));
+        border: 1px solid #d97706;
+        background: #fffbeb;
+        color: #7c2d12;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .remote-conflict-banner__actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
       }
 
       .workspace-chip {
@@ -336,6 +360,26 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         [class.phone-mode]="phoneMode()"
         style="position:relative; display:flex; flex-direction:column;"
       >
+        @if (remoteConflictPending()) {
+          <div class="remote-conflict-banner" role="status" aria-live="polite">
+            <div style="font-weight:600;">Remote changes are waiting</div>
+            <div style="font-size:12px; line-height:1.35;">
+              {{
+                remoteConflictPending()?.reason === 'dirty'
+                  ? 'A live update arrived while you were editing locally.'
+                  : 'A remote change arrived right after a local save.'
+              }}
+              Review and reload when you are ready.
+            </div>
+            <div style="font-size:12px; opacity:0.85;">
+              Keys: {{ remoteConflictPending()?.keys?.length ?? 0 }}
+            </div>
+            <div class="remote-conflict-banner__actions">
+              <button (click)="dismissRemoteConflict()">Dismiss</button>
+              <button (click)="applyPendingRemoteConflict()">Reload Remote Changes</button>
+            </div>
+          </div>
+        }
         @if (phoneMode() && !topBarOpen()) {
           <div
             id="phone-collapsed-bar"
@@ -1083,6 +1127,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly storage = inject(StorageService);
   private readonly debugPerf = inject(DebugPerfService);
   private readonly realtimeSync = inject(RealtimeSyncService);
+  private readonly remoteConflict = inject(RemoteConflictService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1171,6 +1216,7 @@ export class AppComponent implements OnInit, OnDestroy {
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
+  remoteConflictPending = this.remoteConflict.pending.asReadonly();
 
   activeDialogs = computed(() => this.dialogService.getActiveDialogs());
   dialogsHidden = computed(() => this.dialogService.isActiveWorkspaceHidden());
@@ -1644,6 +1690,13 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!event) return;
       if (event.seq <= this.lastStorageRemoteChangeSeq) return;
       this.lastStorageRemoteChangeSeq = event.seq;
+      const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
+      const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(event.keys);
+      if (dirtyOverlap || recentLocalWrite) {
+        this.remoteConflict.queue(event.keys, dirtyOverlap ? 'dirty' : 'recent-local-write');
+        this.remoteSyncApplyPending = false;
+        return;
+      }
       void this.applyRemoteStorageChange(event.keys);
     });
 
@@ -1728,9 +1781,10 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async applyRemoteStorageChange(changedKeys: string[]) {
+  private async applyRemoteStorageChange(changedKeys: string[], options?: { force?: boolean }) {
     if (!changedKeys.length) return;
-    const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
+    const recentLocalWrite =
+      !options?.force && Date.now() - this.storage.getLastLocalMutationAt() < 5000;
     if (recentLocalWrite) {
       this.remoteSyncApplyPending = false;
       return;
@@ -1761,6 +1815,18 @@ export class AppComponent implements OnInit, OnDestroy {
     } finally {
       this.remoteSyncApplyPending = false;
     }
+  }
+
+  dismissRemoteConflict() {
+    this.remoteConflict.clearPending();
+  }
+
+  async applyPendingRemoteConflict() {
+    const pending = this.remoteConflictPending();
+    if (!pending?.keys?.length) return;
+    this.remoteConflict.clearPending();
+    await this.applyRemoteStorageChange(pending.keys, { force: true });
+    this.storage.emitRemoteChange(pending.keys);
   }
 
   updateCanvasBounds = () => {

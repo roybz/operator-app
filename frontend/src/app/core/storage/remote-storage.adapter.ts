@@ -19,6 +19,20 @@ interface RemoteStorageAdapterOptions {
   localFallback?: StorageAdapter;
 }
 
+export class RemoteStorageError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'RemoteStorageError';
+  }
+}
+
+// DynamoDB item max is 400KB including attribute names/metadata; keep a safety margin.
+const REMOTE_VALUE_SOFT_LIMIT_BYTES = 340 * 1024;
+
 export class RemoteStorageAdapter implements StorageAdapter {
   private versions = new Map<string, number>();
 
@@ -84,6 +98,14 @@ export class RemoteStorageAdapter implements StorageAdapter {
     }
     const url = `${this.baseUrl}/storage/item`;
     const headers = await this.authHeaders({ 'Content-Type': 'application/json' });
+    const valueBytes = this.byteLength(value);
+    if (valueBytes > REMOTE_VALUE_SOFT_LIMIT_BYTES) {
+      throw new RemoteStorageError(
+        `Remote item too large (${valueBytes} bytes). Limit is ~${REMOTE_VALUE_SOFT_LIMIT_BYTES} bytes for now.`,
+        413,
+        'item_too_large_client',
+      );
+    }
     const version = this.versions.get(key);
     const response = await fetch(url, {
       method: 'PUT',
@@ -95,7 +117,12 @@ export class RemoteStorageAdapter implements StorageAdapter {
       }),
     });
     if (!response.ok) {
-      throw new Error(`Remote setItem failed (${response.status})`);
+      const details = await this.readErrorBody(response);
+      throw new RemoteStorageError(
+        details?.message ?? `Remote setItem failed (${response.status})`,
+        response.status,
+        details?.code,
+      );
     }
     try {
       const data = (await response.json()) as { version?: number };
@@ -143,5 +170,29 @@ export class RemoteStorageAdapter implements StorageAdapter {
   private async authHeaders(headers: Record<string, string> = {}) {
     const token = await this.options.accessTokenProvider?.();
     return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+  }
+
+  private byteLength(value: string) {
+    if (typeof TextEncoder !== 'undefined') {
+      return new TextEncoder().encode(value).length;
+    }
+    return value.length * 2;
+  }
+
+  private async readErrorBody(
+    response: Response,
+  ): Promise<{ message?: string; code?: string } | null> {
+    try {
+      const data = (await response.json()) as { message?: string; error?: string; code?: string };
+      return {
+        message:
+          (typeof data.message === 'string' && data.message) ||
+          (typeof data.error === 'string' && data.error) ||
+          undefined,
+        code: typeof data.code === 'string' ? data.code : undefined,
+      };
+    } catch {
+      return null;
+    }
   }
 }

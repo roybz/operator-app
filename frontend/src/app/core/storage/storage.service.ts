@@ -53,6 +53,12 @@ export class StorageService {
     return changedKeys;
   }
 
+  emitRemoteChange(keys: string[]) {
+    if (!keys.length) return;
+    this.remoteChangeSeq += 1;
+    this.lastRemoteChange.set({ seq: this.remoteChangeSeq, keys: [...new Set(keys)].sort() });
+  }
+
   getItem(key: string) {
     return this.adapter.getItem(key);
   }

@@ -10,6 +10,7 @@ import {
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
 
 type StickyMode = 'rich' | 'markdown';
 
@@ -222,6 +223,7 @@ export class StickyNotesComponent implements OnInit {
   private prefs = inject(AppPreferencesService);
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
 
   state = signal<StickyNoteState>(defaultState('rich'));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
@@ -236,15 +238,23 @@ export class StickyNotesComponent implements OnInit {
         this.commit({ ...this.state(), colorEnabled: false });
       }
     });
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      if (this.richFocused()) {
+        this.remoteConflict.queue([key], 'dirty');
+        return;
+      }
+      this.reloadFromStorage();
+    });
   }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
     const defaultMode = this.prefs.preferences().stickyNoteDefaultMode ?? 'rich';
     const fallback = defaultState(defaultMode);
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as StickyNoteState;
@@ -343,11 +353,13 @@ export class StickyNotesComponent implements OnInit {
 
   startRichEdit() {
     this.richFocused.set(true);
+    this.remoteConflict.markDirty(this.instanceStorageKey());
     this.syncRichSnapshot();
   }
 
   finishRichEdit() {
     this.richFocused.set(false);
+    this.remoteConflict.clearDirty(this.instanceStorageKey());
     this.commit({ ...this.state() });
     this.syncRichSnapshot();
   }
@@ -379,8 +391,34 @@ export class StickyNotesComponent implements OnInit {
   }
 
   private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+    persistInstanceState(
+      STORAGE_PREFIX,
+      this.prefs.userId(),
+      this.instanceId,
+      this.state(),
+      this.storage,
+    );
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const defaultMode = this.prefs.preferences().stickyNoteDefaultMode ?? 'rich';
+    const fallback = defaultState(defaultMode);
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as StickyNoteState;
+      const next = { ...fallback, ...parsed };
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      this.syncRichSnapshot();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private syncRichSnapshot() {
