@@ -59,6 +59,7 @@ export class DialogService {
   private persistFlushTimer: number | null = null;
   private persistInFlight = false;
   private persistQueued = false;
+  private persistBackoffMs = 0;
 
   constructor() {
     effect(() => {
@@ -677,7 +678,7 @@ export class DialogService {
 
   private persist() {
     this.persistQueued = true;
-    this.schedulePersistFlush();
+    this.schedulePersistFlush(Math.max(120, this.persistBackoffMs));
   }
 
   private schedulePersistFlush(delayMs = 0) {
@@ -707,7 +708,15 @@ export class DialogService {
         const payload = JSON.stringify(this.serializableState(this.state()));
         try {
           await this.storage.setItem(userKey, payload);
+          this.persistBackoffMs = 0;
         } catch (error) {
+          if (this.isTooManyRequests(error)) {
+            // API Gateway throttling during long drags: back off and coalesce the latest state.
+            this.persistBackoffMs = Math.min(Math.max(this.persistBackoffMs || 200, 200) * 2, 2000);
+            this.persistQueued = true;
+            this.schedulePersistFlush(this.persistBackoffMs);
+            break;
+          }
           if (this.isVersionConflict(error)) {
             // Refresh adapter version cache and retry a little later with latest local state.
             try {
@@ -778,6 +787,16 @@ export class DialogService {
     const maybeCode = (error as Error & { code?: unknown }).code;
     const code = typeof maybeCode === 'string' ? maybeCode : '';
     return code === 'version_conflict' || String(error.message || '').includes('version_conflict');
+  }
+
+  private isTooManyRequests(error: unknown) {
+    if (!(error instanceof Error)) return false;
+    const maybeCode = (error as Error & { code?: unknown }).code;
+    const maybeStatus = (error as Error & { status?: unknown }).status;
+    const code = typeof maybeCode === 'string' ? maybeCode : '';
+    const status = typeof maybeStatus === 'number' ? maybeStatus : null;
+    const message = String(error.message || '');
+    return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
   }
 
   private keys() {
