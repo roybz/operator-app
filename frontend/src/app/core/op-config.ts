@@ -16,6 +16,9 @@ export interface OpRuntimeConfig {
   mockMode?: boolean;
   guestModeOnly?: boolean;
   debugPerf?: boolean;
+  cloudVaultAttachmentUploadBetaEnabled?: boolean;
+  cloudVaultAttachmentUploadMaxTotalBytes?: number;
+  cloudVaultAttachmentUploadMaxAssetBytes?: number;
   authProvider?: 'local' | 'cognito';
   cognito?: OpCognitoConfig;
 }

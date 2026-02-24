@@ -7,6 +7,9 @@ window.__OP_CONFIG__ = {
   mockMode: true,
   guestModeOnly: false,
   debugPerf: false,
+  cloudVaultAttachmentUploadBetaEnabled: false,
+  cloudVaultAttachmentUploadMaxTotalBytes: 1572864, // 1.5 MB beta cap
+  cloudVaultAttachmentUploadMaxAssetBytes: 393216, // 384 KB per attachment beta cap
   authProvider: 'cognito', // 'local' | 'cognito'
   cognito: {
     enabled: true,

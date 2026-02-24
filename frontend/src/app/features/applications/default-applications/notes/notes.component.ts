@@ -27,11 +27,23 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { ObsidianImportService } from '../../../../core/obsidian/obsidian-import.service';
+import { VaultDbService } from '../../../../core/obsidian/vault-db';
+import {
+  ObsidianImportProgress,
+  ObsidianImportStats,
+  LinkIndexRecord,
+  VaultFileTreeNode,
+} from '../../../../core/obsidian/vault-types';
+import { DialogService } from '../../../../core/dialog.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
 
 type NotesView = 'notes' | 'archive';
+type NotesSource =
+  | { type: 'internal' }
+  | { type: 'vault'; vaultId: string; vaultName: string; pathPrefix?: string | null };
 
 interface NoteNode {
   id: string;
@@ -57,6 +69,15 @@ interface NotesState {
   sidebarOpenDesktop: boolean;
   sidebarOpenPhone: boolean;
   phoneSidebarInit?: boolean;
+  source?: NotesSource;
+  vaultSelectedNodeId?: string | null;
+  vaultCollapsedFolders?: string[];
+}
+
+interface VaultTreeFlatRow {
+  id: string;
+  node: VaultFileTreeNode;
+  depth: number;
 }
 
 const stateStore = new Map<string, NotesState>();
@@ -192,16 +213,151 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               <span>{{ 'notes.importInstance' | translate }}</span>
               <input type="file" accept=".json" (change)="queueImport($event)" />
             </label>
+            <label style="display:inline-flex; align-items:center; gap:8px;">
+              <span>{{ 'notes.importVaultZip' | translate }}</span>
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                (change)="queueVaultZipImport($event)"
+              />
+            </label>
+            <button (click)="startVaultFolderImport()">
+              {{ 'notes.importVaultFolder' | translate }}
+            </button>
             <button (click)="confirmWipeInstance()">
               {{ 'notes.wipeInstance' | translate }}
             </button>
           </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span>{{ 'notes.importVaultDestination' | translate }}</span>
+            <select
+              [value]="vaultImportDestination()"
+              (change)="vaultImportDestination.set($any($event.target).value)"
+            >
+              <option value="new">{{ 'notes.importVaultDestinationNew' | translate }}</option>
+              <option value="current">
+                {{ 'notes.importVaultDestinationCurrent' | translate }}
+              </option>
+              <option value="splitTopLevel">
+                {{ 'notes.importVaultDestinationSplitTopLevel' | translate }}
+              </option>
+            </select>
+            @if (isVaultMode()) {
+              <button (click)="cloneCurrentVaultToNewInstance()">
+                {{ 'notes.cloneVaultToNewInstance' | translate }}
+              </button>
+            }
+          </div>
+          <label style="display:inline-flex; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+            <input
+              type="checkbox"
+              [checked]="vaultImportCloudBeta()"
+              [disabled]="!vaultCloudBetaAvailable()"
+              (change)="vaultImportCloudBeta.set($any($event.target).checked)"
+            />
+            <span>
+              {{ 'notes.cloudBetaImportToggle' | translate }}
+              <small style="display:block; opacity:0.75;">
+                {{
+                  (vaultCloudBetaAvailable()
+                    ? 'notes.cloudBetaImportHelp'
+                    : 'notes.cloudBetaImportUnavailable'
+                  ) | translate
+                }}
+              </small>
+            </span>
+          </label>
+          @if (isVaultMode()) {
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <label style="display:inline-flex; align-items:center; gap:8px;">
+                <input
+                  type="checkbox"
+                  [checked]="vaultCloudBetaEnabled()"
+                  [disabled]="!vaultCloudBetaAvailable() || vaultCloudBetaSyncing()"
+                  (change)="toggleCurrentVaultCloudBeta($any($event.target).checked)"
+                />
+                <span>{{ 'notes.cloudBetaVaultToggle' | translate }}</span>
+              </label>
+              @if (vaultCloudBetaSyncing()) {
+                <small style="opacity:0.75;">{{ 'notes.cloudBetaSyncing' | translate }}</small>
+              } @else if (vaultCloudBetaStatusMessage()) {
+                <small style="opacity:0.75;">{{
+                  vaultCloudBetaStatusMessage() ?? '' | translate
+                }}</small>
+              }
+            </div>
+            @if (vaultCloudBetaEnabled() && vaultCloudBetaSummary()) {
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <small style="opacity:0.75;">
+                  {{
+                    'notes.cloudBetaAssetsLocalOnly'
+                      | translate
+                        : {
+                            count: vaultCloudBetaSummary()?.counts?.assets ?? 0,
+                            kb: ((vaultCloudBetaSummary()?.assetBytes ?? 0) / 1024).toFixed(1),
+                          }
+                  }}
+                </small>
+                <label style="display:inline-flex; align-items:flex-start; gap:8px;">
+                  <input
+                    type="checkbox"
+                    [checked]="vaultCloudAttachmentsBetaRequested()"
+                    [disabled]="vaultCloudBetaSyncing()"
+                    (change)="
+                      toggleCurrentVaultCloudAttachmentsBetaRequested($any($event.target).checked)
+                    "
+                  />
+                  <span>
+                    {{ 'notes.cloudBetaAttachmentsToggle' | translate }}
+                    <small style="display:block; opacity:0.75;">
+                      {{
+                        (vaultCloudAttachmentsBetaRequested()
+                          ? 'notes.cloudBetaAttachmentsRequested'
+                          : 'notes.cloudBetaAttachmentsHelp'
+                        ) | translate
+                      }}
+                    </small>
+                  </span>
+                </label>
+              </div>
+            }
+          }
           @if (importStatus() === 'loading') {
             <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
           } @else if (importStatus() === 'success') {
             <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
           } @else if (importStatus() === 'error') {
             <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+          }
+          @if (vaultImportStatus() === 'loading') {
+            <div style="opacity:0.8;">
+              {{ 'notes.importVaultLoading' | translate }}
+              @if (vaultImportProgress()) {
+                <div style="font-size:12px; opacity:0.8;">
+                  {{ vaultImportProgress()?.phase }}
+                  @if (vaultImportProgress()?.scanned) {
+                    ({{ vaultImportProgress()?.scanned }}/{{ vaultImportProgress()?.total }})
+                  }
+                </div>
+              }
+            </div>
+          } @else if (vaultImportStatus() === 'success') {
+            <div style="color:#1b5e20;">{{ 'notes.importVaultSuccess' | translate }}</div>
+            @if (vaultImportSummary()) {
+              <div style="font-size:12px; opacity:0.8;">
+                {{
+                  'notes.importVaultSummary'
+                    | translate
+                      : {
+                          md: vaultImportSummary()?.markdownCount,
+                          assets: vaultImportSummary()?.assetCount,
+                          unresolved: vaultImportSummary()?.unresolvedLinksCount,
+                        }
+                }}
+              </div>
+            }
+          } @else if (vaultImportStatus() === 'error') {
+            <div style="color:#b00020;">{{ vaultImportMessage() ?? '' | translate }}</div>
           }
         </div>
       }
@@ -268,22 +424,24 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         }
 
         @if (sidebarOpen()) {
-          <div style="display:flex; gap:6px; margin: 10px 0 6px; flex-wrap:wrap;">
-            <button (click)="addFolder()" [disabled]="isArchiveView()">
-              {{ 'notes.addFolder' | translate }}
-            </button>
-            <button (click)="addNote()" [disabled]="isArchiveView()">
-              {{ 'notes.addNote' | translate }}
-            </button>
-          </div>
-          <div style="display:flex; gap:6px; margin: 0 0 10px; flex-wrap:wrap;">
-            <button (click)="selectAll()">{{ 'notes.selectAll' | translate }}</button>
-            <button (click)="deselectAll()" [disabled]="!selectedIds().length">
-              {{ 'notes.deselectAll' | translate }}
-            </button>
-          </div>
+          @if (!isVaultMode()) {
+            <div style="display:flex; gap:6px; margin: 10px 0 6px; flex-wrap:wrap;">
+              <button (click)="addFolder()" [disabled]="isArchiveView()">
+                {{ 'notes.addFolder' | translate }}
+              </button>
+              <button (click)="addNote()" [disabled]="isArchiveView()">
+                {{ 'notes.addNote' | translate }}
+              </button>
+            </div>
+            <div style="display:flex; gap:6px; margin: 0 0 10px; flex-wrap:wrap;">
+              <button (click)="selectAll()">{{ 'notes.selectAll' | translate }}</button>
+              <button (click)="deselectAll()" [disabled]="!selectedIds().length">
+                {{ 'notes.deselectAll' | translate }}
+              </button>
+            </div>
+          }
 
-          @if (selectedIds().length) {
+          @if (!isVaultMode() && selectedIds().length) {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
               <button (click)="duplicateSelected()">
                 {{ 'notes.duplicateSelected' | translate }}
@@ -303,7 +461,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             </div>
           }
 
-          @if (!state().listCollapsed) {
+          @if (!state().listCollapsed && !isVaultMode()) {
             @if (!(activeRoot().children?.length ?? 0)) {
               <div style="font-size:12px; opacity:0.6;">
                 {{ 'notes.emptyHint' | translate }}
@@ -313,15 +471,125 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               *ngTemplateOutlet="treeTemplate; context: { $implicit: activeRoot(), depth: 0 }"
             ></ng-container>
           }
+          @if (isVaultMode()) {
+            <div style="font-size:12px; opacity:0.7; margin: 10px 0;">
+              {{ 'notes.vaultModeLabel' | translate }}: {{ currentVaultName() }}
+              <span style="margin-left:8px;">
+                {{
+                  (vaultCloudBetaEnabled()
+                    ? 'notes.vaultStorageCloudBeta'
+                    : 'notes.vaultStorageLocalDevice'
+                  ) | translate
+                }}
+              </span>
+            </div>
+            <div
+              style="border:1px solid var(--color-border); border-radius:6px; overflow:auto; min-height:180px; max-height:320px;"
+              (scroll)="onVaultTreeScroll($event)"
+              #vaultTreeScrollHost
+            >
+              <div [style.height.px]="vaultTreeContentHeight()" style="position:relative;">
+                <div
+                  [style.transform]="
+                    'translateY(' + vaultVisibleStartIndex() * vaultTreeRowHeight + 'px)'
+                  "
+                  style="position:absolute; inset:0 auto auto 0; right:0;"
+                >
+                  @for (row of vaultVisibleRows(); track row.id) {
+                    <div
+                      style="display:flex; align-items:center; gap:6px; min-height:26px; padding-right:4px;"
+                      [style.marginLeft.px]="row.depth * 12"
+                    >
+                      @if (row.node.type === 'folder') {
+                        <span>📁</span>
+                        <span>{{ row.node.name }}</span>
+                      } @else {
+                        <button
+                          (click)="selectVaultNode(row.node.id)"
+                          [style.fontWeight]="
+                            state().vaultSelectedNodeId === row.node.id ? '700' : '400'
+                          "
+                          [title]="row.node.path"
+                        >
+                          {{ row.node.name }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+            <div
+              style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;"
+            >
+              <button (click)="vaultUnresolvedPanelOpen.set(!vaultUnresolvedPanelOpen())">
+                {{ 'notes.unresolvedLinks' | translate }}
+                ({{ vaultUnresolvedLinks().length }})
+              </button>
+            </div>
+            @if (vaultUnresolvedPanelOpen()) {
+              <div
+                style="border:1px solid var(--color-border); border-radius:6px; padding:8px; margin-top:6px; max-height:180px; overflow:auto; display:flex; flex-direction:column; gap:6px;"
+              >
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <input
+                    [value]="vaultUnresolvedSearch()"
+                    (input)="vaultUnresolvedSearch.set($any($event.target).value)"
+                    [placeholder]="'notes.unresolvedLinksSearch' | translate"
+                    style="flex:1; min-width:120px;"
+                  />
+                  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px;">
+                    <input
+                      type="checkbox"
+                      [checked]="vaultUnresolvedAmbiguousOnly()"
+                      (change)="vaultUnresolvedAmbiguousOnly.set($any($event.target).checked)"
+                    />
+                    {{ 'notes.unresolvedLinksAmbiguousOnly' | translate }}
+                  </label>
+                </div>
+                @if (!filteredVaultUnresolvedLinks().length) {
+                  <div style="font-size:12px; opacity:0.7;">
+                    {{ 'notes.unresolvedLinksEmpty' | translate }}
+                  </div>
+                } @else {
+                  @for (link of filteredVaultUnresolvedLinks().slice(0, 100); track link.id) {
+                    <div style="display:flex; align-items:flex-start; gap:6px;">
+                      <button
+                        style="text-align:left; display:flex; flex-direction:column; gap:2px; flex:1;"
+                        (click)="openUnresolvedLinkSource(link)"
+                      >
+                        <span style="font-size:12px; font-weight:600;">
+                          {{ link.rawTarget }}
+                          @if (link.ambiguous) {
+                            <span style="font-size:10px; opacity:0.8;">
+                              {{ 'notes.unresolvedLinkAmbiguous' | translate }}
+                            </span>
+                          }
+                        </span>
+                        <span style="font-size:11px; opacity:0.7;">{{
+                          unresolvedLinkSourcePath(link)
+                        }}</span>
+                      </button>
+                      <button style="font-size:11px;" (click)="createNoteForUnresolvedLink(link)">
+                        {{ 'notes.createMissingLinkTarget' | translate }}
+                      </button>
+                    </div>
+                  }
+                }
+              </div>
+            }
+          }
 
           <div style="margin-top:auto; display:flex; flex-wrap:wrap; padding-left:20px;">
-            <div style="font-size:12px; color:var(--color-muted);">
-              {{ 'notes.folderCount' | translate: { count: folderCount() } }}
-            </div>
-            <span> </span>
-            <div style="font-size:12px; color:var(--color-muted);">
-              {{ 'notes.noteCount' | translate: { count: noteCount() } }}
-            </div>
+            @if (!isVaultMode()) {
+              <div style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.folderCount' | translate: { count: folderCount() } }}
+              </div>
+              <span> </span>
+              <div style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.noteCount' | translate: { count: noteCount() } }}
+              </div>
+            }
           </div>
         }
       </aside>
@@ -330,7 +598,47 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         style="flex:1; display:flex; flex-direction:column; gap:12px;"
         [style.display]="isPhoneMode() && sidebarOpen() ? 'none' : 'flex'"
       >
-        @if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
+        @if (!settingsOpen() && isVaultMode()) {
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <h3 style="margin:0;">{{ currentVaultName() }}</h3>
+            <button (click)="exitVaultMode()">
+              {{ 'notes.exitVaultMode' | translate }}
+            </button>
+          </div>
+          <div style="font-size:12px; color:var(--color-muted);">
+            {{ 'notes.vaultReadOnly' | translate }}
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button (click)="saveVaultFile()" [disabled]="!vaultDirty() || vaultSaving()">
+              {{
+                vaultSaving() ? ('notes.vaultSaving' | translate) : ('notes.vaultSave' | translate)
+              }}
+            </button>
+            @if (vaultDirty()) {
+              <span style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.vaultUnsaved' | translate }}
+              </span>
+            }
+          </div>
+          <div
+            style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; flex:1; min-height:260px;"
+          >
+            <textarea
+              [value]="vaultDraftContent()"
+              (input)="onVaultDraftInput($event)"
+              (keydown.control.s)="saveVaultFile(); $event.preventDefault()"
+              style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px;"
+            ></textarea>
+            <div
+              [innerHTML]="vaultPreviewHtml()"
+              tabindex="0"
+              (click)="onVaultPreviewClick($event)"
+              (keydown.enter)="onVaultPreviewClick($event)"
+              (keydown.space)="onVaultPreviewClick($event)"
+              style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px; overflow:auto;"
+            ></div>
+          </div>
+        } @else if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             @if (editingNodeId() === selectedNode()?.id) {
               <input
@@ -472,6 +780,31 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         }
       }
     </ng-template>
+    <ng-template #vaultTreeTemplate let-nodes let-depth="depth">
+      @for (node of nodes; track node.id) {
+        <div style="display:flex; align-items:center; gap:6px;" [style.marginLeft.px]="depth * 12">
+          @if (node.type === 'folder') {
+            <span>📁</span>
+            <span>{{ node.name }}</span>
+          } @else {
+            <button
+              (click)="selectVaultNode(node.id)"
+              [style.fontWeight]="state().vaultSelectedNodeId === node.id ? '700' : '400'"
+            >
+              {{ node.name }}
+            </button>
+          }
+        </div>
+        @if (node.children?.length) {
+          <ng-container
+            *ngTemplateOutlet="
+              vaultTreeTemplate;
+              context: { $implicit: node.children, depth: depth + 1 }
+            "
+          ></ng-container>
+        }
+      }
+    </ng-template>
 
     @if (bulkDeleteOpen()) {
       <app-confirm-dialog
@@ -529,6 +862,9 @@ export class NotesComponent implements OnInit, OnDestroy {
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private obsidianImport = inject(ObsidianImportService);
+  private vaultDb = inject(VaultDbService);
+  private dialog = inject(DialogService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -538,14 +874,23 @@ export class NotesComponent implements OnInit, OnDestroy {
     listCollapsed: false,
     sidebarOpenDesktop: true,
     sidebarOpenPhone: false,
+    source: { type: 'internal' },
+    vaultSelectedNodeId: null,
   });
   editingNodeId = signal<string | null>(null);
   editingName = signal('');
   bulkDeleteOpen = signal(false);
   wipeInstanceOpen = signal(false);
   pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  pendingVaultImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  vaultImportDestination = signal<'current' | 'new' | 'splitTopLevel'>('new');
+  vaultImportCloudBeta = signal(false);
   importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   importMessage = signal<string | null>(null);
+  vaultImportStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  vaultImportMessage = signal<string | null>(null);
+  vaultImportProgress = signal<ObsidianImportProgress | null>(null);
+  vaultImportSummary = signal<ObsidianImportStats | null>(null);
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
   richFocused = signal(false);
@@ -555,6 +900,65 @@ export class NotesComponent implements OnInit, OnDestroy {
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
+  vaultTree = signal<VaultFileTreeNode[]>([]);
+  vaultCollapsedFolderSet = computed(() => new Set(this.state().vaultCollapsedFolders ?? []));
+  vaultFlatRows = computed(() =>
+    this.flattenVaultTree(this.vaultTree(), 0, [], this.vaultCollapsedFolderSet()),
+  );
+  vaultFlatRowMap = computed(
+    () => new Map(this.vaultFlatRows().map((row) => [row.id, row] as const)),
+  );
+  vaultVisibleRows = computed(() => {
+    const rows = this.vaultFlatRows();
+    const height = Math.max(this.vaultTreeViewportHeight(), this.vaultTreeRowHeight * 4);
+    const overscan = 10;
+    const start = Math.max(
+      0,
+      Math.floor(this.vaultTreeScrollTop() / this.vaultTreeRowHeight) - overscan,
+    );
+    const count = Math.ceil(height / this.vaultTreeRowHeight) + overscan * 2;
+    return rows.slice(start, start + count);
+  });
+  vaultVisibleStartIndex = computed(() =>
+    Math.max(0, Math.floor(this.vaultTreeScrollTop() / this.vaultTreeRowHeight) - 10),
+  );
+  vaultTreeContentHeight = computed(() => this.vaultFlatRows().length * this.vaultTreeRowHeight);
+  vaultFileContent = signal<string>('');
+  vaultDraftContent = signal<string>('');
+  vaultPreviewHtml = signal<string>('');
+  vaultSelectedPath = signal<string | null>(null);
+  vaultDirty = signal(false);
+  vaultSaving = signal(false);
+  vaultCloudBetaEnabled = signal(false);
+  vaultCloudBetaSyncing = signal(false);
+  vaultCloudBetaStatusMessage = signal<string | null>(null);
+  vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
+  vaultCloudAttachmentsBetaRequested = signal(false);
+  vaultCloudBetaSummary = signal<{
+    counts: { assets: number };
+    assetBytes: number;
+    attachmentsCloudRequested?: boolean;
+    attachmentsCloudSupported?: boolean;
+  } | null>(null);
+  vaultUnresolvedLinks = signal<LinkIndexRecord[]>([]);
+  vaultUnresolvedSearch = signal('');
+  vaultUnresolvedAmbiguousOnly = signal(false);
+  filteredVaultUnresolvedLinks = computed(() => {
+    const query = this.vaultUnresolvedSearch().trim().toLowerCase();
+    const ambiguousOnly = this.vaultUnresolvedAmbiguousOnly();
+    return this.vaultUnresolvedLinks().filter((link) => {
+      if (ambiguousOnly && !link.ambiguous) return false;
+      if (!query) return true;
+      return (
+        link.rawTarget.toLowerCase().includes(query) ||
+        this.unresolvedLinkSourcePath(link).toLowerCase().includes(query)
+      );
+    });
+  });
+  vaultUnresolvedPanelOpen = signal(false);
+  vaultTreeScrollTop = signal(0);
+  vaultTreeViewportHeight = signal(320);
+  readonly vaultTreeRowHeight = 26;
   private lastRemoteStorageChangeSeq = 0;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
@@ -596,11 +1000,14 @@ export class NotesComponent implements OnInit, OnDestroy {
         sidebarOpenDesktop: sidebarDesktop,
         sidebarOpenPhone: sidebarPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
+        source: nextStored.source ?? ({ type: 'internal' } as const),
+        vaultSelectedNodeId: nextStored.vaultSelectedNodeId ?? null,
       };
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.persistState();
       this.syncRichSnapshot();
+      if (next.source?.type === 'vault') void this.refreshVaultTree();
       return;
     }
     const root = createFolder('Notes');
@@ -615,6 +1022,8 @@ export class NotesComponent implements OnInit, OnDestroy {
       sidebarOpenDesktop: true,
       sidebarOpenPhone: this.isPhoneMode() ? false : this.state().sidebarOpenPhone,
       phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+      source: { type: 'internal' },
+      vaultSelectedNodeId: null,
     };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
@@ -646,6 +1055,8 @@ export class NotesComponent implements OnInit, OnDestroy {
         sidebarOpenDesktop: sidebarDesktop,
         sidebarOpenPhone: sidebarPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+        source: parsed.source ?? ({ type: 'internal' } as const),
+        vaultSelectedNodeId: parsed.vaultSelectedNodeId ?? null,
       };
       this.state.set(next);
       stateStore.set(this.instanceId, next);
@@ -653,6 +1064,7 @@ export class NotesComponent implements OnInit, OnDestroy {
         this.persistState();
       }
       this.syncRichSnapshot();
+      if (next.source?.type === 'vault') void this.refreshVaultTree();
       return true;
     } catch {
       return false;
@@ -738,6 +1150,578 @@ export class NotesComponent implements OnInit, OnDestroy {
 
   closeSettings() {
     this.instanceSettings.close(this.instanceId);
+  }
+
+  isVaultMode() {
+    return this.state().source?.type === 'vault';
+  }
+
+  currentVaultName() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return '';
+    const prefixLabel = source.pathPrefix ? ` / ${source.pathPrefix}` : '';
+    return `${source.vaultName}${prefixLabel}`;
+  }
+
+  async refreshVaultTree() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultTree.set([]);
+      this.vaultFileContent.set('');
+      this.vaultSelectedPath.set(null);
+      this.vaultCloudBetaEnabled.set(false);
+      this.vaultCloudBetaStatusMessage.set(null);
+      return;
+    }
+    await this.vaultDb.ensureVaultAvailable(source.vaultId);
+    await this.refreshCurrentVaultCloudStatus();
+    const fullTree = await this.vaultDb.getTree(source.vaultId);
+    const tree = source.pathPrefix
+      ? this.filterVaultTreeByPrefix(fullTree, source.pathPrefix)
+      : fullTree;
+    this.vaultTree.set(tree);
+    await this.refreshVaultUnresolvedLinks();
+    const selectedId = this.state().vaultSelectedNodeId;
+    if (selectedId) {
+      await this.selectVaultNode(selectedId);
+    } else {
+      const firstFile = this.findFirstVaultFile(tree);
+      if (firstFile) {
+        await this.selectVaultNode(firstFile.id);
+      }
+    }
+  }
+
+  private filterVaultTreeByPrefix(nodes: VaultFileTreeNode[], prefix: string) {
+    const normalized = prefix.replace(/^\/+|\/+$/g, '');
+    if (!normalized) return nodes;
+    const cloneNode = (node: VaultFileTreeNode): VaultFileTreeNode => ({
+      ...node,
+      children: node.children ? node.children.map(cloneNode) : undefined,
+    });
+    const matchedRoots = nodes
+      .filter((node) => node.path === normalized || node.path.startsWith(`${normalized}/`))
+      .map(cloneNode);
+    if (matchedRoots.length) return matchedRoots;
+    // Fallback: search descendants and return matching subtree roots.
+    const search = (list: VaultFileTreeNode[]): VaultFileTreeNode[] => {
+      const out: VaultFileTreeNode[] = [];
+      for (const node of list) {
+        if (node.path === normalized || node.path.startsWith(`${normalized}/`)) {
+          out.push(cloneNode(node));
+          continue;
+        }
+        if (node.children?.length) out.push(...search(node.children));
+      }
+      return out;
+    };
+    return search(nodes);
+  }
+
+  private findFirstVaultFile(nodes: VaultFileTreeNode[]): VaultFileTreeNode | null {
+    for (const node of nodes) {
+      if (node.type === 'file' && /\.md$/i.test(node.path)) return node;
+      if (node.children?.length) {
+        const child = this.findFirstVaultFile(node.children);
+        if (child) return child;
+      }
+    }
+    return null;
+  }
+
+  async selectVaultNode(nodeId: string) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    let file = await this.vaultDb.getMarkdownFile(nodeId);
+    if (!file) {
+      await this.vaultDb.ensureVaultAvailable(source.vaultId);
+      file = await this.vaultDb.getMarkdownFile(nodeId);
+    }
+    if (!file) return;
+    this.vaultFileContent.set(file.content);
+    this.vaultDraftContent.set(file.content);
+    this.vaultDirty.set(false);
+    const node = await this.vaultDb.getNode(nodeId);
+    const selectedPath = node?.path ?? null;
+    if (selectedPath) {
+      const html = await this.renderVaultPreviewHtml(source.vaultId, file.content);
+      this.vaultPreviewHtml.set(html);
+    } else {
+      this.vaultPreviewHtml.set(this.renderMarkdown(file.content));
+    }
+    const nextState = { ...this.state(), vaultSelectedNodeId: nodeId };
+    this.state.set(nextState);
+    stateStore.set(this.instanceId, nextState);
+    this.vaultSelectedPath.set(selectedPath);
+    this.persistState();
+  }
+
+  exitVaultMode() {
+    this.vaultTree.set([]);
+    this.vaultFileContent.set('');
+    this.vaultDraftContent.set('');
+    this.vaultPreviewHtml.set('');
+    this.vaultSelectedPath.set(null);
+    this.vaultDirty.set(false);
+    this.commit({ ...this.state(), source: { type: 'internal' }, vaultSelectedNodeId: null });
+  }
+
+  async queueVaultZipImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.pendingVaultImport.set({ file, input });
+    this.vaultImportStatus.set('idle');
+    this.vaultImportMessage.set(null);
+    this.vaultImportProgress.set(null);
+    await this.confirmVaultImport();
+  }
+
+  async startVaultFolderImport() {
+    if (typeof window === 'undefined' || !('showDirectoryPicker' in window)) {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.importVaultFolderUnsupported');
+      return;
+    }
+    try {
+      const handle = await (
+        window as Window & { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
+      ).showDirectoryPicker();
+      await this.runVaultImport({ type: 'folder', handle });
+    } catch {
+      // User canceled picker or browser blocked it.
+    }
+  }
+
+  async cloneCurrentVaultToNewInstance() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    try {
+      const sourceVault = await this.vaultDb.getVault(source.vaultId);
+      const cloned = await this.vaultDb.cloneVault(source.vaultId, {
+        name: `${source.vaultName} ${this.translate.instant('notes.copySuffix')}`,
+        mode: 'cow',
+      });
+      if (
+        this.vaultCloudBetaAvailable() &&
+        (this.vaultImportCloudBeta() || Boolean(sourceVault?.cloudBeta?.enabled))
+      ) {
+        await this.vaultDb.setVaultCloudBetaEnabled(cloned.id, true);
+      }
+      await this.applyImportedVaultToDestination(
+        cloned.id,
+        cloned.name,
+        this.vaultImportSummary(),
+        'new',
+      );
+      this.vaultImportStatus.set('success');
+      this.vaultImportMessage.set('notes.cloneVaultSuccess');
+    } catch {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.cloneVaultFailed');
+    }
+  }
+
+  private async confirmVaultImport() {
+    const pending = this.pendingVaultImport();
+    if (!pending) return;
+    await this.runVaultImport({ type: 'zip', file: pending.file }, pending.input);
+  }
+
+  private async runVaultImport(
+    input: { type: 'zip'; file: File } | { type: 'folder'; handle: FileSystemDirectoryHandle },
+    inputElement?: HTMLInputElement,
+  ) {
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.vaultImportStatus.set('loading');
+    this.vaultImportMessage.set('notes.importVaultLoading');
+    this.vaultImportSummary.set(null);
+    try {
+      const result = await this.obsidianImport.importObsidianVault(input, {
+        onProgress: (progress) => this.vaultImportProgress.set(progress),
+      });
+      if (this.vaultImportCloudBeta() && this.vaultCloudBetaAvailable()) {
+        await this.vaultDb.setVaultCloudBetaEnabled(result.vaultId, true);
+      }
+      await this.applyImportedVaultToDestination(
+        result.vaultId,
+        result.vaultName,
+        result.stats,
+        this.vaultImportDestination(),
+      );
+      this.vaultImportStatus.set('success');
+      this.vaultImportMessage.set('notes.importVaultSuccess');
+      this.vaultImportSummary.set(result.stats ?? null);
+    } catch {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.importVaultFailed');
+    } finally {
+      if (inputElement) inputElement.value = '';
+      this.pendingVaultImport.set(null);
+      this.importGuard.finish();
+    }
+  }
+
+  private async applyImportedVaultToDestination(
+    vaultId: string,
+    vaultName: string,
+    stats: ObsidianImportStats | null,
+    destination: 'current' | 'new' | 'splitTopLevel',
+  ) {
+    if (destination === 'splitTopLevel') {
+      await this.createSplitTopLevelNotesInstances(vaultId, vaultName);
+      if (stats) this.vaultImportSummary.set(stats);
+      return;
+    }
+    if (destination === 'new') {
+      await this.createNotesInstanceForVault(vaultId, vaultName);
+      if (stats) this.vaultImportSummary.set(stats);
+      return;
+    }
+    const next = {
+      ...this.state(),
+      source: { type: 'vault' as const, vaultId, vaultName, pathPrefix: null },
+      vaultSelectedNodeId: null,
+    };
+    this.commit(next);
+    await this.refreshVaultTree();
+    if (stats) this.vaultImportSummary.set(stats);
+  }
+
+  private async createNotesInstanceForVault(
+    vaultId: string,
+    vaultName: string,
+    pathPrefix?: string | null,
+  ) {
+    const bounds = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    const created = this.dialog.createInstance('notes', bounds);
+    if (!created.ok || !created.instance) throw new Error('Unable to create Notes instance');
+    const instanceId = created.instance.id;
+    this.dialog.setTitleOverride(
+      instanceId,
+      pathPrefix ? `${vaultName} / ${pathPrefix}` : `${vaultName}`,
+    );
+    const fresh = this.createDefaultStateForCurrentMode();
+    const nextState: NotesState = {
+      ...fresh,
+      source: { type: 'vault', vaultId, vaultName, pathPrefix: pathPrefix ?? null },
+      vaultSelectedNodeId: null,
+    };
+    stateStore.set(instanceId, nextState);
+    const key = buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), instanceId);
+    await this.storage.setItem(key, JSON.stringify(nextState));
+  }
+
+  private async createSplitTopLevelNotesInstances(vaultId: string, vaultName: string) {
+    const tree = await this.vaultDb.getTree(vaultId);
+    const topLevelFolders = tree.filter((node) => node.type === 'folder');
+    const topLevelMarkdownFiles = tree.filter(
+      (node) => node.type === 'file' && /\.md$/i.test(node.path),
+    );
+    if (!topLevelFolders.length && !topLevelMarkdownFiles.length) {
+      await this.createNotesInstanceForVault(vaultId, vaultName);
+      return;
+    }
+    if (topLevelMarkdownFiles.length) {
+      await this.createNotesInstanceForVault(vaultId, `${vaultName} / Root`, null);
+    }
+    for (const folder of topLevelFolders) {
+      await this.createNotesInstanceForVault(vaultId, vaultName, folder.path);
+    }
+  }
+
+  private createDefaultStateForCurrentMode(): NotesState {
+    const root = createFolder('Notes');
+    const firstFolder = createFolder('New folder', root.id);
+    const firstNote = createNote('New note', firstFolder.id);
+    firstFolder.children = [firstNote];
+    root.children = [firstFolder];
+    return {
+      root,
+      archiveRoot: createFolder('Archive', undefined, true),
+      selectedId: firstNote.id,
+      selectedIds: [],
+      view: 'notes',
+      listCollapsed: false,
+      sidebarOpenDesktop: true,
+      sidebarOpenPhone: this.isPhoneMode() ? false : false,
+      phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+      source: { type: 'internal' },
+      vaultSelectedNodeId: null,
+    };
+  }
+
+  private async renderVaultPreviewHtml(vaultId: string, markdown: string) {
+    const escaped = (text: string) =>
+      text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const embeds: string[] = [];
+    const links: string[] = [];
+    let working = markdown.replace(/!\[\[([^[\]]+)\]\]/g, (_m, raw: string) => {
+      embeds.push(raw);
+      return `@@OB_EMBED_${embeds.length - 1}@@`;
+    });
+    working = working.replace(/\[\[([^[\]]+)\]\]/g, (_m, raw: string) => {
+      links.push(raw);
+      return `@@OB_LINK_${links.length - 1}@@`;
+    });
+    let html = this.renderMarkdown(working);
+    const assets = await this.vaultDb.listAssets(vaultId);
+    const assetPathMap = new Map<string, string>();
+    const assetBasenameMap = new Map<string, string>();
+    for (const asset of assets) {
+      assetPathMap.set(asset.path.toLowerCase(), asset.path);
+      const basename = asset.path.split('/').pop()?.toLowerCase();
+      if (basename && !assetBasenameMap.has(basename)) {
+        assetBasenameMap.set(basename, asset.path);
+      }
+    }
+    for (let i = 0; i < embeds.length; i += 1) {
+      const [pathRaw] = String(embeds[i]).split('|');
+      const targetPath = pathRaw.split('#')[0]?.trim();
+      const resolvedAssetPath = targetPath
+        ? (assetPathMap.get(targetPath.toLowerCase()) ??
+          assetBasenameMap.get(targetPath.split('/').pop()?.toLowerCase() ?? ''))
+        : undefined;
+      const assetUrl = resolvedAssetPath
+        ? await this.vaultDb.getAssetUrl(vaultId, resolvedAssetPath)
+        : null;
+      const replacement = assetUrl
+        ? /\.(png|jpe?g|gif|webp|svg)$/i.test(resolvedAssetPath ?? targetPath ?? '')
+          ? `<img src="${escaped(assetUrl)}" alt="${escaped(targetPath ?? '')}" style="max-width:100%; display:block; margin:8px 0;" />`
+          : `<a href="${escaped(assetUrl)}" target="_blank" rel="noopener noreferrer">${escaped(resolvedAssetPath ?? targetPath ?? 'attachment')}</a>`
+        : `<span style="color:var(--color-muted)">[missing embed: ${escaped(targetPath ?? embeds[i])}]</span>`;
+      html = html.replace(`@@OB_EMBED_${i}@@`, replacement);
+    }
+    for (let i = 0; i < links.length; i += 1) {
+      const raw = String(links[i]);
+      const [targetWithHeading, alias] = raw.split('|');
+      const label = alias?.trim() || targetWithHeading.trim();
+      const [targetPathRaw] = targetWithHeading.split('#');
+      html = html.replace(
+        `@@OB_LINK_${i}@@`,
+        `<button type="button" data-ob-link="${escaped(targetPathRaw.trim())}" style="border:none;background:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--color-primary, #1e88e5)">${escaped(label)}</button>`,
+      );
+    }
+    return html;
+  }
+
+  async onVaultPreviewClick(event: Event) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    const target = event.target as HTMLElement | null;
+    const linkEl = target?.closest('[data-ob-link]') as HTMLElement | null;
+    if (!linkEl) return;
+    const raw = linkEl.getAttribute('data-ob-link')?.trim();
+    if (!raw) return;
+    const direct =
+      (await this.vaultDb.getNodeByPath(source.vaultId, raw)) ??
+      (await this.vaultDb.getNodeByPath(source.vaultId, `${raw}.md`));
+    if (direct) {
+      await this.selectVaultNode(direct.id);
+      return;
+    }
+    const basename = raw.split('/').pop()?.toLowerCase();
+    if (!basename) return;
+    const fallback = this.findVaultNodeByBasename(this.vaultTree(), basename);
+    if (fallback) await this.selectVaultNode(fallback.id);
+  }
+
+  onVaultDraftInput(event: Event) {
+    const target = event.target as HTMLTextAreaElement;
+    this.vaultDraftContent.set(target.value);
+    this.vaultDirty.set(target.value !== this.vaultFileContent());
+  }
+
+  async saveVaultFile() {
+    const source = this.state().source;
+    const nodeId = this.state().vaultSelectedNodeId;
+    if (!source || source.type !== 'vault' || !nodeId || !this.vaultDirty() || this.vaultSaving())
+      return;
+    this.vaultSaving.set(true);
+    try {
+      await this.vaultDb.saveMarkdownFile(nodeId, this.vaultDraftContent());
+      this.vaultFileContent.set(this.vaultDraftContent());
+      this.vaultDirty.set(false);
+      await this.refreshVaultUnresolvedLinks();
+      this.vaultPreviewHtml.set(
+        await this.renderVaultPreviewHtml(source.vaultId, this.vaultDraftContent()),
+      );
+    } finally {
+      this.vaultSaving.set(false);
+      await this.refreshCurrentVaultCloudStatus();
+    }
+  }
+
+  async toggleCurrentVaultCloudBeta(enabled: boolean) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    if (!this.vaultCloudBetaAvailable()) return;
+    this.vaultCloudBetaSyncing.set(true);
+    this.vaultCloudBetaStatusMessage.set(null);
+    try {
+      await this.vaultDb.setVaultCloudBetaEnabled(source.vaultId, enabled);
+      this.vaultCloudBetaStatusMessage.set(
+        enabled ? 'notes.cloudBetaVaultEnabled' : 'notes.cloudBetaVaultDisabled',
+      );
+    } catch {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+    } finally {
+      this.vaultCloudBetaSyncing.set(false);
+      await this.refreshCurrentVaultCloudStatus();
+    }
+  }
+
+  async toggleCurrentVaultCloudAttachmentsBetaRequested(requested: boolean) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    this.vaultCloudBetaSyncing.set(true);
+    this.vaultCloudBetaStatusMessage.set(null);
+    try {
+      await this.vaultDb.setVaultCloudAttachmentsBetaRequested(source.vaultId, requested);
+      this.vaultCloudBetaStatusMessage.set(
+        requested ? 'notes.cloudBetaAttachmentsRequested' : 'notes.cloudBetaVaultEnabled',
+      );
+    } catch {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+    } finally {
+      this.vaultCloudBetaSyncing.set(false);
+      await this.refreshCurrentVaultCloudStatus();
+    }
+  }
+
+  private async refreshCurrentVaultCloudStatus() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultCloudBetaEnabled.set(false);
+      this.vaultCloudAttachmentsBetaRequested.set(false);
+      this.vaultCloudBetaStatusMessage.set(null);
+      this.vaultCloudBetaSummary.set(null);
+      return;
+    }
+    const vault = await this.vaultDb.getVault(source.vaultId);
+    const summary = await this.vaultDb.getVaultCloudBetaSummary(source.vaultId);
+    this.vaultCloudBetaSummary.set(summary);
+    const enabled = Boolean(vault?.cloudBeta?.enabled);
+    this.vaultCloudBetaEnabled.set(enabled);
+    this.vaultCloudAttachmentsBetaRequested.set(Boolean(summary?.attachmentsCloudRequested));
+    if (!vault) {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultUnavailableLocal');
+      return;
+    }
+    if (!enabled) {
+      this.vaultCloudBetaStatusMessage.set('notes.vaultStorageLocalDevice');
+      return;
+    }
+    if (vault.cloudBeta?.lastSyncError) {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+      return;
+    }
+    this.vaultCloudBetaStatusMessage.set(
+      vault.cloudBeta?.lastSyncedAt ? 'notes.cloudBetaVaultEnabled' : 'notes.cloudBetaSyncPending',
+    );
+  }
+
+  onVaultTreeScroll(event: Event) {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    this.vaultTreeScrollTop.set(target.scrollTop || 0);
+    this.vaultTreeViewportHeight.set(target.clientHeight || 320);
+  }
+
+  isVaultFolderCollapsed(path: string) {
+    return (this.state().vaultCollapsedFolders ?? []).includes(path);
+  }
+
+  toggleVaultFolder(path: string) {
+    const current = new Set(this.state().vaultCollapsedFolders ?? []);
+    if (current.has(path)) current.delete(path);
+    else current.add(path);
+    this.commit({ ...this.state(), vaultCollapsedFolders: Array.from(current).sort() });
+  }
+
+  unresolvedLinkSourcePath(link: LinkIndexRecord) {
+    const row = this.vaultFlatRowMap().get(link.fromNodeId) ?? null;
+    return row?.node.path ?? link.fromNodeId;
+  }
+
+  async openUnresolvedLinkSource(link: LinkIndexRecord) {
+    await this.selectVaultNode(link.fromNodeId);
+  }
+
+  async createNoteForUnresolvedLink(link: LinkIndexRecord) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    const raw = (link.rawTarget || '').split('|')[0]?.split('#')[0]?.trim();
+    if (!raw) return;
+    const basePath = source.pathPrefix ? `${source.pathPrefix}/${raw}` : raw;
+    const created = await this.vaultDb.createMarkdownNoteByPath(source.vaultId, basePath, '');
+    await this.vaultDb.resolveLinkTarget(link.id, created.path);
+    await this.refreshVaultTree();
+    await this.refreshVaultUnresolvedLinks();
+    await this.selectVaultNode(created.id);
+  }
+
+  private async refreshVaultUnresolvedLinks() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultUnresolvedLinks.set([]);
+      return;
+    }
+    const all = await this.vaultDb.listUnresolvedLinks(source.vaultId);
+    if (!source.pathPrefix) {
+      this.vaultUnresolvedLinks.set(all);
+      return;
+    }
+    const rowMap = this.vaultFlatRowMap();
+    this.vaultUnresolvedLinks.set(
+      all.filter((link) => {
+        const row = rowMap.get(link.fromNodeId) ?? null;
+        return Boolean(
+          row &&
+          (row.node.path === source.pathPrefix ||
+            row.node.path.startsWith(`${source.pathPrefix}/`)),
+        );
+      }),
+    );
+  }
+
+  private flattenVaultTree(
+    nodes: VaultFileTreeNode[],
+    depth = 0,
+    out: VaultTreeFlatRow[] = [],
+    collapsed = new Set<string>(),
+  ) {
+    for (const node of nodes) {
+      out.push({ id: node.id, node, depth });
+      if (node.children?.length && !collapsed.has(node.path)) {
+        this.flattenVaultTree(node.children, depth + 1, out, collapsed);
+      }
+    }
+    return out;
+  }
+
+  private findVaultNodeByBasename(
+    nodes: VaultFileTreeNode[],
+    basename: string,
+  ): VaultFileTreeNode | null {
+    for (const node of nodes) {
+      if (node.type === 'file') {
+        const name = node.name.toLowerCase();
+        if (name === basename || name === `${basename}.md`) return node;
+      }
+      if (node.children?.length) {
+        const found = this.findVaultNodeByBasename(node.children, basename);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   folderCount() {
