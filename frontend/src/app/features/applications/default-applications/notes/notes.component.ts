@@ -71,6 +71,7 @@ interface NotesState {
   phoneSidebarInit?: boolean;
   source?: NotesSource;
   vaultSelectedNodeId?: string | null;
+  vaultCollapsedFolders?: string[];
 }
 
 interface VaultTreeFlatRow {
@@ -837,7 +838,14 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
   vaultTree = signal<VaultFileTreeNode[]>([]);
-  vaultFlatRows = computed(() => this.flattenVaultTree(this.vaultTree()));
+  vaultFlatRows = computed(() =>
+    this.flattenVaultTree(
+      this.vaultTree(),
+      0,
+      [],
+      new Set(this.state().vaultCollapsedFolders ?? []),
+    ),
+  );
   vaultVisibleRows = computed(() => {
     const rows = this.vaultFlatRows();
     const height = Math.max(this.vaultTreeViewportHeight(), this.vaultTreeRowHeight * 4);
@@ -864,6 +872,20 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultCloudBetaStatusMessage = signal<string | null>(null);
   vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
   vaultUnresolvedLinks = signal<LinkIndexRecord[]>([]);
+  vaultUnresolvedSearch = signal('');
+  vaultUnresolvedAmbiguousOnly = signal(false);
+  filteredVaultUnresolvedLinks = computed(() => {
+    const query = this.vaultUnresolvedSearch().trim().toLowerCase();
+    const ambiguousOnly = this.vaultUnresolvedAmbiguousOnly();
+    return this.vaultUnresolvedLinks().filter((link) => {
+      if (ambiguousOnly && !link.ambiguous) return false;
+      if (!query) return true;
+      return (
+        link.rawTarget.toLowerCase().includes(query) ||
+        this.unresolvedLinkSourcePath(link).toLowerCase().includes(query)
+      );
+    });
+  });
   vaultUnresolvedPanelOpen = signal(false);
   vaultTreeScrollTop = signal(0);
   vaultTreeViewportHeight = signal(320);
@@ -1521,6 +1543,17 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.vaultTreeViewportHeight.set(target.clientHeight || 320);
   }
 
+  isVaultFolderCollapsed(path: string) {
+    return (this.state().vaultCollapsedFolders ?? []).includes(path);
+  }
+
+  toggleVaultFolder(path: string) {
+    const current = new Set(this.state().vaultCollapsedFolders ?? []);
+    if (current.has(path)) current.delete(path);
+    else current.add(path);
+    this.commit({ ...this.state(), vaultCollapsedFolders: Array.from(current).sort() });
+  }
+
   unresolvedLinkSourcePath(link: LinkIndexRecord) {
     const row = this.findVaultRowById(this.vaultFlatRows(), link.fromNodeId);
     return row?.node.path ?? link.fromNodeId;
@@ -1554,10 +1587,17 @@ export class NotesComponent implements OnInit, OnDestroy {
     );
   }
 
-  private flattenVaultTree(nodes: VaultFileTreeNode[], depth = 0, out: VaultTreeFlatRow[] = []) {
+  private flattenVaultTree(
+    nodes: VaultFileTreeNode[],
+    depth = 0,
+    out: VaultTreeFlatRow[] = [],
+    collapsed = new Set<string>(),
+  ) {
     for (const node of nodes) {
       out.push({ id: node.id, node, depth });
-      if (node.children?.length) this.flattenVaultTree(node.children, depth + 1, out);
+      if (node.children?.length && !collapsed.has(node.path)) {
+        this.flattenVaultTree(node.children, depth + 1, out, collapsed);
+      }
     }
     return out;
   }

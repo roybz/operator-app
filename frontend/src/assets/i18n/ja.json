@@ -339,7 +339,10 @@
     "vaultStorageLocalDevice": "Stored locally on this device",
     "vaultStorageCloudBeta": "Cloud sync beta (markdown + structure)",
     "unresolvedLinks": "Unresolved links",
-    "unresolvedLinksEmpty": "No unresolved links found in this vault view."
+    "unresolvedLinksEmpty": "No unresolved links found in this vault view.",
+    "unresolvedLinksSearch": "Search unresolved links",
+    "unresolvedLinksAmbiguousOnly": "Ambiguous only",
+    "unresolvedLinkAmbiguous": "(ambiguous)"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",
