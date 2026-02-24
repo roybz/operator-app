@@ -17,6 +17,7 @@ export class RealtimeSyncService {
   private shouldBeConnected = false;
   private sessionNonce = '';
   private eventSeq = 0;
+  private reconnectAttempt = 0;
 
   readonly status = signal<RealtimeStatus>('idle');
   readonly lastEvent = signal<{ seq: number; payload: RealtimeEvent } | null>(null);
@@ -70,6 +71,7 @@ export class RealtimeSyncService {
     socket.onopen = () => {
       if (this.socket !== socket) return;
       this.status.set('connected');
+      this.reconnectAttempt = 0;
       this.clearReconnect();
     };
 
@@ -113,11 +115,13 @@ export class RealtimeSyncService {
   private scheduleReconnect() {
     if (typeof window === 'undefined') return;
     if (this.reconnectTimer) return;
+    const attempt = this.reconnectAttempt++;
+    const delayMs = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 4));
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.shouldBeConnected) return;
       void this.connect();
-    }, 2000);
+    }, delayMs);
   }
 
   private clearReconnect() {

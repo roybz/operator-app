@@ -50,10 +50,23 @@ import { cloneNotesState } from './features/applications/default-applications/no
 import { cloneTimerState } from './features/applications/default-applications/timer/timer.component';
 import { cloneCalendarState } from './features/applications/default-applications/calendar/calendar.component';
 import { cloneClockState } from './features/applications/default-applications/clock/clock.component';
-import { cloneKanbanState } from './features/applications/default-applications/kanban/kanban.component';
+import {
+  KanbanState,
+  cloneKanbanState,
+  loadKanbanState,
+  saveKanbanState,
+} from './features/applications/default-applications/kanban/kanban.component';
 import { cloneStickyNoteState } from './features/applications/default-applications/sticky-notes/sticky-notes.component';
 import { cloneDataTableState } from './features/applications/default-applications/data-table/data-table.component';
-import { cloneTodoState } from './features/applications/default-applications/todo/todo-api';
+import {
+  TodoState,
+  TodoSubtask,
+  cloneTodoState,
+  createSubtask,
+  createTodoItem,
+  loadTodoState,
+  saveTodoState,
+} from './features/applications/default-applications/todo/todo-api';
 import { InstanceSettingsService } from './core/instance-settings.service';
 import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
@@ -703,10 +716,17 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   (moveWorkspace)="openMoveWorkspace(instance.id)"
                 >
                   @if (instance.appId === 'todo') {
-                    <app-todo-page [instanceId]="instance.id" />
+                    <app-todo-page
+                      [instanceId]="instance.id"
+                      (transformToKanbanRequest)="transformTodoToKanban(instance.id)"
+                    />
                   }
                   @if (instance.appId === 'kanban') {
-                    <app-kanban [instanceId]="instance.id" />
+                    <app-kanban
+                      [instanceId]="instance.id"
+                      (transformToTodoRequest)="transformKanbanToTodo(instance.id)"
+                      (transformColumnsToTodosRequest)="transformKanbanColumnsToTodos(instance.id)"
+                    />
                   }
                   @if (instance.appId === 'calculator') {
                     <app-calculator [instanceId]="instance.id" />
@@ -1209,6 +1229,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private lastPhoneAppliedId: string | null = null;
   private phoneBootChecked = false;
   private phoneModeReloading = false;
+  private accessibilityPromptSessionScopes = new Set<string>();
   private remoteSyncInterval?: number;
   private remoteSyncInFlight = false;
   private remoteSyncApplyPending = false;
@@ -1547,9 +1568,16 @@ export class AppComponent implements OnInit, OnDestroy {
         this.accessibilityPromptOpen.set(false);
         return;
       }
+      if (!this.auth.ready()) return;
       const universeId = this.auth.getActiveUniverseId(actualUser.id) ?? null;
+      const promptScope = `${actualUser.id}:${universeId ?? ''}`;
       if (this.auth.preferences().accessibilityMode) return;
-      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) return;
+      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) {
+        this.accessibilityPromptSessionScopes.add(promptScope);
+        return;
+      }
+      if (this.accessibilityPromptSessionScopes.has(promptScope)) return;
+      this.accessibilityPromptSessionScopes.add(promptScope);
       this.accessibilityPromptEnabled.set(false);
       this.accessibilityPromptOpen.set(true);
     });
@@ -1561,6 +1589,17 @@ export class AppComponent implements OnInit, OnDestroy {
     });
     effect(() => {
       if (!this.phoneMode()) return;
+      const visibleCandidates = this.phoneDialogs().filter(
+        (instance) => !this.isPhoneStashed(instance) && !this.isPhoneMinimized(instance),
+      );
+      if (visibleCandidates.length === 0) {
+        const recoverable = this.phoneDialogs()
+          .filter((instance) => !this.isPhoneStashed(instance))
+          .sort((a, b) => b.z - a.z)[0];
+        if (recoverable) {
+          this.dialogService.setPhoneMinimized(recoverable.id, false);
+        }
+      }
       const active = this.phoneActiveInstance();
       if (!active) {
         this.phoneActiveDialogId.set(null);
@@ -1699,7 +1738,9 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!event) return;
       if (event.seq <= this.lastStorageRemoteChangeSeq) return;
       this.lastStorageRemoteChangeSeq = event.seq;
-      const signature = this.changedKeysSignature(event.keys);
+      const shellKeys = event.keys.filter((key) => this.isShellRemoteRefreshKey(key));
+      if (shellKeys.length === 0) return;
+      const signature = this.changedKeysSignature(shellKeys);
       if (
         this.suppressRemoteChangeSignature &&
         this.suppressRemoteChangeSignature === signature &&
@@ -1710,14 +1751,14 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
-      const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(event.keys);
+      const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(shellKeys);
       if (dirtyOverlap || recentLocalWrite) {
-        this.remoteConflict.queue(event.keys, dirtyOverlap ? 'dirty' : 'recent-local-write');
+        this.remoteConflict.queue(shellKeys, dirtyOverlap ? 'dirty' : 'recent-local-write');
         this.scheduleDeferredRemoteApply();
         this.remoteSyncApplyPending = false;
         return;
       }
-      void this.applyRemoteStorageChange(event.keys);
+      void this.applyRemoteStorageChange(shellKeys);
     });
 
     effect(() => {
@@ -1792,6 +1833,8 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const changedKeys = await this.storage.hydrateAndGetChangedKeys();
       if (changedKeys.length === 0) return;
+      const shellKeys = changedKeys.filter((key) => this.isShellRemoteRefreshKey(key));
+      if (shellKeys.length === 0) return;
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       if (recentLocalWrite) return;
       this.remoteSyncApplyPending = true;
@@ -1905,6 +1948,23 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private changedKeysSignature(keys: string[]) {
     return [...keys].sort().join('|');
+  }
+
+  private isShellRemoteRefreshKey(key: string) {
+    return (
+      [
+        'op_users',
+        'op_session',
+        'op_prefs',
+        'op_preview_prefs',
+        'op_org_settings',
+        'op_universes',
+        'op_active_universe',
+        'op_invitees',
+      ].includes(key) ||
+      key.startsWith('op_dialog_state_v1:') ||
+      key.startsWith('op_preview_dialog_state_v1:')
+    );
   }
 
   updateCanvasBounds = () => {
@@ -2524,6 +2584,248 @@ export class AppComponent implements OnInit, OnDestroy {
     if (appId === 'clock') cloneClockState(fromId, toId, this.storage);
     if (appId === 'kanban') cloneKanbanState(fromId, toId, this.storage);
     if (appId === 'dataTable') cloneDataTableState(fromId, toId, this.storage);
+  }
+
+  transformTodoToKanban(instanceId: string) {
+    if (!this.canEdit()) return;
+    const original = this.dialogService.getActiveDialogs().find((item) => item.id === instanceId);
+    if (!original || original.appId !== 'todo') return;
+    const userKey = this.auth.storageUserKey();
+    const todoState = loadTodoState(this.storage, instanceId, userKey);
+    const nextInstance = this.createTransformedInstance('kanban', original);
+    if (!nextInstance) return;
+    saveKanbanState(
+      this.storage,
+      nextInstance.id,
+      this.auth.storageUserKey(),
+      this.todoToKanbanState(todoState),
+    );
+    this.dialogService.setTitleOverride(
+      nextInstance.id,
+      this.buildTransformTitle(original, 'Kanban'),
+    );
+  }
+
+  transformKanbanToTodo(instanceId: string) {
+    if (!this.canEdit()) return;
+    const original = this.dialogService.getActiveDialogs().find((item) => item.id === instanceId);
+    if (!original || original.appId !== 'kanban') return;
+    const kanbanState = loadKanbanState(this.storage, instanceId, this.auth.storageUserKey());
+    if (!kanbanState) return;
+    const nextInstance = this.createTransformedInstance('todo', original);
+    if (!nextInstance) return;
+    saveTodoState(
+      this.storage,
+      nextInstance.id,
+      this.auth.storageUserKey(),
+      this.kanbanToTodoState(kanbanState),
+    );
+    this.dialogService.setTitleOverride(
+      nextInstance.id,
+      this.buildTransformTitle(original, 'Todo'),
+    );
+  }
+
+  transformKanbanColumnsToTodos(instanceId: string) {
+    if (!this.canEdit()) return;
+    const original = this.dialogService.getActiveDialogs().find((item) => item.id === instanceId);
+    if (!original || original.appId !== 'kanban') return;
+    const kanbanState = loadKanbanState(this.storage, instanceId, this.auth.storageUserKey());
+    const activeBoard =
+      kanbanState?.boards.find((b) => b.id === kanbanState.activeBoardId) ?? kanbanState?.boards[0];
+    if (!kanbanState || !activeBoard) return;
+    for (const column of activeBoard.columns) {
+      const nextInstance = this.createTransformedInstance('todo', original);
+      if (!nextInstance) break;
+      saveTodoState(
+        this.storage,
+        nextInstance.id,
+        this.auth.storageUserKey(),
+        this.kanbanColumnToTodoState(kanbanState, activeBoard.id, column.id),
+      );
+      this.dialogService.setTitleOverride(
+        nextInstance.id,
+        `${this.instanceLabel(original)} - ${column.title}`,
+      );
+    }
+  }
+
+  private createTransformedInstance(
+    appId: AppId,
+    original?: DialogInstance,
+  ): DialogInstance | null {
+    this.updateCanvasBounds();
+    const result = this.dialogService.createInstance(appId, this.viewportBounds());
+    if (!result.ok || !result.instance) {
+      alert(this.translate.instant(result.message ?? 'dialogs.error.generic'));
+      return null;
+    }
+    const next = result.instance;
+    if (this.phoneMode()) {
+      this.phoneDialogs()
+        .filter((instance) => instance.id !== next.id)
+        .forEach((instance) => this.dialogService.setPhoneMinimized(instance.id, true));
+      this.dialogService.setPhoneRect(
+        next.id,
+        { x: 0, y: 0, width: this.viewportBounds().width, height: this.viewportBounds().height },
+        this.viewportBounds(),
+      );
+      this.dialogService.setPhoneMinimized(next.id, false);
+      this.dialogService.unstashPhoneInstance(next.id);
+      this.setPhoneActiveInstance(next.id, true);
+    } else if (original) {
+      this.dialogService.moveInstance(
+        next.id,
+        { x: original.rect.x + 24, y: original.rect.y + 24 },
+        this.canvasBounds(),
+      );
+    }
+    this.dialogService.bringToFront(next.id);
+    return next;
+  }
+
+  private buildTransformTitle(original: DialogInstance, targetLabel: string) {
+    return `${this.instanceLabel(original)} (${targetLabel})`;
+  }
+
+  private todoToKanbanState(todoState: TodoState): KanbanState {
+    const cardId = () =>
+      `card_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const colId = () => `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const chkId = () => `chk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const boardId = `board_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const cards: NonNullable<KanbanState['boards'][number]>['cards'] = {};
+    const columns = todoState.projects.map((project) => {
+      const nextColumnId = colId();
+      const columnCardIds: string[] = [];
+      for (const todo of project.todos) {
+        const nextCardId = cardId();
+        columnCardIds.push(nextCardId);
+        cards[nextCardId] = {
+          id: nextCardId,
+          title: todo.text,
+          description: '',
+          dueDate: '',
+          labels: todo.completed ? ['completed'] : [],
+          checklist: (todo.subtasks ?? []).map((sub) => ({
+            id: chkId(),
+            text: sub.text,
+            done: Boolean(sub.completed),
+          })),
+        };
+      }
+      return { id: nextColumnId, title: project.title, cardIds: columnCardIds };
+    });
+    const ensuredColumns = columns.length
+      ? columns
+      : [{ id: colId(), title: 'Todo', cardIds: [] as string[] }];
+    return {
+      boards: [
+        {
+          id: boardId,
+          name: 'Board',
+          columns: ensuredColumns,
+          cards,
+        },
+      ],
+      activeBoardId: boardId,
+      selectedCardId: null,
+      selectedColumnId: ensuredColumns[0]?.id ?? null,
+    };
+  }
+
+  private kanbanToTodoState(kanbanState: KanbanState): TodoState {
+    const activeBoard =
+      kanbanState.boards.find((b) => b.id === kanbanState.activeBoardId) ?? kanbanState.boards[0];
+    if (!activeBoard) {
+      const todo = createTodoItem('');
+      return {
+        version: 2,
+        projectsEnabled: false,
+        projects: [{ id: `p_${todo.id}`, title: 'Project', todos: [] }],
+        activeProjectId: `p_${todo.id}`,
+        subtaskCollapsed: {},
+      };
+    }
+    const projects = activeBoard.columns.map((column) => {
+      const todos = column.cardIds
+        .map((cardId) => activeBoard.cards?.[cardId])
+        .filter(Boolean)
+        .map((card) => this.kanbanCardToTodo(card!, column.title));
+      return {
+        id: `proj_${column.id}_${Math.random().toString(36).slice(2, 6)}`,
+        title: column.title || 'Project',
+        todos,
+      };
+    });
+    const ensuredProjects =
+      projects.length > 0
+        ? projects
+        : [{ id: `proj_${Date.now().toString(36)}`, title: 'Project', todos: [] }];
+    return {
+      version: 2,
+      projectsEnabled: ensuredProjects.length > 1,
+      projects: ensuredProjects,
+      activeProjectId: ensuredProjects[0].id,
+      subtaskCollapsed: {},
+    };
+  }
+
+  private kanbanColumnToTodoState(
+    kanbanState: KanbanState,
+    boardId: string,
+    columnId: string,
+  ): TodoState {
+    const board = kanbanState.boards.find((item) => item.id === boardId);
+    const column = board?.columns.find((item) => item.id === columnId);
+    const todos =
+      board && column
+        ? column.cardIds
+            .map((cardId) => board.cards?.[cardId])
+            .filter(Boolean)
+            .map((card) => this.kanbanCardToTodo(card!, column.title))
+        : [];
+    const projectId = `proj_${columnId}_${Date.now().toString(36)}`;
+    return {
+      version: 2,
+      projectsEnabled: false,
+      projects: [{ id: projectId, title: column?.title || 'Project', todos }],
+      activeProjectId: projectId,
+      subtaskCollapsed: {},
+    };
+  }
+
+  private kanbanCardToTodo(
+    card: NonNullable<KanbanState['boards'][number]['cards'][string]>,
+    columnTitle: string,
+  ) {
+    const todo = createTodoItem(card.title ?? '');
+    todo.completed =
+      this.looksDoneColumn(columnTitle) ||
+      card.labels?.some((label) => /done|complete/i.test(label));
+    const subtasks: TodoSubtask[] = (card.checklist ?? []).map((item) => ({
+      id: createSubtask(item.text ?? '').id,
+      text: item.text ?? '',
+      completed: Boolean(item.done),
+    }));
+    if (card.description?.trim()) {
+      subtasks.push(createSubtask(`Description: ${card.description.trim()}`));
+    }
+    if (card.dueDate?.trim()) {
+      subtasks.push(createSubtask(`Due: ${card.dueDate.trim()}`));
+    }
+    if (Array.isArray(card.labels) && card.labels.length) {
+      const otherLabels = card.labels.filter((label) => !/done|complete/i.test(label));
+      if (otherLabels.length) {
+        subtasks.push(createSubtask(`Labels: ${otherLabels.join(', ')}`));
+      }
+    }
+    todo.subtasks = subtasks;
+    return todo;
+  }
+
+  private looksDoneColumn(title: string) {
+    return /(done|complete|completed|finished)/i.test(title || '');
   }
 
   private effectiveUserId() {
