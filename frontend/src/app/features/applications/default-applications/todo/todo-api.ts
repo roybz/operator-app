@@ -49,7 +49,7 @@ function newId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function stateKey(instanceId: string, userId: string) {
+export function todoStateKey(instanceId: string, userId: string) {
   return `${STATE_STORAGE_KEY}:${userId}:${instanceId}`;
 }
 
@@ -62,7 +62,10 @@ function normalizeTodo(raw: unknown): Todo | null {
   const todo = raw as Partial<Todo>;
   const id = typeof todo.id === 'string' && todo.id ? todo.id : newId();
   const text = typeof todo.text === 'string' ? todo.text : '';
-  const createdAt = typeof todo.createdAt === 'string' && todo.createdAt ? todo.createdAt : new Date().toISOString();
+  const createdAt =
+    typeof todo.createdAt === 'string' && todo.createdAt
+      ? todo.createdAt
+      : new Date().toISOString();
   const completed = Boolean(todo.completed);
   const subtasks: TodoSubtask[] = [];
   if (Array.isArray(todo.subtasks)) {
@@ -83,7 +86,8 @@ function normalizeProject(raw: unknown): TodoProject | null {
   if (!raw || typeof raw !== 'object') return null;
   const project = raw as Partial<TodoProject>;
   const id = typeof project.id === 'string' && project.id ? project.id : newId();
-  const title = typeof project.title === 'string' && project.title.trim() ? project.title : 'Project';
+  const title =
+    typeof project.title === 'string' && project.title.trim() ? project.title : 'Project';
   const todos = Array.isArray(project.todos)
     ? project.todos.map((todo) => normalizeTodo(todo)).filter((todo): todo is Todo => Boolean(todo))
     : [];
@@ -116,7 +120,7 @@ function normalizeState(state: Partial<TodoState> | null | undefined): TodoState
 }
 
 export function loadTodoState(storage: StorageLike, instanceId: string, userId: string): TodoState {
-  const raw = storage.getItemSync(stateKey(instanceId, userId));
+  const raw = storage.getItemSync(todoStateKey(instanceId, userId));
   if (raw) {
     try {
       return normalizeState(JSON.parse(raw) as Partial<TodoState>);
@@ -154,7 +158,11 @@ export function saveTodoState(
   userId: string,
   state: TodoState,
 ) {
-  void storage.setItem(stateKey(instanceId, userId), JSON.stringify(normalizeState(state)));
+  void storage.setItem(todoStateKey(instanceId, userId), serializeTodoState(state));
+}
+
+export function serializeTodoState(state: TodoState) {
+  return JSON.stringify(normalizeState(state));
 }
 
 export function cloneTodoState(

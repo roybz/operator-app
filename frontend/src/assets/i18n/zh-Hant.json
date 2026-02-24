@@ -262,7 +262,8 @@
     "expand": "展開",
     "license": "License & Privacy Policy",
     "logout": "登出",
-    "settings": "設定"
+    "settings": "設定",
+    "switchDesktopMode": "Switch to Desktop Mode"
   },
   "notes": {
     "addFolder": "Add folder",

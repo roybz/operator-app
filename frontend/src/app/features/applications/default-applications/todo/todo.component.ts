@@ -4,6 +4,7 @@ import {
   EventEmitter,
   HostListener,
   Input,
+  OnDestroy,
   OnInit,
   Output,
   effect,
@@ -20,7 +21,7 @@ import {
   createSubtask,
   createTodoItem,
   loadTodoState,
-  saveTodoState,
+  serializeTodoState,
 } from './todo-api';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
@@ -29,6 +30,11 @@ import { ExportGuardService } from '../../../../core/export-guard.service';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
 
@@ -471,7 +477,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
     `,
   ],
 })
-export class TodoPageComponent implements OnInit {
+export class TodoPageComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
   @Output() transformToKanbanRequest = new EventEmitter<void>();
   state = signal<TodoState>({
@@ -516,6 +522,13 @@ export class TodoPageComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), serializeTodoState(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -535,6 +548,10 @@ export class TodoPageComponent implements OnInit {
 
   async ngOnInit() {
     await this.reload();
+  }
+
+  ngOnDestroy() {
+    this.persistQueue.destroy();
   }
 
   async reload(options?: { suppressNormalizationPersist?: boolean }) {
@@ -997,7 +1014,7 @@ export class TodoPageComponent implements OnInit {
     this.todos.set(this.activeProject(next)?.todos ?? []);
     this.subtaskCollapsed.set(collapsed);
     this.syncSubtaskCollapse(this.activeProject(next)?.todos ?? []);
-    saveTodoState(this.storage, this.instanceId, this.prefs.userId(), next);
+    this.persistState();
   }
 
   private activeProject(state = this.state()) {
@@ -1052,9 +1069,13 @@ export class TodoPageComponent implements OnInit {
       const updated = { ...current, subtaskCollapsed: next };
       this.state.set(updated);
       if (!options?.suppressNormalizationPersist) {
-        saveTodoState(this.storage, this.instanceId, this.prefs.userId(), updated);
+        this.persistState();
       }
     }
+  }
+
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
   }
 
   @HostListener('focusin', ['$event'])
@@ -1252,5 +1273,22 @@ export class TodoPageComponent implements OnInit {
       return !['checkbox', 'radio', 'button', 'submit', 'file', 'color'].includes(type);
     }
     return false;
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (!this.isLocallyEditing()) {
+        await this.reload({ suppressNormalizationPersist: true });
+      }
+      return 'handled' as const;
+    }
+    return undefined;
   }
 }

@@ -30,6 +30,11 @@ import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
 export interface ChecklistItem {
@@ -573,6 +578,13 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   } | null = null;
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -641,6 +653,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.persistQueue.destroy();
     this.cleanupTouchDrag();
   }
 
@@ -1293,8 +1306,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+    this.persistQueue.schedule();
   }
 
   private reloadFromStorage() {
@@ -1331,5 +1343,22 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
       return !['checkbox', 'radio', 'button', 'submit', 'file', 'color', 'date'].includes(type);
     }
     return false;
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (!this.isLocallyEditing()) {
+        this.reloadFromStorage();
+      }
+      return 'handled' as const;
+    }
+    return undefined;
   }
 }
