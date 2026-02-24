@@ -1209,6 +1209,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private lastPhoneAppliedId: string | null = null;
   private phoneBootChecked = false;
   private phoneModeReloading = false;
+  private accessibilityPromptSessionScopes = new Set<string>();
   private remoteSyncInterval?: number;
   private remoteSyncInFlight = false;
   private remoteSyncApplyPending = false;
@@ -1547,9 +1548,16 @@ export class AppComponent implements OnInit, OnDestroy {
         this.accessibilityPromptOpen.set(false);
         return;
       }
+      if (!this.auth.ready()) return;
       const universeId = this.auth.getActiveUniverseId(actualUser.id) ?? null;
+      const promptScope = `${actualUser.id}:${universeId ?? ''}`;
       if (this.auth.preferences().accessibilityMode) return;
-      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) return;
+      if (this.auth.hasSeenAccessibilityPrompt(actualUser.id, universeId)) {
+        this.accessibilityPromptSessionScopes.add(promptScope);
+        return;
+      }
+      if (this.accessibilityPromptSessionScopes.has(promptScope)) return;
+      this.accessibilityPromptSessionScopes.add(promptScope);
       this.accessibilityPromptEnabled.set(false);
       this.accessibilityPromptOpen.set(true);
     });
@@ -1561,6 +1569,17 @@ export class AppComponent implements OnInit, OnDestroy {
     });
     effect(() => {
       if (!this.phoneMode()) return;
+      const visibleCandidates = this.phoneDialogs().filter(
+        (instance) => !this.isPhoneStashed(instance) && !this.isPhoneMinimized(instance),
+      );
+      if (visibleCandidates.length === 0) {
+        const recoverable = this.phoneDialogs()
+          .filter((instance) => !this.isPhoneStashed(instance))
+          .sort((a, b) => b.z - a.z)[0];
+        if (recoverable) {
+          this.dialogService.setPhoneMinimized(recoverable.id, false);
+        }
+      }
       const active = this.phoneActiveInstance();
       if (!active) {
         this.phoneActiveDialogId.set(null);

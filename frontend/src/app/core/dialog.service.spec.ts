@@ -104,4 +104,31 @@ describe('DialogService', () => {
     expect(dialog.getAppInstances('todo').length).toBe(1);
     expect(dialog.getAppInstances('todo', { includeArchived: false }).length).toBe(0);
   });
+
+  it('does not persist phone-only dialog UI state into shared storage', async () => {
+    const dialog = TestBed.inject(DialogService);
+    const auth = TestBed.inject(AuthService);
+    const storage = TestBed.inject(StorageService);
+    const created = dialog.createInstance('todo', bounds);
+    expect(created.ok).toBe(true);
+    if (!created.ok || !created.instance) return;
+
+    dialog.setPhoneMinimized(created.instance.id, true);
+    dialog.stashPhoneInstance(created.instance.id, bounds);
+    dialog.togglePhoneMaximize(created.instance.id, bounds);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const raw = storage.getItemSync(`op_dialog_state_v1:${auth.storageUserKey()}`);
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(String(raw)) as {
+      dialogsByWorkspace: Record<string, Record<string, unknown>[]>;
+    };
+    const stored = Object.values(parsed.dialogsByWorkspace).flat()[0];
+    expect(stored['phoneMinimized']).toBe(false);
+    expect(stored['phoneStashed']).toBe(false);
+    expect(stored['phoneRect']).toBeUndefined();
+    expect(stored['phoneTileRect']).toBeUndefined();
+    expect(stored['phoneRestoreRect']).toBeUndefined();
+    expect(stored['phoneMaximized']).toBe(false);
+  });
 });

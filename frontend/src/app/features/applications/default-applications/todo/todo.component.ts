@@ -984,11 +984,11 @@ export class TodoPageComponent implements OnInit {
   }
 
   private updateState(nextState: TodoState) {
+    const ensuredProjects = nextState.projects.length ? nextState.projects : [this.defaultProject()];
     const normalized = {
       ...nextState,
-      projects: nextState.projects.length ? nextState.projects : [this.defaultProject()],
-      activeProjectId:
-        nextState.activeProjectId || nextState.projects[0]?.id || this.defaultProject().id,
+      projects: ensuredProjects,
+      activeProjectId: nextState.activeProjectId || ensuredProjects[0]?.id || this.defaultProject().id,
     };
     const collapsed = { ...(normalized.subtaskCollapsed ?? {}), ...this.subtaskCollapsed() };
     const next = { ...normalized, subtaskCollapsed: collapsed };

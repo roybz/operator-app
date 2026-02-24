@@ -674,7 +674,7 @@ export class DialogService {
 
   private persist() {
     const userKey = this.userStorageKey();
-    this.setRaw(userKey, JSON.stringify(this.state()));
+    this.setRaw(userKey, JSON.stringify(this.serializableState(this.state())));
   }
 
   private userStorageKey() {
@@ -757,12 +757,13 @@ export class DialogService {
         stashed: instance.stashed ?? false,
         archived: instance.archived ?? false,
         tileRect: instance.tileRect,
-        phoneRect: instance.phoneRect,
-        phoneMinimized: instance.phoneMinimized ?? false,
-        phoneStashed: instance.phoneStashed ?? false,
-        phoneTileRect: instance.phoneTileRect,
-        phoneRestoreRect: instance.phoneRestoreRect,
-        phoneMaximized: instance.phoneMaximized ?? false,
+        // Phone UI state is device-local UX state and should not be hydrated from shared storage.
+        phoneRect: undefined,
+        phoneMinimized: false,
+        phoneStashed: false,
+        phoneTileRect: undefined,
+        phoneRestoreRect: undefined,
+        phoneMaximized: false,
         deleteLocked: instance.deleteLocked ?? false,
       }));
       dialogsByWorkspace[workspaceId].forEach((instance) => {
@@ -783,5 +784,21 @@ export class DialogService {
       zCounter: state.zCounter ?? 0,
       appCounters,
     };
+  }
+
+  private serializableState(state: DialogState): DialogState {
+    const dialogsByWorkspace: Record<string, DialogInstance[]> = {};
+    for (const [workspaceId, dialogs] of Object.entries(state.dialogsByWorkspace ?? {})) {
+      dialogsByWorkspace[workspaceId] = dialogs.map((instance) => ({
+        ...instance,
+        phoneRect: undefined,
+        phoneMinimized: false,
+        phoneStashed: false,
+        phoneTileRect: undefined,
+        phoneRestoreRect: undefined,
+        phoneMaximized: false,
+      }));
+    }
+    return { ...state, dialogsByWorkspace };
   }
 }
