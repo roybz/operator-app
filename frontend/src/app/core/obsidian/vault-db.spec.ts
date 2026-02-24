@@ -26,6 +26,7 @@ class MockAuthService {
 
 describe('VaultDbService', () => {
   let service: VaultDbService;
+  let storage: StorageService;
 
   beforeEach(async () => {
     await new Promise<void>((resolve) => {
@@ -45,12 +46,24 @@ describe('VaultDbService', () => {
     }).compileComponents();
 
     service = TestBed.inject(VaultDbService);
-    await TestBed.inject(StorageService).hydrate();
+    storage = TestBed.inject(StorageService);
+    await storage.hydrate();
+    (globalThis as { window?: { __OP_CONFIG__?: unknown } }).window ??= {};
+    (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
+      storageMode: 'local',
+      cloudVaultAttachmentUploadBetaEnabled: false,
+      cloudVaultAttachmentUploadMaxTotalBytes: 1024 * 1024,
+      cloudVaultAttachmentUploadMaxAssetBytes: 256 * 1024,
+    };
   });
 
   afterEach(async () => {
     const db = await (service as unknown as { dbPromise?: Promise<IDBDatabase> }).dbPromise;
     db?.close();
+    (globalThis as { window?: { __OP_CONFIG__?: unknown } }).window ??= {};
+    (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
+      storageMode: 'local',
+    };
   });
 
   it('clones markdown files with shared content refs in cow mode and materializes on edit', async () => {
@@ -123,5 +136,55 @@ describe('VaultDbService', () => {
     expect(summary.attachmentsCloudSupported).toBe(false);
     expect(updatedVault?.cloudBeta?.attachmentsCloudRequested).toBe(true);
     expect(updatedVault?.cloudBeta?.attachmentsCloudSupported).toBe(false);
+  });
+
+  it('uploads small attachments to cloud keys when strict runtime flag is enabled', async () => {
+    (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
+      storageMode: 'remote',
+      cloudVaultAttachmentUploadBetaEnabled: true,
+      cloudVaultAttachmentUploadMaxTotalBytes: 256 * 1024,
+      cloudVaultAttachmentUploadMaxAssetBytes: 128 * 1024,
+    };
+    const vault = await service.createVault('Attachment Cloud Vault', {
+      type: 'zip',
+      originalName: 'attachment.zip',
+    });
+    await service.putAssets([
+      {
+        asset: {
+          id: 'a1',
+          vaultId: vault.id,
+          path: 'img.png',
+          mime: 'image/png',
+          size: 8,
+          blobId: 'b1',
+        },
+        blob: new Blob(['pngdata!!'], { type: 'image/png' }),
+      },
+    ]);
+    await service.setVaultCloudAttachmentsBetaRequested(vault.id, true);
+    await service.setVaultCloudBetaEnabled(vault.id, true);
+
+    const manifest = await storage.getJson<Record<string, unknown> | null>(
+      `op_obsidian_vault_cloud:v1:${vault.id}:manifest`,
+      null,
+    );
+    const attachmentPlan = await storage.getJson<Record<string, unknown> | null>(
+      `op_obsidian_vault_cloud:v1:${vault.id}:attachments:plan`,
+      null,
+    );
+    const attachmentIndex = await storage.getJson<{ id: string; chunkCount: number }[]>(
+      `op_obsidian_vault_cloud:v1:${vault.id}:attachments:index`,
+      [],
+    );
+
+    expect(manifest?.['assetsStoredInCloud']).toBe(true);
+    expect(manifest?.['attachmentsCloudSupported']).toBe(true);
+    expect(attachmentPlan?.['mode']).toBe('chunked_base64');
+    expect(attachmentPlan?.['requested']).toBe(true);
+    if (attachmentIndex.length > 0) {
+      expect(attachmentIndex[0]?.id).toBe('a1');
+      expect((attachmentIndex[0]?.chunkCount ?? 0) > 0).toBe(true);
+    }
   });
 });

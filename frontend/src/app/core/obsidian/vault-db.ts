@@ -17,6 +17,7 @@ const DB_NAME = 'operator-obsidian-vaults';
 const DB_VERSION = 3;
 const CLOUD_VAULT_PREFIX = 'op_obsidian_vault_cloud:v1';
 const CLOUD_CHUNK_TARGET_BYTES = 220 * 1024;
+const CLOUD_ATTACHMENT_CHUNK_TARGET_BYTES = 140 * 1024;
 
 const STORES = {
   vaults: 'vaults',
@@ -32,6 +33,19 @@ type StoredMarkdownFileRecord = Omit<MarkdownFileRecord, 'content'> & {
   content?: string;
   contentRefId?: string | null;
 };
+
+interface AttachmentCloudUploadPlan {
+  requested: boolean;
+  supported: boolean;
+  mode: 'disabled_stub' | 'chunked_base64';
+  assetCount: number;
+  totalBytes: number;
+  chunkTargetBytes: number;
+  estimatedChunkCount: number;
+  uploadedAssetCount?: number;
+  skippedAssetCount?: number;
+  skipReason?: string | null;
+}
 
 function reqToPromise<T>(request: IDBRequest<T>) {
   return new Promise<T>((resolve, reject) => {
@@ -178,6 +192,12 @@ export class VaultDbService {
     if (this.auth.session().userId === 'u_guest') return false;
     if (this.auth.orgSettings().testModeEnabled) return false;
     return true;
+  }
+
+  canUseCloudVaultAttachmentSyncBeta() {
+    if (!this.canUseCloudVaultSyncBeta()) return false;
+    const config = getOpConfig();
+    return Boolean(config.cloudVaultAttachmentUploadBetaEnabled);
   }
 
   async setVaultCloudBetaEnabled(vaultId: string, enabled: boolean) {
@@ -746,10 +766,10 @@ export class VaultDbService {
         markdown: chunks.markdown.length,
         links: chunks.links.length,
       },
-      assetsStoredInCloud: false,
-      assetsMetadataOnly: true,
+      assetsStoredInCloud: attachmentUploadPlan.supported,
+      assetsMetadataOnly: !attachmentUploadPlan.supported,
       attachmentsCloudRequested: Boolean(vault.cloudBeta?.attachmentsCloudRequested),
-      attachmentsCloudSupported: false,
+      attachmentsCloudSupported: attachmentUploadPlan.supported,
       attachmentsCloudUploadPlan: attachmentUploadPlan,
     };
     const keysToKeep = new Set<string>([
@@ -762,11 +782,9 @@ export class VaultDbService {
       keysToKeep.add(this.cloudChunkKey(vaultId, 'markdown', i));
     for (let i = 0; i < chunks.links.length; i += 1)
       keysToKeep.add(this.cloudChunkKey(vaultId, 'links', i));
-    const attachmentStubKeys = this.buildAttachmentCloudStubChunkKeys(
-      vaultId,
-      attachmentUploadPlan,
-    );
-    for (const key of attachmentStubKeys) keysToKeep.add(key);
+    for (const key of this.buildAttachmentCloudUploadKeys(vaultId, attachmentUploadPlan)) {
+      keysToKeep.add(key);
+    }
 
     const previousIndex = await this.storage.getJson<{ keys?: string[] } | null>(
       this.cloudIndexKey(vaultId),
@@ -782,7 +800,7 @@ export class VaultDbService {
     for (let i = 0; i < chunks.links.length; i += 1) {
       await this.storage.setJson(this.cloudChunkKey(vaultId, 'links', i), chunks.links[i]);
     }
-    await this.writeAttachmentCloudStubChunks(vaultId, attachmentUploadPlan);
+    await this.writeAttachmentCloudPayload(vaultId, assets, attachmentUploadPlan);
     await this.cleanupCloudVaultExtraKeys(previousIndex, keysToKeep);
     await this.storage.setJson(this.cloudIndexKey(vaultId), {
       vaultId,
@@ -796,7 +814,7 @@ export class VaultDbService {
       lastSyncError: null,
       syncedMarkdownOnly: true,
       attachmentsCloudRequested: Boolean(vault.cloudBeta?.attachmentsCloudRequested),
-      attachmentsCloudSupported: false,
+      attachmentsCloudSupported: attachmentUploadPlan.supported,
     };
     await this.putVault(vault);
   }
@@ -814,11 +832,14 @@ export class VaultDbService {
       attachmentsCloudUploadPlan?: {
         requested: boolean;
         supported: boolean;
-        mode: 'disabled_stub';
+        mode: 'disabled_stub' | 'chunked_base64';
         assetCount: number;
         totalBytes: number;
         chunkTargetBytes: number;
         estimatedChunkCount: number;
+        uploadedAssetCount?: number;
+        skippedAssetCount?: number;
+        skipReason?: string | null;
       };
     } | null>(this.cloudManifestKey(vaultId), null);
     if (!manifest || manifest.vaultId !== vaultId) return false;
@@ -828,6 +849,10 @@ export class VaultDbService {
       this.loadCloudChunks<MarkdownFileRecord>(vaultId, 'markdown', manifest.chunks.markdown),
       this.loadCloudChunks<LinkIndexRecord>(vaultId, 'links', manifest.chunks.links),
     ]);
+    const cloudAssets =
+      manifest.assetsStoredInCloud && manifest.attachmentsCloudSupported
+        ? await this.loadAttachmentCloudPayload(vaultId)
+        : [];
     const restoredVault: VaultRecord = {
       ...manifest.vault,
       cloudBeta: {
@@ -842,7 +867,7 @@ export class VaultDbService {
 
     const db = await this.openDb();
     const tx = db.transaction(
-      [STORES.vaults, STORES.nodes, STORES.markdown, STORES.links],
+      [STORES.vaults, STORES.nodes, STORES.markdown, STORES.links, STORES.assets, STORES.blobs],
       'readwrite',
     );
     tx.objectStore(STORES.vaults).put(restoredVault);
@@ -852,6 +877,12 @@ export class VaultDbService {
     for (const row of markdown) mdStore.put(row);
     const linkStore = tx.objectStore(STORES.links);
     for (const row of links) linkStore.put(row);
+    const assetStore = tx.objectStore(STORES.assets);
+    const blobStore = tx.objectStore(STORES.blobs);
+    for (const item of cloudAssets) {
+      assetStore.put(item.asset);
+      blobStore.put({ id: item.asset.blobId, blob: item.blob });
+    }
     await txDone(tx);
     return true;
   }
@@ -900,6 +931,48 @@ export class VaultDbService {
     return out;
   }
 
+  private async loadAttachmentCloudPayload(vaultId: string) {
+    const indexRows = await this.storage.getJson<
+      {
+        id: string;
+        path: string;
+        mime: string;
+        size: number;
+        blobId: string;
+        chunkCount: number;
+      }[]
+    >(this.cloudAttachmentIndexKey(vaultId), []);
+    const out: { asset: AssetRecord; blob: Blob }[] = [];
+    for (const row of indexRows) {
+      const parts: string[] = [];
+      for (let i = 0; i < (row.chunkCount || 0); i += 1) {
+        const chunk = await this.storage.getJson<{ data?: string } | null>(
+          this.cloudAttachmentChunkKey(vaultId, row.id, i),
+          null,
+        );
+        if (!chunk?.data) {
+          parts.length = 0;
+          break;
+        }
+        parts.push(chunk.data);
+      }
+      if (!parts.length) continue;
+      const blob = this.base64ToBlob(parts.join(''), row.mime || 'application/octet-stream');
+      out.push({
+        asset: {
+          id: row.id,
+          vaultId,
+          path: row.path,
+          mime: row.mime,
+          size: row.size,
+          blobId: row.blobId,
+        },
+        blob,
+      });
+    }
+    return out;
+  }
+
   private cloudManifestKey(vaultId: string) {
     return `${CLOUD_VAULT_PREFIX}:${vaultId}:manifest`;
   }
@@ -920,54 +993,203 @@ export class VaultDbService {
     return `${CLOUD_VAULT_PREFIX}:${vaultId}:attachments:chunk:${index}:stub`;
   }
 
+  private cloudAttachmentChunkKey(vaultId: string, assetId: string, index: number) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:attachments:data:${assetId}:${index}`;
+  }
+
+  private cloudAttachmentIndexKey(vaultId: string) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:attachments:index`;
+  }
+
   private buildAttachmentCloudUploadPlan(vault: VaultRecord, assets: AssetRecord[]) {
     const requested = Boolean(vault.cloudBeta?.attachmentsCloudRequested);
+    const cfg = getOpConfig();
+    const enabled = this.canUseCloudVaultAttachmentSyncBeta();
+    const maxTotalBytes = Math.max(
+      64 * 1024,
+      Number(cfg.cloudVaultAttachmentUploadMaxTotalBytes ?? 0) || 0,
+    );
+    const maxAssetBytes = Math.max(
+      32 * 1024,
+      Number(cfg.cloudVaultAttachmentUploadMaxAssetBytes ?? 0) || 0,
+    );
     const totalBytes = assets.reduce((sum, a) => sum + (a.size || 0), 0);
-    const estimatedChunkCount = requested
-      ? Math.max(1, Math.ceil(totalBytes / CLOUD_CHUNK_TARGET_BYTES))
-      : 0;
+    const eligibleAssets = assets.filter(
+      (a) => (a.size || 0) > 0 && (a.size || 0) <= maxAssetBytes,
+    );
+    const eligibleTotalBytes = eligibleAssets.reduce((sum, a) => sum + (a.size || 0), 0);
+    const supported = Boolean(
+      requested && enabled && eligibleAssets.length && eligibleTotalBytes <= maxTotalBytes,
+    );
+    const estimatedChunkCount =
+      requested && supported
+        ? Math.max(1, Math.ceil((eligibleTotalBytes * 1.37) / CLOUD_ATTACHMENT_CHUNK_TARGET_BYTES))
+        : requested
+          ? Math.max(1, Math.ceil(totalBytes / CLOUD_CHUNK_TARGET_BYTES))
+          : 0;
     return {
       requested,
-      supported: false,
-      mode: 'disabled_stub' as const,
+      supported,
+      mode: supported ? ('chunked_base64' as const) : ('disabled_stub' as const),
       assetCount: assets.length,
       totalBytes,
-      chunkTargetBytes: CLOUD_CHUNK_TARGET_BYTES,
+      chunkTargetBytes: supported ? CLOUD_ATTACHMENT_CHUNK_TARGET_BYTES : CLOUD_CHUNK_TARGET_BYTES,
       estimatedChunkCount,
+      uploadedAssetCount: supported ? eligibleAssets.length : 0,
+      skippedAssetCount: Math.max(0, assets.length - (supported ? eligibleAssets.length : 0)),
+      skipReason:
+        requested && !supported
+          ? !enabled
+            ? 'runtime_flag_disabled'
+            : eligibleAssets.length === 0
+              ? 'no_assets_under_limit'
+              : eligibleTotalBytes > maxTotalBytes
+                ? 'total_size_over_limit'
+                : 'unsupported'
+          : null,
     };
   }
 
-  private buildAttachmentCloudStubChunkKeys(
-    vaultId: string,
-    plan: ReturnType<VaultDbService['buildAttachmentCloudUploadPlan']>,
-  ) {
+  private buildAttachmentCloudUploadKeys(vaultId: string, plan: AttachmentCloudUploadPlan) {
     if (!plan.requested) return [];
     const keys = [this.cloudAttachmentPlanKey(vaultId)];
+    if (plan.supported) {
+      keys.push(this.cloudAttachmentIndexKey(vaultId));
+      return keys;
+    }
     for (let i = 0; i < plan.estimatedChunkCount; i += 1) {
       keys.push(this.cloudAttachmentChunkStubKey(vaultId, i));
     }
     return keys;
   }
 
-  private async writeAttachmentCloudStubChunks(
+  private async writeAttachmentCloudPayload(
     vaultId: string,
-    plan: ReturnType<VaultDbService['buildAttachmentCloudUploadPlan']>,
+    assets: AssetRecord[],
+    plan: AttachmentCloudUploadPlan,
   ) {
     if (!plan.requested) return;
     await this.storage.setJson(this.cloudAttachmentPlanKey(vaultId), plan);
-    for (let i = 0; i < plan.estimatedChunkCount; i += 1) {
-      await this.storage.setJson(this.cloudAttachmentChunkStubKey(vaultId, i), {
-        vaultId,
-        index: i,
-        mode: 'disabled_stub',
-        message: 'Attachment cloud sync beta not enabled on server yet',
+    if (!plan.supported) {
+      for (let i = 0; i < plan.estimatedChunkCount; i += 1) {
+        await this.storage.setJson(this.cloudAttachmentChunkStubKey(vaultId, i), {
+          vaultId,
+          index: i,
+          mode: 'disabled_stub',
+          reason: plan.skipReason ?? 'Attachment cloud sync beta not enabled on server yet',
+        });
+      }
+      return;
+    }
+
+    const cfg = getOpConfig();
+    const maxAssetBytes = Math.max(
+      32 * 1024,
+      Number(cfg.cloudVaultAttachmentUploadMaxAssetBytes ?? 0) || 0,
+    );
+    const indexRows: {
+      id: string;
+      path: string;
+      mime: string;
+      size: number;
+      blobId: string;
+      chunkCount: number;
+    }[] = [];
+    const eligible = assets.filter((a) => (a.size || 0) > 0 && (a.size || 0) <= maxAssetBytes);
+    for (const asset of eligible) {
+      const blob = await this.getAssetBlobById(asset.blobId);
+      if (!blob) continue;
+      const b64 = await this.blobToBase64(blob);
+      const chunks = this.chunkString(
+        b64,
+        Math.max(32 * 1024, CLOUD_ATTACHMENT_CHUNK_TARGET_BYTES),
+      );
+      for (let i = 0; i < chunks.length; i += 1) {
+        await this.storage.setJson(this.cloudAttachmentChunkKey(vaultId, asset.id, i), {
+          vaultId,
+          assetId: asset.id,
+          index: i,
+          encoding: 'base64',
+          data: chunks[i],
+        });
+      }
+      indexRows.push({
+        id: asset.id,
+        path: asset.path,
+        mime: asset.mime,
+        size: asset.size,
+        blobId: asset.blobId,
+        chunkCount: chunks.length,
       });
     }
+    await this.storage.setJson(this.cloudAttachmentIndexKey(vaultId), indexRows);
   }
 
   private byteLength(value: string) {
     if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(value).length;
     return value.length * 2;
+  }
+
+  private chunkString(value: string, chunkSize: number) {
+    const out: string[] = [];
+    for (let i = 0; i < value.length; i += chunkSize) out.push(value.slice(i, i + chunkSize));
+    return out;
+  }
+
+  private async getAssetBlobById(blobId: string) {
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.blobs], 'readonly');
+    const blobRow = (await reqToPromise(tx.objectStore(STORES.blobs).get(blobId))) as
+      | { id: string; blob: Blob }
+      | undefined;
+    return blobRow?.blob ?? null;
+  }
+
+  private async blobToBase64(blob: Blob) {
+    const arrayBuffer =
+      typeof blob.arrayBuffer === 'function'
+        ? await blob.arrayBuffer()
+        : await new Promise<ArrayBuffer>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'));
+            reader.onload = () => resolve(reader.result as ArrayBuffer);
+            reader.readAsArrayBuffer(blob);
+          });
+    const bytes = new Uint8Array(arrayBuffer);
+    if (typeof btoa !== 'function') {
+      const NodeBuffer = (
+        globalThis as { Buffer?: { from(data: Uint8Array): { toString(enc: string): string } } }
+      ).Buffer;
+      if (!NodeBuffer) throw new Error('Base64 encoding unavailable');
+      return NodeBuffer.from(bytes).toString('base64');
+    }
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  private base64ToBlob(base64: string, mime: string) {
+    const bytes =
+      typeof atob === 'function'
+        ? (() => {
+            const binary = atob(base64);
+            const out = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
+            return out;
+          })()
+        : (() => {
+            const NodeBuffer = (
+              globalThis as {
+                Buffer?: { from(data: string, enc: string): ArrayLike<number> };
+              }
+            ).Buffer;
+            if (!NodeBuffer) throw new Error('Base64 decoding unavailable');
+            return new Uint8Array(NodeBuffer.from(base64, 'base64'));
+          })();
+    return new Blob([bytes], { type: mime });
   }
 
   private markdownContentRefId(hash: string) {
