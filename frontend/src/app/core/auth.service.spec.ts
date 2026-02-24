@@ -166,4 +166,66 @@ describe('AuthService external auth phone-mode behavior', () => {
 
     expect(auth.getLoginPhoneModePreference()).toBe(true);
   });
+
+  it('skips remote persist when serialized value is unchanged', async () => {
+    const auth = TestBed.inject(AuthService);
+    const authPrivate = auth as unknown as { persist: (key: string, value: unknown) => void };
+    const storage = TestBed.inject(StorageService);
+    const key = 'op_test_persist_noop';
+    const value = { hello: 'world', n: 1 };
+    await storage.setItem(key, JSON.stringify(value));
+    let calls = 0;
+    const originalSetItem = storage.setItem.bind(storage);
+    storage.setItem = (async (k: string, v: string) => {
+      calls += 1;
+      return originalSetItem(k, v);
+    }) as StorageService['setItem'];
+
+    authPrivate.persist(key, value);
+
+    await Promise.resolve();
+    expect(calls).toBe(0);
+    storage.setItem = originalSetItem;
+  });
+
+  it('retries once on version_conflict for non-ephemeral auth keys', async () => {
+    const auth = TestBed.inject(AuthService);
+    const authPrivate = auth as unknown as { persist: (key: string, value: unknown) => void };
+    const storage = TestBed.inject(StorageService);
+    const key = 'op_test_persist_retry';
+    const value = { retry: true };
+    const conflict = Object.assign(new Error('version_conflict'), { code: 'version_conflict' });
+    let setCalls = 0;
+    let getItemCalls = 0;
+    const originalSetItem = storage.setItem.bind(storage);
+    const originalGetItem = storage.getItem.bind(storage);
+    const originalGetItemSync = storage.getItemSync.bind(storage);
+    storage.setItem = (async (keyName: string, serialized: string) => {
+      void keyName;
+      void serialized;
+      setCalls += 1;
+      if (setCalls === 1) throw conflict;
+      return Promise.resolve();
+    }) as StorageService['setItem'];
+    storage.getItem = (async (k: string) => {
+      void k;
+      getItemCalls += 1;
+      return null;
+    }) as StorageService['getItem'];
+    storage.getItemSync = ((k: string) => {
+      void k;
+      return null;
+    }) as StorageService['getItemSync'];
+
+    authPrivate.persist(key, value);
+    await Promise.resolve();
+    expect(setCalls).toBe(1);
+    expect(getItemCalls).toBe(1);
+
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    expect(setCalls).toBe(2);
+    storage.setItem = originalSetItem;
+    storage.getItem = originalGetItem;
+    storage.getItemSync = originalGetItemSync;
+  });
 });
