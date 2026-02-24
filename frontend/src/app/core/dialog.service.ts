@@ -56,6 +56,9 @@ export class DialogService {
 
   private auth = inject(AuthService);
   private storage = inject(StorageService);
+  private persistFlushTimer: number | null = null;
+  private persistInFlight = false;
+  private persistQueued = false;
 
   constructor() {
     effect(() => {
@@ -673,8 +676,59 @@ export class DialogService {
   }
 
   private persist() {
-    const userKey = this.userStorageKey();
-    this.setRaw(userKey, JSON.stringify(this.serializableState(this.state())));
+    this.persistQueued = true;
+    this.schedulePersistFlush();
+  }
+
+  private schedulePersistFlush(delayMs = 0) {
+    if (typeof window === 'undefined') {
+      void this.flushPersist();
+      return;
+    }
+    if (this.persistFlushTimer) {
+      if (delayMs <= 0) return;
+      window.clearTimeout(this.persistFlushTimer);
+      this.persistFlushTimer = null;
+    }
+    this.persistFlushTimer = window.setTimeout(() => {
+      this.persistFlushTimer = null;
+      void this.flushPersist();
+    }, delayMs);
+  }
+
+  private async flushPersist() {
+    if (this.persistInFlight) return;
+    if (!this.persistQueued) return;
+    this.persistInFlight = true;
+    try {
+      while (this.persistQueued) {
+        this.persistQueued = false;
+        const userKey = this.userStorageKey();
+        const payload = JSON.stringify(this.serializableState(this.state()));
+        try {
+          await this.storage.setItem(userKey, payload);
+        } catch (error) {
+          if (this.isVersionConflict(error)) {
+            // Refresh adapter version cache and retry a little later with latest local state.
+            try {
+              await this.storage.getItem(userKey);
+            } catch {
+              // Ignore refresh failures; polling/realtime may catch up.
+            }
+            this.persistQueued = true;
+            this.schedulePersistFlush(120);
+            break;
+          }
+          // Avoid unhandled rejections from async persistence; keep app usable.
+          console.error(error);
+        }
+      }
+    } finally {
+      this.persistInFlight = false;
+      if (this.persistQueued && !this.persistFlushTimer) {
+        this.schedulePersistFlush();
+      }
+    }
   }
 
   private userStorageKey() {
@@ -717,6 +771,13 @@ export class DialogService {
 
   private removeKey(key: string) {
     void this.storage.removeItem(key);
+  }
+
+  private isVersionConflict(error: unknown) {
+    if (!(error instanceof Error)) return false;
+    const maybeCode = (error as Error & { code?: unknown }).code;
+    const code = typeof maybeCode === 'string' ? maybeCode : '';
+    return code === 'version_conflict' || String(error.message || '').includes('version_conflict');
   }
 
   private keys() {
