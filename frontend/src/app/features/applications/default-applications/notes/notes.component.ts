@@ -40,7 +40,9 @@ type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
 
 type NotesView = 'notes' | 'archive';
-type NotesSource = { type: 'internal' } | { type: 'vault'; vaultId: string; vaultName: string };
+type NotesSource =
+  | { type: 'internal' }
+  | { type: 'vault'; vaultId: string; vaultName: string; pathPrefix?: string | null };
 
 interface NoteNode {
   id: string;
@@ -227,6 +229,9 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               <option value="new">{{ 'notes.importVaultDestinationNew' | translate }}</option>
               <option value="current">
                 {{ 'notes.importVaultDestinationCurrent' | translate }}
+              </option>
+              <option value="splitTopLevel">
+                {{ 'notes.importVaultDestinationSplitTopLevel' | translate }}
               </option>
             </select>
             @if (isVaultMode()) {
@@ -683,7 +688,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   wipeInstanceOpen = signal(false);
   pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
   pendingVaultImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
-  vaultImportDestination = signal<'current' | 'new'>('new');
+  vaultImportDestination = signal<'current' | 'new' | 'splitTopLevel'>('new');
   importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   importMessage = signal<string | null>(null);
   vaultImportStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -902,7 +907,9 @@ export class NotesComponent implements OnInit, OnDestroy {
 
   currentVaultName() {
     const source = this.state().source;
-    return source && source.type === 'vault' ? source.vaultName : '';
+    if (!source || source.type !== 'vault') return '';
+    const prefixLabel = source.pathPrefix ? ` / ${source.pathPrefix}` : '';
+    return `${source.vaultName}${prefixLabel}`;
   }
 
   async refreshVaultTree() {
@@ -913,7 +920,10 @@ export class NotesComponent implements OnInit, OnDestroy {
       this.vaultSelectedPath.set(null);
       return;
     }
-    const tree = await this.vaultDb.getTree(source.vaultId);
+    const fullTree = await this.vaultDb.getTree(source.vaultId);
+    const tree = source.pathPrefix
+      ? this.filterVaultTreeByPrefix(fullTree, source.pathPrefix)
+      : fullTree;
     this.vaultTree.set(tree);
     const selectedId = this.state().vaultSelectedNodeId;
     if (selectedId) {
@@ -924,6 +934,32 @@ export class NotesComponent implements OnInit, OnDestroy {
         await this.selectVaultNode(firstFile.id);
       }
     }
+  }
+
+  private filterVaultTreeByPrefix(nodes: VaultFileTreeNode[], prefix: string) {
+    const normalized = prefix.replace(/^\/+|\/+$/g, '');
+    if (!normalized) return nodes;
+    const cloneNode = (node: VaultFileTreeNode): VaultFileTreeNode => ({
+      ...node,
+      children: node.children ? node.children.map(cloneNode) : undefined,
+    });
+    const matchedRoots = nodes
+      .filter((node) => node.path === normalized || node.path.startsWith(`${normalized}/`))
+      .map(cloneNode);
+    if (matchedRoots.length) return matchedRoots;
+    // Fallback: search descendants and return matching subtree roots.
+    const search = (list: VaultFileTreeNode[]): VaultFileTreeNode[] => {
+      const out: VaultFileTreeNode[] = [];
+      for (const node of list) {
+        if (node.path === normalized || node.path.startsWith(`${normalized}/`)) {
+          out.push(cloneNode(node));
+          continue;
+        }
+        if (node.children?.length) out.push(...search(node.children));
+      }
+      return out;
+    };
+    return search(nodes);
   }
 
   private findFirstVaultFile(nodes: VaultFileTreeNode[]): VaultFileTreeNode | null {
@@ -1059,8 +1095,13 @@ export class NotesComponent implements OnInit, OnDestroy {
     vaultId: string,
     vaultName: string,
     stats: ObsidianImportStats | null,
-    destination: 'current' | 'new',
+    destination: 'current' | 'new' | 'splitTopLevel',
   ) {
+    if (destination === 'splitTopLevel') {
+      await this.createSplitTopLevelNotesInstances(vaultId, vaultName);
+      if (stats) this.vaultImportSummary.set(stats);
+      return;
+    }
     if (destination === 'new') {
       await this.createNotesInstanceForVault(vaultId, vaultName);
       if (stats) this.vaultImportSummary.set(stats);
@@ -1068,7 +1109,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     }
     const next = {
       ...this.state(),
-      source: { type: 'vault' as const, vaultId, vaultName },
+      source: { type: 'vault' as const, vaultId, vaultName, pathPrefix: null },
       vaultSelectedNodeId: null,
     };
     this.commit(next);
@@ -1076,21 +1117,46 @@ export class NotesComponent implements OnInit, OnDestroy {
     if (stats) this.vaultImportSummary.set(stats);
   }
 
-  private async createNotesInstanceForVault(vaultId: string, vaultName: string) {
+  private async createNotesInstanceForVault(
+    vaultId: string,
+    vaultName: string,
+    pathPrefix?: string | null,
+  ) {
     const bounds = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
     const created = this.dialog.createInstance('notes', bounds);
     if (!created.ok || !created.instance) throw new Error('Unable to create Notes instance');
     const instanceId = created.instance.id;
-    this.dialog.setTitleOverride(instanceId, `${vaultName}`);
+    this.dialog.setTitleOverride(
+      instanceId,
+      pathPrefix ? `${vaultName} / ${pathPrefix}` : `${vaultName}`,
+    );
     const fresh = this.createDefaultStateForCurrentMode();
     const nextState: NotesState = {
       ...fresh,
-      source: { type: 'vault', vaultId, vaultName },
+      source: { type: 'vault', vaultId, vaultName, pathPrefix: pathPrefix ?? null },
       vaultSelectedNodeId: null,
     };
     stateStore.set(instanceId, nextState);
     const key = buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), instanceId);
     await this.storage.setItem(key, JSON.stringify(nextState));
+  }
+
+  private async createSplitTopLevelNotesInstances(vaultId: string, vaultName: string) {
+    const tree = await this.vaultDb.getTree(vaultId);
+    const topLevelFolders = tree.filter((node) => node.type === 'folder');
+    const topLevelMarkdownFiles = tree.filter(
+      (node) => node.type === 'file' && /\.md$/i.test(node.path),
+    );
+    if (!topLevelFolders.length && !topLevelMarkdownFiles.length) {
+      await this.createNotesInstanceForVault(vaultId, vaultName);
+      return;
+    }
+    if (topLevelMarkdownFiles.length) {
+      await this.createNotesInstanceForVault(vaultId, `${vaultName} / Root`, null);
+    }
+    for (const folder of topLevelFolders) {
+      await this.createNotesInstanceForVault(vaultId, vaultName, folder.path);
+    }
   }
 
   private createDefaultStateForCurrentMode(): NotesState {

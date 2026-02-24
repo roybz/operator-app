@@ -321,7 +321,8 @@
     "importVaultDestinationCurrent": "Current Notes instance",
     "cloneVaultToNewInstance": "Clone vault to new Notes instance",
     "cloneVaultSuccess": "Vault clone complete.",
-    "cloneVaultFailed": "Vault clone failed."
+    "cloneVaultFailed": "Vault clone failed.",
+    "importVaultDestinationSplitTopLevel": "Multiple Notes instances by top-level folder"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",
