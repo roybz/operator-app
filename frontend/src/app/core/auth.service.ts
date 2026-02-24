@@ -1457,10 +1457,37 @@ export class AuthService {
   }
 
   private persist(key: string, value: unknown) {
-    void this.storage.setJson(key, value).catch((error) => {
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(value);
+    } catch (error) {
+      console.error(error);
+      return;
+    }
+    if (this.getRaw(key) === serialized) return;
+    void this.persistSerialized(key, serialized);
+  }
+
+  private async persistSerialized(key: string, serialized: string, attempt = 0) {
+    try {
+      await this.storage.setItem(key, serialized);
+      return;
+    } catch (error) {
       if (this.shouldIgnorePersistConflict(key, error)) return;
-      throw error;
-    });
+      if (this.isVersionConflict(error) && attempt < 1) {
+        try {
+          await this.storage.getItem(key);
+        } catch {
+          // Ignore cache refresh failures; retry once anyway.
+        }
+        if (this.getRaw(key) === serialized) return;
+        setTimeout(() => {
+          void this.persistSerialized(key, serialized, attempt + 1);
+        }, 120);
+        return;
+      }
+      console.error(error);
+    }
   }
 
   private persistLoginSecurity() {
@@ -2086,6 +2113,14 @@ export class AuthService {
       key.startsWith(`${UNIVERSE_PRESENCE_KEY}:`) ||
       key.startsWith(`${UNIVERSE_GUEST_COUNTER_KEY}:`)
     );
+  }
+
+  private isVersionConflict(error: unknown) {
+    if (!(error instanceof Error)) return false;
+    const maybeCode = (error as Error & { code?: unknown }).code;
+    const code = typeof maybeCode === 'string' ? maybeCode : '';
+    const message = String(error.message || '');
+    return code === 'version_conflict' || message.includes('version_conflict');
   }
 
   private mirrorOrgSettingsForRuntimeGuards(value: OrgSettings) {
