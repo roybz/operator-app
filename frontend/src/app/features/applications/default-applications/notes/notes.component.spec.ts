@@ -15,6 +15,7 @@ import { UserPreferences } from '../../../../core/auth.service';
 import { VaultFileTreeNode } from '../../../../core/obsidian/vault-types';
 import { TranslateService } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
+import { vi } from 'vitest';
 
 class MockPrefsService {
   preferences() {
@@ -149,6 +150,7 @@ class MockVaultDbService {
 describe('NotesComponent (vault mode)', () => {
   let fixture: ComponentFixture<NotesComponent>;
   let component: NotesComponent;
+  let vaultDb: MockVaultDbService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -179,6 +181,7 @@ describe('NotesComponent (vault mode)', () => {
     }).compileComponents();
 
     await TestBed.inject(StorageService).hydrate();
+    vaultDb = TestBed.inject(VaultDbService) as unknown as MockVaultDbService;
 
     fixture = TestBed.createComponent(NotesComponent);
     component = fixture.componentInstance;
@@ -217,5 +220,34 @@ describe('NotesComponent (vault mode)', () => {
 
     expect(afterFirst).toBeTruthy();
     expect(afterFirst).not.toBe(beforeFirst);
+  });
+
+  it('creates missing note target from unresolved link and selects it', async () => {
+    const createSpy = vi.spyOn(vaultDb, 'createMarkdownNoteByPath');
+    const selectSpy = vi.spyOn(component, 'selectVaultNode').mockResolvedValue();
+    component.state.set({
+      ...component.state(),
+      source: { type: 'vault', vaultId: 'v1', vaultName: 'Vault' },
+      vaultSelectedNodeId: null,
+    });
+    await component.refreshVaultTree();
+
+    await component.createNoteForUnresolvedLink(component.vaultUnresolvedLinks()[0]!);
+
+    expect(createSpy).toHaveBeenCalledWith('v1', 'Missing', '');
+    expect(selectSpy).toHaveBeenCalledWith('created_note');
+  });
+
+  it('persists attachment cloud beta request flag for current vault', async () => {
+    const setSpy = vi.spyOn(vaultDb, 'setVaultCloudAttachmentsBetaRequested');
+    component.state.set({
+      ...component.state(),
+      source: { type: 'vault', vaultId: 'v1', vaultName: 'Vault' },
+      vaultSelectedNodeId: null,
+    });
+
+    await component.toggleCurrentVaultCloudAttachmentsBetaRequested(true);
+
+    expect(setSpy).toHaveBeenCalledWith('v1', true);
   });
 });

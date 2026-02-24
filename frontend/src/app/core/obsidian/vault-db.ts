@@ -473,7 +473,7 @@ export class VaultDbService {
     }
     await txDone(tx);
     const result = { record: nextRecord, previous: current };
-    void this.garbageCollectMarkdownContentRefs(vaultId);
+    void this.garbageCollectMarkdownContentRefs();
     const vault = await this.getVault(vaultId);
     if (vault?.cloudBeta?.enabled && this.canUseCloudVaultSyncBeta()) {
       void this.syncVaultToCloud(vaultId);
@@ -892,16 +892,12 @@ export class VaultDbService {
     return next;
   }
 
-  async garbageCollectMarkdownContentRefs(vaultId?: string) {
+  async garbageCollectMarkdownContentRefs() {
     const db = await this.openDb();
     const tx = db.transaction([STORES.markdown, STORES.markdownContent], 'readwrite');
     const mdStore = tx.objectStore(STORES.markdown);
     const contentStore = tx.objectStore(STORES.markdownContent);
-    const markdownRows = vaultId
-      ? ((await reqToPromise(
-          mdStore.index('byVaultId').getAll(vaultId),
-        )) as StoredMarkdownFileRecord[])
-      : ((await reqToPromise(mdStore.getAll())) as StoredMarkdownFileRecord[]);
+    const markdownRows = (await reqToPromise(mdStore.getAll())) as StoredMarkdownFileRecord[];
     const referenced = new Set(
       markdownRows.map((row) => row.contentRefId).filter(Boolean) as string[],
     );

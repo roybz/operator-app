@@ -48,6 +48,11 @@ describe('VaultDbService', () => {
     await TestBed.inject(StorageService).hydrate();
   });
 
+  afterEach(async () => {
+    const db = await (service as unknown as { dbPromise?: Promise<IDBDatabase> }).dbPromise;
+    db?.close();
+  });
+
   it('clones markdown files with shared content refs in cow mode and materializes on edit', async () => {
     const vault = await service.createVault('Test Vault', {
       type: 'zip',
@@ -86,5 +91,37 @@ describe('VaultDbService', () => {
     expect(originalAfter.content).toBe('# Hello');
     expect(cloneAfter.content).toBe('# Changed clone');
     expect(cloneAfter.contentRefId).not.toBe(originalAfter.contentRefId);
+  });
+
+  it('creates markdown notes by path with missing folders', async () => {
+    const vault = await service.createVault('Path Vault', {
+      type: 'zip',
+      originalName: 'path.zip',
+    });
+
+    const node = await service.createMarkdownNoteByPath(vault.id, 'Projects/Work/Plan');
+    const nodes = await service.listNodes(vault.id);
+    const md = await service.getMarkdownFile(node.id);
+
+    expect(node.path).toBe('Projects/Work/Plan.md');
+    expect(nodes.some((n) => n.type === 'folder' && n.path === 'Projects')).toBe(true);
+    expect(nodes.some((n) => n.type === 'folder' && n.path === 'Projects/Work')).toBe(true);
+    expect(md?.content).toBe('');
+  });
+
+  it('stores attachment cloud beta request in vault summary without uploading assets', async () => {
+    const vault = await service.createVault('Cloud Pref Vault', {
+      type: 'zip',
+      originalName: 'cloud-pref.zip',
+    });
+    await service.setVaultCloudAttachmentsBetaRequested(vault.id, true);
+
+    const summary = await service.getVaultCloudBetaSummary(vault.id);
+    const updatedVault = await service.getVault(vault.id);
+
+    expect(summary.attachmentsCloudRequested).toBe(true);
+    expect(summary.attachmentsCloudSupported).toBe(false);
+    expect(updatedVault?.cloudBeta?.attachmentsCloudRequested).toBe(true);
+    expect(updatedVault?.cloudBeta?.attachmentsCloudSupported).toBe(false);
   });
 });
