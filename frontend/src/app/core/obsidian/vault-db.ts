@@ -391,6 +391,28 @@ export class VaultDbService {
     await txDone(tx);
   }
 
+  async resolveLinkTarget(linkId: string, targetPath: string) {
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.links], 'readwrite');
+    const store = tx.objectStore(STORES.links);
+    const existing = (await reqToPromise(store.get(linkId))) as LinkIndexRecord | undefined;
+    if (!existing) {
+      await txDone(tx);
+      return false;
+    }
+    store.put({
+      ...existing,
+      targetPath,
+      ambiguous: false,
+    });
+    await txDone(tx);
+    const vault = await this.getVault(existing.vaultId);
+    if (vault?.cloudBeta?.enabled && this.canUseCloudVaultSyncBeta()) {
+      void this.syncVaultToCloud(existing.vaultId);
+    }
+    return true;
+  }
+
   async saveMarkdownFile(nodeId: string, content: string) {
     const [node, current] = await Promise.all([this.getNode(nodeId), this.getMarkdownFile(nodeId)]);
     if (!node || node.type !== 'file') throw new Error('Vault file not found');
@@ -701,6 +723,7 @@ export class VaultDbService {
       markdown: this.chunkJsonArray(markdownFiles),
       links: this.chunkJsonArray(links),
     };
+    const attachmentUploadPlan = this.buildAttachmentCloudUploadPlan(vault, assets);
     const manifest = {
       version: 1,
       vaultId,
@@ -727,6 +750,7 @@ export class VaultDbService {
       assetsMetadataOnly: true,
       attachmentsCloudRequested: Boolean(vault.cloudBeta?.attachmentsCloudRequested),
       attachmentsCloudSupported: false,
+      attachmentsCloudUploadPlan: attachmentUploadPlan,
     };
     const keysToKeep = new Set<string>([
       this.cloudIndexKey(vaultId),
@@ -738,6 +762,11 @@ export class VaultDbService {
       keysToKeep.add(this.cloudChunkKey(vaultId, 'markdown', i));
     for (let i = 0; i < chunks.links.length; i += 1)
       keysToKeep.add(this.cloudChunkKey(vaultId, 'links', i));
+    const attachmentStubKeys = this.buildAttachmentCloudStubChunkKeys(
+      vaultId,
+      attachmentUploadPlan,
+    );
+    for (const key of attachmentStubKeys) keysToKeep.add(key);
 
     const previousIndex = await this.storage.getJson<{ keys?: string[] } | null>(
       this.cloudIndexKey(vaultId),
@@ -753,6 +782,7 @@ export class VaultDbService {
     for (let i = 0; i < chunks.links.length; i += 1) {
       await this.storage.setJson(this.cloudChunkKey(vaultId, 'links', i), chunks.links[i]);
     }
+    await this.writeAttachmentCloudStubChunks(vaultId, attachmentUploadPlan);
     await this.cleanupCloudVaultExtraKeys(previousIndex, keysToKeep);
     await this.storage.setJson(this.cloudIndexKey(vaultId), {
       vaultId,
@@ -781,6 +811,15 @@ export class VaultDbService {
       assetsMetadataOnly?: boolean;
       attachmentsCloudRequested?: boolean;
       attachmentsCloudSupported?: boolean;
+      attachmentsCloudUploadPlan?: {
+        requested: boolean;
+        supported: boolean;
+        mode: 'disabled_stub';
+        assetCount: number;
+        totalBytes: number;
+        chunkTargetBytes: number;
+        estimatedChunkCount: number;
+      };
     } | null>(this.cloudManifestKey(vaultId), null);
     if (!manifest || manifest.vaultId !== vaultId) return false;
 
@@ -871,6 +910,59 @@ export class VaultDbService {
 
   private cloudChunkKey(vaultId: string, section: 'nodes' | 'markdown' | 'links', index: number) {
     return `${CLOUD_VAULT_PREFIX}:${vaultId}:${section}:${index}`;
+  }
+
+  private cloudAttachmentPlanKey(vaultId: string) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:attachments:plan`;
+  }
+
+  private cloudAttachmentChunkStubKey(vaultId: string, index: number) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:attachments:chunk:${index}:stub`;
+  }
+
+  private buildAttachmentCloudUploadPlan(vault: VaultRecord, assets: AssetRecord[]) {
+    const requested = Boolean(vault.cloudBeta?.attachmentsCloudRequested);
+    const totalBytes = assets.reduce((sum, a) => sum + (a.size || 0), 0);
+    const estimatedChunkCount = requested
+      ? Math.max(1, Math.ceil(totalBytes / CLOUD_CHUNK_TARGET_BYTES))
+      : 0;
+    return {
+      requested,
+      supported: false,
+      mode: 'disabled_stub' as const,
+      assetCount: assets.length,
+      totalBytes,
+      chunkTargetBytes: CLOUD_CHUNK_TARGET_BYTES,
+      estimatedChunkCount,
+    };
+  }
+
+  private buildAttachmentCloudStubChunkKeys(
+    vaultId: string,
+    plan: ReturnType<VaultDbService['buildAttachmentCloudUploadPlan']>,
+  ) {
+    if (!plan.requested) return [];
+    const keys = [this.cloudAttachmentPlanKey(vaultId)];
+    for (let i = 0; i < plan.estimatedChunkCount; i += 1) {
+      keys.push(this.cloudAttachmentChunkStubKey(vaultId, i));
+    }
+    return keys;
+  }
+
+  private async writeAttachmentCloudStubChunks(
+    vaultId: string,
+    plan: ReturnType<VaultDbService['buildAttachmentCloudUploadPlan']>,
+  ) {
+    if (!plan.requested) return;
+    await this.storage.setJson(this.cloudAttachmentPlanKey(vaultId), plan);
+    for (let i = 0; i < plan.estimatedChunkCount; i += 1) {
+      await this.storage.setJson(this.cloudAttachmentChunkStubKey(vaultId, i), {
+        vaultId,
+        index: i,
+        mode: 'disabled_stub',
+        message: 'Attachment cloud sync beta not enabled on server yet',
+      });
+    }
   }
 
   private byteLength(value: string) {

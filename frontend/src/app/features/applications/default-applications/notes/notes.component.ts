@@ -901,13 +901,12 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
   vaultTree = signal<VaultFileTreeNode[]>([]);
+  vaultCollapsedFolderSet = computed(() => new Set(this.state().vaultCollapsedFolders ?? []));
   vaultFlatRows = computed(() =>
-    this.flattenVaultTree(
-      this.vaultTree(),
-      0,
-      [],
-      new Set(this.state().vaultCollapsedFolders ?? []),
-    ),
+    this.flattenVaultTree(this.vaultTree(), 0, [], this.vaultCollapsedFolderSet()),
+  );
+  vaultFlatRowMap = computed(
+    () => new Map(this.vaultFlatRows().map((row) => [row.id, row] as const)),
   );
   vaultVisibleRows = computed(() => {
     const rows = this.vaultFlatRows();
@@ -1648,7 +1647,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   }
 
   unresolvedLinkSourcePath(link: LinkIndexRecord) {
-    const row = this.findVaultRowById(this.vaultFlatRows(), link.fromNodeId);
+    const row = this.vaultFlatRowMap().get(link.fromNodeId) ?? null;
     return row?.node.path ?? link.fromNodeId;
   }
 
@@ -1663,6 +1662,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     if (!raw) return;
     const basePath = source.pathPrefix ? `${source.pathPrefix}/${raw}` : raw;
     const created = await this.vaultDb.createMarkdownNoteByPath(source.vaultId, basePath, '');
+    await this.vaultDb.resolveLinkTarget(link.id, created.path);
     await this.refreshVaultTree();
     await this.refreshVaultUnresolvedLinks();
     await this.selectVaultNode(created.id);
@@ -1679,10 +1679,10 @@ export class NotesComponent implements OnInit, OnDestroy {
       this.vaultUnresolvedLinks.set(all);
       return;
     }
-    const rows = this.flattenVaultTree(this.vaultTree());
+    const rowMap = this.vaultFlatRowMap();
     this.vaultUnresolvedLinks.set(
       all.filter((link) => {
-        const row = this.findVaultRowById(rows, link.fromNodeId);
+        const row = rowMap.get(link.fromNodeId) ?? null;
         return Boolean(
           row &&
           (row.node.path === source.pathPrefix ||
@@ -1705,10 +1705,6 @@ export class NotesComponent implements OnInit, OnDestroy {
       }
     }
     return out;
-  }
-
-  private findVaultRowById(rows: VaultTreeFlatRow[], id: string) {
-    return rows.find((row) => row.id === id) ?? null;
   }
 
   private findVaultNodeByBasename(

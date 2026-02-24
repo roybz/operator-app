@@ -145,6 +145,9 @@ class MockVaultDbService {
   async createMarkdownNoteByPath() {
     return { id: 'created_note', vaultId: 'v1', path: 'Created.md', type: 'file' as const };
   }
+  async resolveLinkTarget() {
+    return true;
+  }
 }
 
 describe('NotesComponent (vault mode)', () => {
@@ -224,6 +227,7 @@ describe('NotesComponent (vault mode)', () => {
 
   it('creates missing note target from unresolved link and selects it', async () => {
     const createSpy = vi.spyOn(vaultDb, 'createMarkdownNoteByPath');
+    const relinkSpy = vi.spyOn(vaultDb, 'resolveLinkTarget');
     const selectSpy = vi.spyOn(component, 'selectVaultNode').mockResolvedValue();
     component.state.set({
       ...component.state(),
@@ -235,6 +239,7 @@ describe('NotesComponent (vault mode)', () => {
     await component.createNoteForUnresolvedLink(component.vaultUnresolvedLinks()[0]!);
 
     expect(createSpy).toHaveBeenCalledWith('v1', 'Missing', '');
+    expect(relinkSpy).toHaveBeenCalledWith('l1', 'Created.md');
     expect(selectSpy).toHaveBeenCalledWith('created_note');
   });
 
