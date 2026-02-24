@@ -114,34 +114,28 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                       </td>
                     </tr>
                   }
-                  <div style="display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                      <button type="button" (click)="transformToKanbanRequest.emit()">
-                        Todo → Kanban
-                      </button>
-                      <button (click)="exportInstance()">
-                        {{ 'todo.exportInstance' | translate }}
-                      </button>
-                      <label style="display:inline-flex; align-items:center; gap:8px;">
-                        <span>{{ 'todo.importInstance' | translate }}</span>
-                        <input type="file" accept=".json" (change)="queueImport($event)" />
-                      </label>
-                      <button (click)="confirmWipeInstance()">
-                        {{ 'todo.wipeInstance' | translate }}
-                      </button>
-                    </div>
-                    @if (importStatus() === 'loading') {
-                      <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
-                    } @else if (importStatus() === 'success') {
-                      <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
-                    } @else if (importStatus() === 'error') {
-                      <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
-                    }
-                  </div>
                 </tbody>
               </table>
             </div>
           }
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" (click)="transformToKanbanRequest.emit()">Todo → Kanban</button>
+              <button (click)="exportInstance()">{{ 'todo.exportInstance' | translate }}</button>
+              <label style="display:inline-flex; align-items:center; gap:8px;">
+                <span>{{ 'todo.importInstance' | translate }}</span>
+                <input type="file" accept=".json" (change)="queueImport($event)" />
+              </label>
+              <button (click)="confirmWipeInstance()">{{ 'todo.wipeInstance' | translate }}</button>
+            </div>
+            @if (importStatus() === 'loading') {
+              <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
+            } @else if (importStatus() === 'success') {
+              <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
+            } @else if (importStatus() === 'error') {
+              <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+            }
+          </div>
         </section>
       } @else {
         <header style="display:flex; align-items:center; justify-content:space-between;">

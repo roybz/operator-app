@@ -14,6 +14,6 @@ window.__OP_CONFIG__ = {
     clientId: '32bfn92gkldr6bhed85hjkfrgb',
     redirectUri: 'https://plannerdemo.roy.bz/login',
     logoutRedirectUri: 'https://plannerdemo.roy.bz/login',
-    scopes: ['openid', 'email', 'profile'],
+    scopes: ['openid', 'email', 'profile', 'aws.cognito.signin.user.admin'],
   },
 };
