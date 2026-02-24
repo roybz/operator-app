@@ -2,10 +2,12 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  EventEmitter,
   HostListener,
   Input,
   OnDestroy,
   OnInit,
+  Output,
   ViewChild,
   computed,
   effect,
@@ -30,13 +32,13 @@ import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
 import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
-interface ChecklistItem {
+export interface ChecklistItem {
   id: string;
   text: string;
   done: boolean;
 }
 
-interface KanbanCard {
+export interface KanbanCard {
   id: string;
   title: string;
   description: string;
@@ -45,20 +47,20 @@ interface KanbanCard {
   checklist: ChecklistItem[];
 }
 
-interface KanbanColumn {
+export interface KanbanColumn {
   id: string;
   title: string;
   cardIds: string[];
 }
 
-interface KanbanBoard {
+export interface KanbanBoard {
   id: string;
   name: string;
   columns: KanbanColumn[];
   cards: Record<string, KanbanCard>;
 }
 
-interface KanbanState {
+export interface KanbanState {
   boards: KanbanBoard[];
   activeBoardId: string;
   selectedCardId: string | null;
@@ -84,6 +86,29 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
     storage,
     (stored) => JSON.parse(JSON.stringify(stored)) as KanbanState,
   );
+}
+
+export function loadKanbanState(
+  storage: StorageService,
+  instanceId: string,
+  userId: string,
+): KanbanState | null {
+  const raw = storage.getItemSync(buildInstanceStorageKey(STORAGE_PREFIX, userId, instanceId));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as KanbanState;
+  } catch {
+    return null;
+  }
+}
+
+export function saveKanbanState(
+  storage: StorageService,
+  instanceId: string,
+  userId: string,
+  state: KanbanState,
+) {
+  persistInstanceState(STORAGE_PREFIX, userId, instanceId, state, storage);
 }
 
 @Component({
@@ -208,6 +233,10 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
           </div>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" (click)="transformToTodoRequest.emit()">Kanban → Todo</button>
+              <button type="button" (click)="transformColumnsToTodosRequest.emit()">
+                Columns → Todo Instances
+              </button>
               <button (click)="exportInstance()">{{ 'kanban.exportInstance' | translate }}</button>
               <label style="display:inline-flex; align-items:center; gap:8px;">
                 <span>{{ 'kanban.importInstance' | translate }}</span>
@@ -493,6 +522,8 @@ export function cloneKanbanState(fromId: string, toId: string, storage: StorageS
 })
 export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
+  @Output() transformToTodoRequest = new EventEmitter<void>();
+  @Output() transformColumnsToTodosRequest = new EventEmitter<void>();
   @ViewChild('boardScroll') boardScroll?: ElementRef<HTMLDivElement>;
   private host = inject(ElementRef);
 

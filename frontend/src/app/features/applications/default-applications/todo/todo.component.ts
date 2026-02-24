@@ -1,9 +1,11 @@
 import {
   Component,
   ElementRef,
+  EventEmitter,
   HostListener,
   Input,
   OnInit,
+  Output,
   effect,
   inject,
   signal,
@@ -90,10 +92,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                       </td>
                       <td style="padding:6px 0;">
                         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                          <button
-                            (click)="moveProject(project.id, -1)"
-                            [disabled]="$index === 0"
-                          >
+                          <button (click)="moveProject(project.id, -1)" [disabled]="$index === 0">
                             ↑
                           </button>
                           <button
@@ -117,6 +116,9 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                   }
                   <div style="display:flex; flex-direction:column; gap:8px;">
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <button type="button" (click)="transformToKanbanRequest.emit()">
+                        Todo → Kanban
+                      </button>
                       <button (click)="exportInstance()">
                         {{ 'todo.exportInstance' | translate }}
                       </button>
@@ -436,6 +438,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
         color: #9aa1ad;
         cursor: grab;
         user-select: none;
+        touch-action: none;
       }
       .todo__drag:active {
         cursor: grabbing;
@@ -476,6 +479,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
 })
 export class TodoPageComponent implements OnInit {
   @Input({ required: true }) instanceId!: string;
+  @Output() transformToKanbanRequest = new EventEmitter<void>();
   state = signal<TodoState>({
     version: 2,
     projectsEnabled: false,
@@ -984,11 +988,14 @@ export class TodoPageComponent implements OnInit {
   }
 
   private updateState(nextState: TodoState) {
-    const ensuredProjects = nextState.projects.length ? nextState.projects : [this.defaultProject()];
+    const ensuredProjects = nextState.projects.length
+      ? nextState.projects
+      : [this.defaultProject()];
     const normalized = {
       ...nextState,
       projects: ensuredProjects,
-      activeProjectId: nextState.activeProjectId || ensuredProjects[0]?.id || this.defaultProject().id,
+      activeProjectId:
+        nextState.activeProjectId || ensuredProjects[0]?.id || this.defaultProject().id,
     };
     const collapsed = { ...(normalized.subtaskCollapsed ?? {}), ...this.subtaskCollapsed() };
     const next = { ...normalized, subtaskCollapsed: collapsed };
@@ -1077,12 +1084,16 @@ export class TodoPageComponent implements OnInit {
   }
 
   startTodoDrag(todo: Todo, event: PointerEvent) {
+    event.stopPropagation();
     event.preventDefault();
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
     this.draggingTodoId.set(todo.id);
   }
 
   startSubtaskDrag(todoId: string, sub: TodoSubtask, event: PointerEvent) {
+    event.stopPropagation();
     event.preventDefault();
+    (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
     this.draggingSubtask.set({ todoId, subtaskId: sub.id });
   }
 
