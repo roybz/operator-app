@@ -224,6 +224,12 @@ export class VaultDbService {
     return clonedVault;
   }
 
+  async cloneVault(vaultId: string, options?: { name?: string; mode?: 'deep' | 'cow' }) {
+    // v1: assets are shared (immutable), markdown/nodes are deep-copied.
+    // This gives a safe demo-ready clone while keeping a stable API for future COW.
+    return this.cloneVaultDeep(vaultId, { name: options?.name });
+  }
+
   async putNodes(nodes: VaultNodeRecord[]) {
     if (!nodes.length) return;
     const db = await this.openDb();
@@ -315,6 +321,13 @@ export class VaultDbService {
     return (await reqToPromise(tx.objectStore(STORES.nodes).get(nodeId))) as
       | VaultNodeRecord
       | undefined;
+  }
+
+  async getNodeByPath(vaultId: string, path: string) {
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.nodes], 'readonly');
+    const idx = tx.objectStore(STORES.nodes).index('byVaultPath');
+    return (await reqToPromise(idx.get([vaultId, path]))) as VaultNodeRecord | undefined;
   }
 
   async getAsset(vaultId: string, path: string) {

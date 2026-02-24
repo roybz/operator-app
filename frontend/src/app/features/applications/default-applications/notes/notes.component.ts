@@ -431,6 +431,10 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             ></textarea>
             <div
               [innerHTML]="vaultPreviewHtml()"
+              tabindex="0"
+              (click)="onVaultPreviewClick($event)"
+              (keydown.enter)="onVaultPreviewClick($event)"
+              (keydown.space)="onVaultPreviewClick($event)"
               style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px; overflow:auto;"
             ></div>
           </div>
@@ -993,8 +997,9 @@ export class NotesComponent implements OnInit, OnDestroy {
     const source = this.state().source;
     if (!source || source.type !== 'vault') return;
     try {
-      const cloned = await this.vaultDb.cloneVaultDeep(source.vaultId, {
+      const cloned = await this.vaultDb.cloneVault(source.vaultId, {
         name: `${source.vaultName} ${this.translate.instant('notes.copySuffix')}`,
+        mode: 'cow',
       });
       await this.applyImportedVaultToDestination(
         cloned.id,
@@ -1127,14 +1132,30 @@ export class NotesComponent implements OnInit, OnDestroy {
       return `@@OB_LINK_${links.length - 1}@@`;
     });
     let html = this.renderMarkdown(working);
+    const assets = await this.vaultDb.listAssets(vaultId);
+    const assetPathMap = new Map<string, string>();
+    const assetBasenameMap = new Map<string, string>();
+    for (const asset of assets) {
+      assetPathMap.set(asset.path.toLowerCase(), asset.path);
+      const basename = asset.path.split('/').pop()?.toLowerCase();
+      if (basename && !assetBasenameMap.has(basename)) {
+        assetBasenameMap.set(basename, asset.path);
+      }
+    }
     for (let i = 0; i < embeds.length; i += 1) {
       const [pathRaw] = String(embeds[i]).split('|');
       const targetPath = pathRaw.split('#')[0]?.trim();
-      const assetUrl = targetPath ? await this.vaultDb.getAssetUrl(vaultId, targetPath) : null;
+      const resolvedAssetPath = targetPath
+        ? (assetPathMap.get(targetPath.toLowerCase()) ??
+          assetBasenameMap.get(targetPath.split('/').pop()?.toLowerCase() ?? ''))
+        : undefined;
+      const assetUrl = resolvedAssetPath
+        ? await this.vaultDb.getAssetUrl(vaultId, resolvedAssetPath)
+        : null;
       const replacement = assetUrl
-        ? /\.(png|jpe?g|gif|webp|svg)$/i.test(targetPath ?? '')
+        ? /\.(png|jpe?g|gif|webp|svg)$/i.test(resolvedAssetPath ?? targetPath ?? '')
           ? `<img src="${escaped(assetUrl)}" alt="${escaped(targetPath ?? '')}" style="max-width:100%; display:block; margin:8px 0;" />`
-          : `<a href="${escaped(assetUrl)}" target="_blank" rel="noopener noreferrer">${escaped(targetPath ?? 'attachment')}</a>`
+          : `<a href="${escaped(assetUrl)}" target="_blank" rel="noopener noreferrer">${escaped(resolvedAssetPath ?? targetPath ?? 'attachment')}</a>`
         : `<span style="color:var(--color-muted)">[missing embed: ${escaped(targetPath ?? embeds[i])}]</span>`;
       html = html.replace(`@@OB_EMBED_${i}@@`, replacement);
     }
@@ -1142,12 +1163,51 @@ export class NotesComponent implements OnInit, OnDestroy {
       const raw = String(links[i]);
       const [targetWithHeading, alias] = raw.split('|');
       const label = alias?.trim() || targetWithHeading.trim();
+      const [targetPathRaw] = targetWithHeading.split('#');
       html = html.replace(
         `@@OB_LINK_${i}@@`,
-        `<span style="text-decoration:underline; color:var(--color-primary, #1e88e5)">${escaped(label)}</span>`,
+        `<button type="button" data-ob-link="${escaped(targetPathRaw.trim())}" style="border:none;background:none;padding:0;cursor:pointer;text-decoration:underline;color:var(--color-primary, #1e88e5)">${escaped(label)}</button>`,
       );
     }
     return html;
+  }
+
+  async onVaultPreviewClick(event: Event) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    const target = event.target as HTMLElement | null;
+    const linkEl = target?.closest('[data-ob-link]') as HTMLElement | null;
+    if (!linkEl) return;
+    const raw = linkEl.getAttribute('data-ob-link')?.trim();
+    if (!raw) return;
+    const direct =
+      (await this.vaultDb.getNodeByPath(source.vaultId, raw)) ??
+      (await this.vaultDb.getNodeByPath(source.vaultId, `${raw}.md`));
+    if (direct) {
+      await this.selectVaultNode(direct.id);
+      return;
+    }
+    const basename = raw.split('/').pop()?.toLowerCase();
+    if (!basename) return;
+    const fallback = this.findVaultNodeByBasename(this.vaultTree(), basename);
+    if (fallback) await this.selectVaultNode(fallback.id);
+  }
+
+  private findVaultNodeByBasename(
+    nodes: VaultFileTreeNode[],
+    basename: string,
+  ): VaultFileTreeNode | null {
+    for (const node of nodes) {
+      if (node.type === 'file') {
+        const name = node.name.toLowerCase();
+        if (name === basename || name === `${basename}.md`) return node;
+      }
+      if (node.children?.length) {
+        const found = this.findVaultNodeByBasename(node.children, basename);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   folderCount() {
