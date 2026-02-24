@@ -453,6 +453,7 @@ export class VaultDbService {
     }
     await txDone(tx);
     const result = { record: nextRecord, previous: current };
+    void this.garbageCollectMarkdownContentRefs(vaultId);
     const vault = await this.getVault(vaultId);
     if (vault?.cloudBeta?.enabled && this.canUseCloudVaultSyncBeta()) {
       void this.syncVaultToCloud(vaultId);
@@ -570,6 +571,73 @@ export class VaultDbService {
   async listUnresolvedLinks(vaultId: string) {
     const links = await this.listLinks(vaultId);
     return links.filter((link) => !link.targetPath);
+  }
+
+  async getVaultCloudBetaSummary(vaultId: string) {
+    const [vault, nodes, markdown, links, assets] = await Promise.all([
+      this.getVault(vaultId),
+      this.listNodes(vaultId),
+      this.listMarkdownFiles(vaultId),
+      this.listLinks(vaultId),
+      this.listAssets(vaultId),
+    ]);
+    return {
+      cloudEnabled: Boolean(vault?.cloudBeta?.enabled),
+      syncedMarkdownOnly: true,
+      counts: {
+        nodes: nodes.length,
+        markdown: markdown.length,
+        links: links.length,
+        assets: assets.length,
+      },
+      assetBytes: assets.reduce((sum, asset) => sum + (asset.size || 0), 0),
+    };
+  }
+
+  async createMarkdownNoteByPath(vaultId: string, pathInput: string, content = '') {
+    const path = this.normalizeVaultMarkdownPath(pathInput);
+    const existing = await this.getNodeByPath(vaultId, path);
+    if (existing?.type === 'file') return existing;
+    const nodes = await this.listNodes(vaultId);
+    const existingByPath = new Map(nodes.map((n) => [n.path, n] as const));
+    const parts = path.split('/').filter(Boolean);
+    const fileName = parts.pop();
+    if (!fileName) throw new Error('Invalid path');
+    let parentId: string | undefined;
+    let parentPath = '';
+    const newNodes: VaultNodeRecord[] = [];
+    for (const part of parts) {
+      const nextPath = parentPath ? `${parentPath}/${part}` : part;
+      const existingFolder = existingByPath.get(nextPath);
+      if (existingFolder?.type === 'folder') {
+        parentId = existingFolder.id;
+        parentPath = nextPath;
+        continue;
+      }
+      const folder: VaultNodeRecord = {
+        id: uid('vnode'),
+        vaultId,
+        path: nextPath,
+        type: 'folder',
+        ...(parentId ? { parentId } : {}),
+      };
+      newNodes.push(folder);
+      existingByPath.set(nextPath, folder);
+      parentId = folder.id;
+      parentPath = nextPath;
+    }
+    if (newNodes.length) await this.putNodes(newNodes);
+    const filePath = parentPath ? `${parentPath}/${fileName}` : fileName;
+    const node: VaultNodeRecord = {
+      id: uid('vnode'),
+      vaultId,
+      path: filePath,
+      type: 'file',
+      ...(parentId ? { parentId } : {}),
+    };
+    await this.putNodes([node]);
+    await this.saveMarkdownFile(node.id, content);
+    return node;
   }
 
   async syncVaultToCloud(vaultId: string) {
@@ -781,6 +849,36 @@ export class VaultDbService {
 
   private markdownContentRefId(hash: string) {
     return `mdc_${hash}`;
+  }
+
+  private normalizeVaultMarkdownPath(pathInput: string) {
+    let next = pathInput
+      .replace(/\\/g, '/')
+      .replace(/^\.?\/*/, '')
+      .trim();
+    if (!next) next = 'New note.md';
+    if (!/\.md$/i.test(next)) next = `${next}.md`;
+    return next;
+  }
+
+  async garbageCollectMarkdownContentRefs(vaultId?: string) {
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.markdown, STORES.markdownContent], 'readwrite');
+    const mdStore = tx.objectStore(STORES.markdown);
+    const contentStore = tx.objectStore(STORES.markdownContent);
+    const markdownRows = vaultId
+      ? ((await reqToPromise(
+          mdStore.index('byVaultId').getAll(vaultId),
+        )) as StoredMarkdownFileRecord[])
+      : ((await reqToPromise(mdStore.getAll())) as StoredMarkdownFileRecord[]);
+    const referenced = new Set(
+      markdownRows.map((row) => row.contentRefId).filter(Boolean) as string[],
+    );
+    const keys = (await reqToPromise(contentStore.getAllKeys())) as string[];
+    for (const key of keys) {
+      if (!referenced.has(key)) contentStore.delete(key);
+    }
+    await txDone(tx);
   }
 
   private async ensureMarkdownContentRefForRecord(record: StoredMarkdownFileRecord) {

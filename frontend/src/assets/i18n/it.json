@@ -342,7 +342,9 @@
     "unresolvedLinksEmpty": "No unresolved links found in this vault view.",
     "unresolvedLinksSearch": "Search unresolved links",
     "unresolvedLinksAmbiguousOnly": "Ambiguous only",
-    "unresolvedLinkAmbiguous": "(ambiguous)"
+    "unresolvedLinkAmbiguous": "(ambiguous)",
+    "createMissingLinkTarget": "Create target note",
+    "cloudBetaAssetsLocalOnly": "Attachments remain local-only in beta ({{count}} files, {{kb}} KB on this device)."
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",

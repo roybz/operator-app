@@ -286,6 +286,18 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
                 }}</small>
               }
             </div>
+            @if (vaultCloudBetaEnabled() && vaultCloudBetaSummary()) {
+              <small style="opacity:0.75;">
+                {{
+                  'notes.cloudBetaAssetsLocalOnly'
+                    | translate
+                      : {
+                          count: vaultCloudBetaSummary()?.counts?.assets ?? 0,
+                          kb: ((vaultCloudBetaSummary()?.assetBytes ?? 0) / 1024).toFixed(1),
+                        }
+                }}
+              </small>
+            }
           }
           @if (importStatus() === 'loading') {
             <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
@@ -496,21 +508,49 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               <div
                 style="border:1px solid var(--color-border); border-radius:6px; padding:8px; margin-top:6px; max-height:180px; overflow:auto; display:flex; flex-direction:column; gap:6px;"
               >
-                @if (!vaultUnresolvedLinks().length) {
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <input
+                    [value]="vaultUnresolvedSearch()"
+                    (input)="vaultUnresolvedSearch.set($any($event.target).value)"
+                    [placeholder]="'notes.unresolvedLinksSearch' | translate"
+                    style="flex:1; min-width:120px;"
+                  />
+                  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px;">
+                    <input
+                      type="checkbox"
+                      [checked]="vaultUnresolvedAmbiguousOnly()"
+                      (change)="vaultUnresolvedAmbiguousOnly.set($any($event.target).checked)"
+                    />
+                    {{ 'notes.unresolvedLinksAmbiguousOnly' | translate }}
+                  </label>
+                </div>
+                @if (!filteredVaultUnresolvedLinks().length) {
                   <div style="font-size:12px; opacity:0.7;">
                     {{ 'notes.unresolvedLinksEmpty' | translate }}
                   </div>
                 } @else {
-                  @for (link of vaultUnresolvedLinks().slice(0, 100); track link.id) {
-                    <button
-                      style="text-align:left; display:flex; flex-direction:column; gap:2px;"
-                      (click)="openUnresolvedLinkSource(link)"
-                    >
-                      <span style="font-size:12px; font-weight:600;">{{ link.rawTarget }}</span>
-                      <span style="font-size:11px; opacity:0.7;">{{
-                        unresolvedLinkSourcePath(link)
-                      }}</span>
-                    </button>
+                  @for (link of filteredVaultUnresolvedLinks().slice(0, 100); track link.id) {
+                    <div style="display:flex; align-items:flex-start; gap:6px;">
+                      <button
+                        style="text-align:left; display:flex; flex-direction:column; gap:2px; flex:1;"
+                        (click)="openUnresolvedLinkSource(link)"
+                      >
+                        <span style="font-size:12px; font-weight:600;">
+                          {{ link.rawTarget }}
+                          @if (link.ambiguous) {
+                            <span style="font-size:10px; opacity:0.8;">
+                              {{ 'notes.unresolvedLinkAmbiguous' | translate }}
+                            </span>
+                          }
+                        </span>
+                        <span style="font-size:11px; opacity:0.7;">{{
+                          unresolvedLinkSourcePath(link)
+                        }}</span>
+                      </button>
+                      <button style="font-size:11px;" (click)="createNoteForUnresolvedLink(link)">
+                        {{ 'notes.createMissingLinkTarget' | translate }}
+                      </button>
+                    </div>
                   }
                 }
               </div>
@@ -871,6 +911,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultCloudBetaSyncing = signal(false);
   vaultCloudBetaStatusMessage = signal<string | null>(null);
   vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
+  vaultCloudBetaSummary = signal<{ counts: { assets: number }; assetBytes: number } | null>(null);
   vaultUnresolvedLinks = signal<LinkIndexRecord[]>([]);
   vaultUnresolvedSearch = signal('');
   vaultUnresolvedAmbiguousOnly = signal(false);
@@ -1514,9 +1555,12 @@ export class NotesComponent implements OnInit, OnDestroy {
     if (!source || source.type !== 'vault') {
       this.vaultCloudBetaEnabled.set(false);
       this.vaultCloudBetaStatusMessage.set(null);
+      this.vaultCloudBetaSummary.set(null);
       return;
     }
     const vault = await this.vaultDb.getVault(source.vaultId);
+    const summary = await this.vaultDb.getVaultCloudBetaSummary(source.vaultId);
+    this.vaultCloudBetaSummary.set(summary);
     const enabled = Boolean(vault?.cloudBeta?.enabled);
     this.vaultCloudBetaEnabled.set(enabled);
     if (!vault) {
@@ -1561,6 +1605,18 @@ export class NotesComponent implements OnInit, OnDestroy {
 
   async openUnresolvedLinkSource(link: LinkIndexRecord) {
     await this.selectVaultNode(link.fromNodeId);
+  }
+
+  async createNoteForUnresolvedLink(link: LinkIndexRecord) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    const raw = (link.rawTarget || '').split('|')[0]?.split('#')[0]?.trim();
+    if (!raw) return;
+    const basePath = source.pathPrefix ? `${source.pathPrefix}/${raw}` : raw;
+    const created = await this.vaultDb.createMarkdownNoteByPath(source.vaultId, basePath, '');
+    await this.refreshVaultTree();
+    await this.refreshVaultUnresolvedLinks();
+    await this.selectVaultNode(created.id);
   }
 
   private async refreshVaultUnresolvedLinks() {

@@ -135,6 +135,12 @@ class MockVaultDbService {
   async setVaultCloudBetaEnabled() {
     return true;
   }
+  async getVaultCloudBetaSummary() {
+    return { cloudEnabled: false, syncedMarkdownOnly: true, counts: { assets: 0 }, assetBytes: 0 };
+  }
+  async createMarkdownNoteByPath() {
+    return { id: 'created_note', vaultId: 'v1', path: 'Created.md', type: 'file' as const };
+  }
 }
 
 describe('NotesComponent (vault mode)', () => {
