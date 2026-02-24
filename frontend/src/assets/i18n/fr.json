@@ -262,7 +262,8 @@
     "expand": "Developper",
     "license": "License & Privacy Policy",
     "logout": "Se deconnecter",
-    "settings": "Parametres"
+    "settings": "Parametres",
+    "switchDesktopMode": "Switch to Desktop Mode"
   },
   "notes": {
     "addFolder": "Add folder",

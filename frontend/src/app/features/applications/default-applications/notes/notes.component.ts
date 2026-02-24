@@ -1,4 +1,13 @@
-import { Component, Input, OnInit, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnDestroy,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
@@ -7,13 +16,17 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -391,7 +404,9 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             } @else if (selectedNode()?.editorMode === 'markdown') {
               <textarea
                 [value]="selectedNode()?.content"
+                (focus)="startMarkdownEdit()"
                 (input)="onMarkdownInput($event)"
+                (blur)="finishMarkdownEdit()"
                 [disabled]="selectedNode()?.locked"
                 style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:200px;"
               ></textarea>
@@ -504,7 +519,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
     }
   `,
 })
-export class NotesComponent implements OnInit {
+export class NotesComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
   private translate = inject(TranslateService);
@@ -534,12 +549,20 @@ export class NotesComponent implements OnInit {
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
   richFocused = signal(false);
+  markdownFocused = signal(false);
   richSnapshot = signal('');
   isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
   private lastRemoteStorageChangeSeq = 0;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -550,7 +573,7 @@ export class NotesComponent implements OnInit {
       const userId = this.prefs.userId();
       const key = buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId || '');
       if (!this.instanceId || !event.keys.includes(key)) return;
-      if (this.richFocused()) {
+      if (this.isLocallyEditing()) {
         this.remoteConflict.queue([key], 'dirty');
         return;
       }
@@ -599,6 +622,10 @@ export class NotesComponent implements OnInit {
     this.syncRichSnapshot();
   }
 
+  ngOnDestroy() {
+    this.persistQueue.destroy();
+  }
+
   private reloadFromStorage(options?: { persistNormalized?: boolean }) {
     const userId = this.prefs.userId();
     const raw = this.storage.getItemSync(
@@ -639,8 +666,7 @@ export class NotesComponent implements OnInit {
   }
 
   private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+    this.persistQueue.schedule();
   }
 
   activeRoot() {
@@ -672,6 +698,10 @@ export class NotesComponent implements OnInit {
     if (!this.richFocused()) {
       this.richSnapshot.set(note.content ?? '');
     }
+  }
+
+  private isLocallyEditing() {
+    return this.richFocused() || this.markdownFocused();
   }
 
   selectNode(id: string) {
@@ -809,9 +839,24 @@ export class NotesComponent implements OnInit {
 
   finishRichEdit() {
     this.richFocused.set(false);
-    this.remoteConflict.clearDirty(this.instanceStorageKey());
+    if (!this.isLocallyEditing()) {
+      this.remoteConflict.clearDirty(this.instanceStorageKey());
+    }
     this.commit({ ...this.state() });
     this.syncRichSnapshot();
+  }
+
+  startMarkdownEdit() {
+    this.markdownFocused.set(true);
+    this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  finishMarkdownEdit() {
+    this.markdownFocused.set(false);
+    if (!this.isLocallyEditing()) {
+      this.remoteConflict.clearDirty(this.instanceStorageKey());
+    }
+    this.commit({ ...this.state() });
   }
 
   private instanceStorageKey() {
@@ -832,6 +877,23 @@ export class NotesComponent implements OnInit {
     const target = event.target as HTMLTextAreaElement;
     note.content = target.value;
     this.commit({ ...this.state() });
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (!this.isLocallyEditing()) {
+        this.reloadFromStorage({ persistNormalized: false });
+      }
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   deleteNode(nodeId?: string) {

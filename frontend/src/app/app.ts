@@ -522,6 +522,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             (toggleLock)="toggleDeleteLock($event)"
             (archive)="confirmArchive($event)"
             (unarchive)="unarchiveInstance($event)"
+            (switchToDesktopMode)="requestSwitchToDesktopMode()"
             (toggleSettings)="toggleSettings()"
             (openLicense)="openLicense()"
             (logout)="logout()"
@@ -1499,6 +1500,8 @@ export class AppComponent implements OnInit, OnDestroy {
   });
   effectiveCanvasScale = computed(() => (this.phoneMode() ? 1 : this.canvasScale()));
   forceLoggedOut = signal(false);
+  private logoutRedirectInProgress = false;
+  private viewportReflowRaf: number | null = null;
 
   constructor() {
     this.translate.setDefaultLang('en');
@@ -1506,18 +1509,14 @@ export class AppComponent implements OnInit, OnDestroy {
     const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
     this.handleLogoutLocation(currentPath, currentSearch);
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/logout')) {
-      this.auth.logout();
-      window.location.replace('/login?loggedOut=1');
+      this.performLogoutRouteRedirect();
     }
     this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .subscribe((event) => {
         this.handleLogoutLocation(event.urlAfterRedirects, '');
         if (!event.urlAfterRedirects.startsWith('/logout')) return;
-        if (this.auth.isLoggedIn()) {
-          this.auth.logout();
-        }
-        this.router.navigateByUrl('/login?loggedOut=1');
+        this.performLogoutRouteRedirect();
       });
     effect(() => {
       if (typeof document === 'undefined') return;
@@ -1648,10 +1647,7 @@ export class AppComponent implements OnInit, OnDestroy {
       if (typeof window === 'undefined') return;
       if (!this.auth.ready()) return;
       if (!window.location.pathname.startsWith('/logout')) return;
-      if (this.auth.isLoggedIn()) {
-        this.auth.logout();
-      }
-      this.router.navigateByUrl('/login?loggedOut=1');
+      this.performLogoutRouteRedirect();
     });
     effect(() => {
       const userId = this.auth.actualUser()?.id ?? null;
@@ -1784,8 +1780,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.debugPerf.markDialogHostInit();
     if (typeof window === 'undefined') return;
     if (window.location.pathname.startsWith('/logout')) {
-      this.auth.logout();
-      window.location.replace('/login?loggedOut=1');
+      this.performLogoutRouteRedirect();
       return;
     }
     this.handleLogoutRoute();
@@ -1807,8 +1802,12 @@ export class AppComponent implements OnInit, OnDestroy {
       this.now.set(new Date());
       this.applyThemeClasses();
     }, 60_000);
-    setTimeout(this.updateCanvasBounds, 0);
-    window.addEventListener('resize', this.updateCanvasBounds);
+    setTimeout(this.scheduleCanvasBoundsUpdate, 0);
+    window.addEventListener('resize', this.scheduleCanvasBoundsUpdate);
+    window.addEventListener('orientationchange', this.scheduleCanvasBoundsUpdate);
+    window.addEventListener('focus', this.scheduleCanvasBoundsUpdate);
+    window.visualViewport?.addEventListener('resize', this.scheduleCanvasBoundsUpdate);
+    window.visualViewport?.addEventListener('scroll', this.scheduleCanvasBoundsUpdate);
   }
 
   ngOnDestroy() {
@@ -1821,7 +1820,15 @@ export class AppComponent implements OnInit, OnDestroy {
     this.clearDeferredRemoteApplyTimers();
     this.realtimeSync.stop();
     if (typeof window !== 'undefined') {
-      window.removeEventListener('resize', this.updateCanvasBounds);
+      window.removeEventListener('resize', this.scheduleCanvasBoundsUpdate);
+      window.removeEventListener('orientationchange', this.scheduleCanvasBoundsUpdate);
+      window.removeEventListener('focus', this.scheduleCanvasBoundsUpdate);
+      window.visualViewport?.removeEventListener('resize', this.scheduleCanvasBoundsUpdate);
+      window.visualViewport?.removeEventListener('scroll', this.scheduleCanvasBoundsUpdate);
+      if (this.viewportReflowRaf !== null) {
+        window.cancelAnimationFrame(this.viewportReflowRaf);
+        this.viewportReflowRaf = null;
+      }
     }
   }
 
@@ -1996,6 +2003,15 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   };
 
+  private scheduleCanvasBoundsUpdate = () => {
+    if (typeof window === 'undefined') return;
+    if (this.viewportReflowRaf !== null) return;
+    this.viewportReflowRaf = window.requestAnimationFrame(() => {
+      this.viewportReflowRaf = null;
+      this.updateCanvasBounds();
+    });
+  };
+
   @HostListener('window:pointermove', ['$event'])
   onTilePointerMove(event: PointerEvent) {
     if (this.tileDragState) {
@@ -2102,10 +2118,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private handleLogoutRoute() {
     if (typeof window === 'undefined') return;
     if (!window.location.pathname.startsWith('/logout')) return;
-    if (this.auth.isLoggedIn()) {
-      this.auth.logout();
-    }
-    this.router.navigateByUrl('/login?loggedOut=1');
+    this.performLogoutRouteRedirect();
   }
 
   toggleNav() {
@@ -3501,14 +3514,37 @@ export class AppComponent implements OnInit, OnDestroy {
     const rawSearch = search || window.location.search;
     const hasLoggedOut = rawSearch.includes('loggedOut=1');
     if (rawPath.startsWith('/logout') || hasLoggedOut) {
+      if (rawPath.startsWith('/logout')) {
+        this.performLogoutRouteRedirect();
+        return;
+      }
       this.auth.logout();
       void this.storage.removeItem('op_session');
       this.forceLoggedOut.set(true);
-      if (rawPath.startsWith('/logout')) {
-        this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
-      }
       return;
     }
     this.forceLoggedOut.set(false);
+    this.logoutRedirectInProgress = false;
+  }
+
+  requestSwitchToDesktopMode() {
+    if (!this.phoneMode()) return;
+    this.pendingPhoneMode.set(false);
+    this.phoneModeConfirmOpen.set(true);
+  }
+
+  private performLogoutRouteRedirect() {
+    if (typeof window === 'undefined') return;
+    if (this.logoutRedirectInProgress) return;
+    this.logoutRedirectInProgress = true;
+    const externalAuth = this.auth.usesExternalAuth();
+    this.auth.logout();
+    void this.storage.removeItem('op_session');
+    this.forceLoggedOut.set(true);
+    if (externalAuth) {
+      this.auth.startExternalLogout();
+      return;
+    }
+    void this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
   }
 }

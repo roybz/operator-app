@@ -1,4 +1,13 @@
-import { Component, Input, OnInit, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnDestroy,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -6,11 +15,15 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 type StickyMode = 'rich' | 'markdown';
 
@@ -199,7 +212,9 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
             } @else {
               <textarea
                 [value]="state().content"
+                (focus)="startMarkdownEdit()"
                 (input)="onMarkdownInput($event)"
+                (blur)="finishMarkdownEdit()"
                 [disabled]="state().locked"
                 [style.fontSize.px]="state().fontSize"
                 style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:200px; flex:1;"
@@ -217,7 +232,7 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
     </div>
   `,
 })
-export class StickyNotesComponent implements OnInit {
+export class StickyNotesComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
   private prefs = inject(AppPreferencesService);
@@ -229,8 +244,16 @@ export class StickyNotesComponent implements OnInit {
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
   accessibilityMode = computed(() => this.prefs.preferences().accessibilityMode);
   richFocused = signal(false);
+  markdownFocused = signal(false);
   richSnapshot = signal('');
   richHtml = computed(() => (this.richFocused() ? this.richSnapshot() : this.state().content));
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -243,7 +266,7 @@ export class StickyNotesComponent implements OnInit {
       if (!event || !this.instanceId) return;
       const key = this.instanceStorageKey();
       if (!event.keys.includes(key)) return;
-      if (this.richFocused()) {
+      if (this.isLocallyEditing()) {
         this.remoteConflict.queue([key], 'dirty');
         return;
       }
@@ -274,7 +297,11 @@ export class StickyNotesComponent implements OnInit {
       this.state.set(fallback);
       stateStore.set(this.instanceId, this.state());
     }
-    this.persistState();
+    this.persistState({ immediate: true });
+  }
+
+  ngOnDestroy() {
+    this.persistQueue.destroy();
   }
 
   closeSettings() {
@@ -373,7 +400,21 @@ export class StickyNotesComponent implements OnInit {
 
   onMarkdownInput(event: Event) {
     const target = event.target as HTMLTextAreaElement;
-    this.commit({ ...this.state(), content: target.value });
+    const next = { ...this.state(), content: target.value };
+    this.state.set(next);
+    stateStore.set(this.instanceId, next);
+    this.persistState();
+  }
+
+  startMarkdownEdit() {
+    this.markdownFocused.set(true);
+    this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  finishMarkdownEdit() {
+    this.markdownFocused.set(false);
+    this.remoteConflict.clearDirty(this.instanceStorageKey());
+    this.commit({ ...this.state() });
   }
 
   renderVisual() {
@@ -390,14 +431,8 @@ export class StickyNotesComponent implements OnInit {
     this.persistState();
   }
 
-  private persistState() {
-    persistInstanceState(
-      STORAGE_PREFIX,
-      this.prefs.userId(),
-      this.instanceId,
-      this.state(),
-      this.storage,
-    );
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
   }
 
   private instanceStorageKey() {
@@ -425,6 +460,27 @@ export class StickyNotesComponent implements OnInit {
     if (!this.richFocused()) {
       this.richSnapshot.set(this.state().content || '');
     }
+  }
+
+  private isLocallyEditing() {
+    return this.richFocused() || this.markdownFocused();
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (!this.isLocallyEditing()) {
+        this.reloadFromStorage();
+      }
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   private getThemeColors() {

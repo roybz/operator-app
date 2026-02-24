@@ -55,6 +55,12 @@ import { AppId } from '../../features/dependencies/app-types';
           </div>
           <div style="display:flex; flex-direction:column; gap:12px; margin-top:16px;">
             <button
+              (click)="switchToDesktopMode.emit()"
+              style="padding:10px 12px; font-size:16px; border-radius:5px;"
+            >
+              {{ 'nav.switchDesktopMode' | translate }}
+            </button>
+            <button
               (click)="toggleSettings.emit()"
               style="padding:10px 12px; font-size:16px; border-radius:5px;"
             >
@@ -93,6 +99,7 @@ export class PhoneShellComponent {
   @Output() toggleLock = new EventEmitter<string>();
   @Output() archive = new EventEmitter<string>();
   @Output() unarchive = new EventEmitter<string>();
+  @Output() switchToDesktopMode = new EventEmitter<void>();
   @Output() toggleSettings = new EventEmitter<void>();
   @Output() openLicense = new EventEmitter<void>();
   @Output() logout = new EventEmitter<void>();

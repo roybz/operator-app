@@ -124,11 +124,11 @@ describe('DialogService', () => {
       dialogsByWorkspace: Record<string, Record<string, unknown>[]>;
     };
     const stored = Object.values(parsed.dialogsByWorkspace).flat()[0];
-    expect(stored['phoneMinimized']).toBe(false);
-    expect(stored['phoneStashed']).toBe(false);
+    expect(stored['phoneMinimized']).toBeUndefined();
+    expect(stored['phoneStashed']).toBeUndefined();
     expect(stored['phoneRect']).toBeUndefined();
     expect(stored['phoneTileRect']).toBeUndefined();
     expect(stored['phoneRestoreRect']).toBeUndefined();
-    expect(stored['phoneMaximized']).toBe(false);
+    expect(stored['phoneMaximized']).toBeUndefined();
   });
 });

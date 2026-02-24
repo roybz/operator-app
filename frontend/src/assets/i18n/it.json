@@ -262,7 +262,8 @@
     "expand": "Espandi",
     "license": "License & Privacy Policy",
     "logout": "Esci",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "switchDesktopMode": "Switch to Desktop Mode"
   },
   "notes": {
     "addFolder": "Add folder",
