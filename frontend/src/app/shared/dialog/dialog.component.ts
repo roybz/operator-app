@@ -322,6 +322,7 @@ export class DialogComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLElement;
     if (target.closest('input')) return;
     if (event.detail > 1 && target.closest('.dialog__title')) return;
+    event.stopPropagation();
     event.preventDefault();
     this.bringToFront.emit();
     this.dragStart = {
@@ -336,6 +337,7 @@ export class DialogComponent implements OnInit, OnDestroy {
   startResize(event: PointerEvent) {
     if (this.phoneMode) return;
     if (this.disabled) return;
+    event.stopPropagation();
     event.preventDefault();
     this.bringToFront.emit();
     this.resizeStart = {
