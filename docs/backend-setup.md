@@ -27,6 +27,7 @@ Behavior:
 - Guest/no-token path uses local storage.
 - Authenticated path uses remote storage with `Authorization: Bearer <JWT>`.
 - App hydrates asynchronously at startup using existing `APP_INITIALIZER`.
+- Realtime invalidation is WebSocket-first with polling fallback (optional but recommended).
 
 ## Required Backend Responsibilities
 
@@ -133,6 +134,8 @@ Use `frontend/src/assets/op-config.js` to select backend/auth provider:
 - `authProvider`: `'local' | 'cognito'` (can be extended)
 - `storageApiBaseUrl`
 - provider-specific auth config
+- `realtimeEnabled`
+- `realtimeWebSocketUrl`
 
 For another provider:
 
@@ -149,3 +152,18 @@ For another provider:
 - Durable data store backups / PITR equivalent
 - Separate IAM/service account credentials (not root)
 - Domain callback/logout URLs kept in sync with auth provider config
+- Explicit logout route/provider logout behavior (avoid local-only logout with external auth)
+- Realtime connect failures degrade gracefully (polling fallback or similar)
+
+## Frontend Sync Hardening Pattern (Current App)
+
+The frontend now uses a shared instance-scoped persist queue helper to reduce conflict/throttle thrash:
+
+- debounce/coalesce writes
+- serialize in-flight persistence
+- back off on `429 Too Many Requests`
+- hook app-specific handling for `409 version_conflict`
+
+Reference:
+
+- `frontend/src/app/core/realtime/instance-persist-queue.ts`
