@@ -344,7 +344,10 @@
     "unresolvedLinksAmbiguousOnly": "Ambiguous only",
     "unresolvedLinkAmbiguous": "(ambiguous)",
     "createMissingLinkTarget": "Create target note",
-    "cloudBetaAssetsLocalOnly": "Attachments remain local-only in beta ({{count}} files, {{kb}} KB on this device)."
+    "cloudBetaAssetsLocalOnly": "Attachments remain local-only in beta ({{count}} files, {{kb}} KB on this device).",
+    "cloudBetaAttachmentsToggle": "Sync attachments in cloud (paid beta)",
+    "cloudBetaAttachmentsHelp": "Saved as a paid-beta preference only for now. Attachments still remain local on this device.",
+    "cloudBetaAttachmentsRequested": "Paid beta attachment sync requested for this vault. Attachments still remain local until the service is enabled."
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",

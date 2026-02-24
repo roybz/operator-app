@@ -287,16 +287,39 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               }
             </div>
             @if (vaultCloudBetaEnabled() && vaultCloudBetaSummary()) {
-              <small style="opacity:0.75;">
-                {{
-                  'notes.cloudBetaAssetsLocalOnly'
-                    | translate
-                      : {
-                          count: vaultCloudBetaSummary()?.counts?.assets ?? 0,
-                          kb: ((vaultCloudBetaSummary()?.assetBytes ?? 0) / 1024).toFixed(1),
-                        }
-                }}
-              </small>
+              <div style="display:flex; flex-direction:column; gap:6px;">
+                <small style="opacity:0.75;">
+                  {{
+                    'notes.cloudBetaAssetsLocalOnly'
+                      | translate
+                        : {
+                            count: vaultCloudBetaSummary()?.counts?.assets ?? 0,
+                            kb: ((vaultCloudBetaSummary()?.assetBytes ?? 0) / 1024).toFixed(1),
+                          }
+                  }}
+                </small>
+                <label style="display:inline-flex; align-items:flex-start; gap:8px;">
+                  <input
+                    type="checkbox"
+                    [checked]="vaultCloudAttachmentsBetaRequested()"
+                    [disabled]="vaultCloudBetaSyncing()"
+                    (change)="
+                      toggleCurrentVaultCloudAttachmentsBetaRequested($any($event.target).checked)
+                    "
+                  />
+                  <span>
+                    {{ 'notes.cloudBetaAttachmentsToggle' | translate }}
+                    <small style="display:block; opacity:0.75;">
+                      {{
+                        (vaultCloudAttachmentsBetaRequested()
+                          ? 'notes.cloudBetaAttachmentsRequested'
+                          : 'notes.cloudBetaAttachmentsHelp'
+                        ) | translate
+                      }}
+                    </small>
+                  </span>
+                </label>
+              </div>
             }
           }
           @if (importStatus() === 'loading') {
@@ -911,7 +934,13 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultCloudBetaSyncing = signal(false);
   vaultCloudBetaStatusMessage = signal<string | null>(null);
   vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
-  vaultCloudBetaSummary = signal<{ counts: { assets: number }; assetBytes: number } | null>(null);
+  vaultCloudAttachmentsBetaRequested = signal(false);
+  vaultCloudBetaSummary = signal<{
+    counts: { assets: number };
+    assetBytes: number;
+    attachmentsCloudRequested?: boolean;
+    attachmentsCloudSupported?: boolean;
+  } | null>(null);
   vaultUnresolvedLinks = signal<LinkIndexRecord[]>([]);
   vaultUnresolvedSearch = signal('');
   vaultUnresolvedAmbiguousOnly = signal(false);
@@ -1550,10 +1579,29 @@ export class NotesComponent implements OnInit, OnDestroy {
     }
   }
 
+  async toggleCurrentVaultCloudAttachmentsBetaRequested(requested: boolean) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    this.vaultCloudBetaSyncing.set(true);
+    this.vaultCloudBetaStatusMessage.set(null);
+    try {
+      await this.vaultDb.setVaultCloudAttachmentsBetaRequested(source.vaultId, requested);
+      this.vaultCloudBetaStatusMessage.set(
+        requested ? 'notes.cloudBetaAttachmentsRequested' : 'notes.cloudBetaVaultEnabled',
+      );
+    } catch {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+    } finally {
+      this.vaultCloudBetaSyncing.set(false);
+      await this.refreshCurrentVaultCloudStatus();
+    }
+  }
+
   private async refreshCurrentVaultCloudStatus() {
     const source = this.state().source;
     if (!source || source.type !== 'vault') {
       this.vaultCloudBetaEnabled.set(false);
+      this.vaultCloudAttachmentsBetaRequested.set(false);
       this.vaultCloudBetaStatusMessage.set(null);
       this.vaultCloudBetaSummary.set(null);
       return;
@@ -1563,6 +1611,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.vaultCloudBetaSummary.set(summary);
     const enabled = Boolean(vault?.cloudBeta?.enabled);
     this.vaultCloudBetaEnabled.set(enabled);
+    this.vaultCloudAttachmentsBetaRequested.set(Boolean(summary?.attachmentsCloudRequested));
     if (!vault) {
       this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultUnavailableLocal');
       return;

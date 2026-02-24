@@ -188,11 +188,29 @@ export class VaultDbService {
       lastSyncedAt: enabled ? (vault.cloudBeta?.lastSyncedAt ?? null) : null,
       lastSyncError: null,
       syncedMarkdownOnly: true,
+      attachmentsCloudRequested: vault.cloudBeta?.attachmentsCloudRequested ?? false,
+      attachmentsCloudSupported: false,
     };
     await this.putVault(vault);
     if (enabled) {
       await this.syncVaultToCloud(vaultId);
     }
+    return true;
+  }
+
+  async setVaultCloudAttachmentsBetaRequested(vaultId: string, requested: boolean) {
+    const vault = await this.getVault(vaultId);
+    if (!vault) return false;
+    vault.cloudBeta = {
+      enabled: Boolean(vault.cloudBeta?.enabled),
+      lastSyncedAt: vault.cloudBeta?.lastSyncedAt ?? null,
+      lastSyncError: vault.cloudBeta?.lastSyncError ?? null,
+      syncedMarkdownOnly: true,
+      attachmentsCloudRequested: requested,
+      attachmentsCloudSupported: false,
+    };
+    await this.putVault(vault);
+    if (vault.cloudBeta.enabled) void this.syncVaultToCloud(vaultId);
     return true;
   }
 
@@ -253,6 +271,8 @@ export class VaultDbService {
           lastSyncedAt: null,
           lastSyncError: null,
           syncedMarkdownOnly: true,
+          attachmentsCloudRequested: sourceVault.cloudBeta?.attachmentsCloudRequested ?? false,
+          attachmentsCloudSupported: false,
         }
       : null;
     const db = await this.openDb();
@@ -584,6 +604,8 @@ export class VaultDbService {
     return {
       cloudEnabled: Boolean(vault?.cloudBeta?.enabled),
       syncedMarkdownOnly: true,
+      attachmentsCloudRequested: Boolean(vault?.cloudBeta?.attachmentsCloudRequested),
+      attachmentsCloudSupported: Boolean(vault?.cloudBeta?.attachmentsCloudSupported),
       counts: {
         nodes: nodes.length,
         markdown: markdown.length,
@@ -652,6 +674,7 @@ export class VaultDbService {
             ...vault.cloudBeta,
             lastSyncError: error instanceof Error ? error.message : 'sync_failed',
             syncedMarkdownOnly: true,
+            attachmentsCloudSupported: false,
           };
           await this.putVault(vault);
         }
@@ -702,6 +725,8 @@ export class VaultDbService {
       },
       assetsStoredInCloud: false,
       assetsMetadataOnly: true,
+      attachmentsCloudRequested: Boolean(vault.cloudBeta?.attachmentsCloudRequested),
+      attachmentsCloudSupported: false,
     };
     const keysToKeep = new Set<string>([
       this.cloudIndexKey(vaultId),
@@ -740,6 +765,8 @@ export class VaultDbService {
       lastSyncedAt: updatedAt,
       lastSyncError: null,
       syncedMarkdownOnly: true,
+      attachmentsCloudRequested: Boolean(vault.cloudBeta?.attachmentsCloudRequested),
+      attachmentsCloudSupported: false,
     };
     await this.putVault(vault);
   }
@@ -752,6 +779,8 @@ export class VaultDbService {
       chunks: { nodes: number; markdown: number; links: number };
       assetsStoredInCloud?: boolean;
       assetsMetadataOnly?: boolean;
+      attachmentsCloudRequested?: boolean;
+      attachmentsCloudSupported?: boolean;
     } | null>(this.cloudManifestKey(vaultId), null);
     if (!manifest || manifest.vaultId !== vaultId) return false;
 
@@ -767,6 +796,8 @@ export class VaultDbService {
         lastSyncedAt: Date.now(),
         lastSyncError: null,
         syncedMarkdownOnly: true,
+        attachmentsCloudRequested: Boolean(manifest.attachmentsCloudRequested),
+        attachmentsCloudSupported: Boolean(manifest.attachmentsCloudSupported),
       },
     };
 

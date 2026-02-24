@@ -135,6 +135,9 @@ class MockVaultDbService {
   async setVaultCloudBetaEnabled() {
     return true;
   }
+  async setVaultCloudAttachmentsBetaRequested() {
+    return true;
+  }
   async getVaultCloudBetaSummary() {
     return { cloudEnabled: false, syncedMarkdownOnly: true, counts: { assets: 0 }, assetBytes: 0 };
   }

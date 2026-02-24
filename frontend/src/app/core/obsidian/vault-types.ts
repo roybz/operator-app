@@ -11,6 +11,8 @@ export interface VaultRecord {
     lastSyncedAt?: number | null;
     lastSyncError?: string | null;
     syncedMarkdownOnly?: boolean;
+    attachmentsCloudRequested?: boolean;
+    attachmentsCloudSupported?: boolean;
   } | null;
 }
 
