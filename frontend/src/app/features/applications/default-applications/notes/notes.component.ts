@@ -27,11 +27,20 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { ObsidianImportService } from '../../../../core/obsidian/obsidian-import.service';
+import { VaultDbService } from '../../../../core/obsidian/vault-db';
+import {
+  ObsidianImportProgress,
+  ObsidianImportStats,
+  VaultFileTreeNode,
+} from '../../../../core/obsidian/vault-types';
+import { DialogService } from '../../../../core/dialog.service';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
 
 type NotesView = 'notes' | 'archive';
+type NotesSource = { type: 'internal' } | { type: 'vault'; vaultId: string; vaultName: string };
 
 interface NoteNode {
   id: string;
@@ -57,6 +66,8 @@ interface NotesState {
   sidebarOpenDesktop: boolean;
   sidebarOpenPhone: boolean;
   phoneSidebarInit?: boolean;
+  source?: NotesSource;
+  vaultSelectedNodeId?: string | null;
 }
 
 const stateStore = new Map<string, NotesState>();
@@ -192,9 +203,37 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               <span>{{ 'notes.importInstance' | translate }}</span>
               <input type="file" accept=".json" (change)="queueImport($event)" />
             </label>
+            <label style="display:inline-flex; align-items:center; gap:8px;">
+              <span>{{ 'notes.importVaultZip' | translate }}</span>
+              <input
+                type="file"
+                accept=".zip,application/zip"
+                (change)="queueVaultZipImport($event)"
+              />
+            </label>
+            <button (click)="startVaultFolderImport()">
+              {{ 'notes.importVaultFolder' | translate }}
+            </button>
             <button (click)="confirmWipeInstance()">
               {{ 'notes.wipeInstance' | translate }}
             </button>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span>{{ 'notes.importVaultDestination' | translate }}</span>
+            <select
+              [value]="vaultImportDestination()"
+              (change)="vaultImportDestination.set($any($event.target).value)"
+            >
+              <option value="new">{{ 'notes.importVaultDestinationNew' | translate }}</option>
+              <option value="current">
+                {{ 'notes.importVaultDestinationCurrent' | translate }}
+              </option>
+            </select>
+            @if (isVaultMode()) {
+              <button (click)="cloneCurrentVaultToNewInstance()">
+                {{ 'notes.cloneVaultToNewInstance' | translate }}
+              </button>
+            }
           </div>
           @if (importStatus() === 'loading') {
             <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
@@ -202,6 +241,36 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             <div style="color:#1b5e20;">{{ 'dialogs.importSuccess' | translate }}</div>
           } @else if (importStatus() === 'error') {
             <div style="color:#b00020;">{{ importMessage() ?? '' | translate }}</div>
+          }
+          @if (vaultImportStatus() === 'loading') {
+            <div style="opacity:0.8;">
+              {{ 'notes.importVaultLoading' | translate }}
+              @if (vaultImportProgress()) {
+                <div style="font-size:12px; opacity:0.8;">
+                  {{ vaultImportProgress()?.phase }}
+                  @if (vaultImportProgress()?.scanned) {
+                    ({{ vaultImportProgress()?.scanned }}/{{ vaultImportProgress()?.total }})
+                  }
+                </div>
+              }
+            </div>
+          } @else if (vaultImportStatus() === 'success') {
+            <div style="color:#1b5e20;">{{ 'notes.importVaultSuccess' | translate }}</div>
+            @if (vaultImportSummary()) {
+              <div style="font-size:12px; opacity:0.8;">
+                {{
+                  'notes.importVaultSummary'
+                    | translate
+                      : {
+                          md: vaultImportSummary()?.markdownCount,
+                          assets: vaultImportSummary()?.assetCount,
+                          unresolved: vaultImportSummary()?.unresolvedLinksCount,
+                        }
+                }}
+              </div>
+            }
+          } @else if (vaultImportStatus() === 'error') {
+            <div style="color:#b00020;">{{ vaultImportMessage() ?? '' | translate }}</div>
           }
         </div>
       }
@@ -268,22 +337,24 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         }
 
         @if (sidebarOpen()) {
-          <div style="display:flex; gap:6px; margin: 10px 0 6px; flex-wrap:wrap;">
-            <button (click)="addFolder()" [disabled]="isArchiveView()">
-              {{ 'notes.addFolder' | translate }}
-            </button>
-            <button (click)="addNote()" [disabled]="isArchiveView()">
-              {{ 'notes.addNote' | translate }}
-            </button>
-          </div>
-          <div style="display:flex; gap:6px; margin: 0 0 10px; flex-wrap:wrap;">
-            <button (click)="selectAll()">{{ 'notes.selectAll' | translate }}</button>
-            <button (click)="deselectAll()" [disabled]="!selectedIds().length">
-              {{ 'notes.deselectAll' | translate }}
-            </button>
-          </div>
+          @if (!isVaultMode()) {
+            <div style="display:flex; gap:6px; margin: 10px 0 6px; flex-wrap:wrap;">
+              <button (click)="addFolder()" [disabled]="isArchiveView()">
+                {{ 'notes.addFolder' | translate }}
+              </button>
+              <button (click)="addNote()" [disabled]="isArchiveView()">
+                {{ 'notes.addNote' | translate }}
+              </button>
+            </div>
+            <div style="display:flex; gap:6px; margin: 0 0 10px; flex-wrap:wrap;">
+              <button (click)="selectAll()">{{ 'notes.selectAll' | translate }}</button>
+              <button (click)="deselectAll()" [disabled]="!selectedIds().length">
+                {{ 'notes.deselectAll' | translate }}
+              </button>
+            </div>
+          }
 
-          @if (selectedIds().length) {
+          @if (!isVaultMode() && selectedIds().length) {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
               <button (click)="duplicateSelected()">
                 {{ 'notes.duplicateSelected' | translate }}
@@ -303,7 +374,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
             </div>
           }
 
-          @if (!state().listCollapsed) {
+          @if (!state().listCollapsed && !isVaultMode()) {
             @if (!(activeRoot().children?.length ?? 0)) {
               <div style="font-size:12px; opacity:0.6;">
                 {{ 'notes.emptyHint' | translate }}
@@ -313,15 +384,25 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               *ngTemplateOutlet="treeTemplate; context: { $implicit: activeRoot(), depth: 0 }"
             ></ng-container>
           }
+          @if (isVaultMode()) {
+            <div style="font-size:12px; opacity:0.7; margin: 10px 0;">
+              {{ 'notes.vaultModeLabel' | translate }}: {{ currentVaultName() }}
+            </div>
+            <ng-container
+              *ngTemplateOutlet="vaultTreeTemplate; context: { $implicit: vaultTree(), depth: 0 }"
+            ></ng-container>
+          }
 
           <div style="margin-top:auto; display:flex; flex-wrap:wrap; padding-left:20px;">
-            <div style="font-size:12px; color:var(--color-muted);">
-              {{ 'notes.folderCount' | translate: { count: folderCount() } }}
-            </div>
-            <span> </span>
-            <div style="font-size:12px; color:var(--color-muted);">
-              {{ 'notes.noteCount' | translate: { count: noteCount() } }}
-            </div>
+            @if (!isVaultMode()) {
+              <div style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.folderCount' | translate: { count: folderCount() } }}
+              </div>
+              <span> </span>
+              <div style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.noteCount' | translate: { count: noteCount() } }}
+              </div>
+            }
           </div>
         }
       </aside>
@@ -330,7 +411,30 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         style="flex:1; display:flex; flex-direction:column; gap:12px;"
         [style.display]="isPhoneMode() && sidebarOpen() ? 'none' : 'flex'"
       >
-        @if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
+        @if (!settingsOpen() && isVaultMode()) {
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <h3 style="margin:0;">{{ currentVaultName() }}</h3>
+            <button (click)="exitVaultMode()">
+              {{ 'notes.exitVaultMode' | translate }}
+            </button>
+          </div>
+          <div style="font-size:12px; color:var(--color-muted);">
+            {{ 'notes.vaultReadOnly' | translate }}
+          </div>
+          <div
+            style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; flex:1; min-height:260px;"
+          >
+            <textarea
+              [value]="vaultFileContent()"
+              readonly
+              style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px;"
+            ></textarea>
+            <div
+              [innerHTML]="vaultPreviewHtml()"
+              style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px; overflow:auto;"
+            ></div>
+          </div>
+        } @else if (!settingsOpen() && selectedNode() && selectedNode()?.type === 'note') {
           <div style="display:flex; justify-content:space-between; align-items:center;">
             @if (editingNodeId() === selectedNode()?.id) {
               <input
@@ -472,6 +576,31 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         }
       }
     </ng-template>
+    <ng-template #vaultTreeTemplate let-nodes let-depth="depth">
+      @for (node of nodes; track node.id) {
+        <div style="display:flex; align-items:center; gap:6px;" [style.marginLeft.px]="depth * 12">
+          @if (node.type === 'folder') {
+            <span>📁</span>
+            <span>{{ node.name }}</span>
+          } @else {
+            <button
+              (click)="selectVaultNode(node.id)"
+              [style.fontWeight]="state().vaultSelectedNodeId === node.id ? '700' : '400'"
+            >
+              {{ node.name }}
+            </button>
+          }
+        </div>
+        @if (node.children?.length) {
+          <ng-container
+            *ngTemplateOutlet="
+              vaultTreeTemplate;
+              context: { $implicit: node.children, depth: depth + 1 }
+            "
+          ></ng-container>
+        }
+      }
+    </ng-template>
 
     @if (bulkDeleteOpen()) {
       <app-confirm-dialog
@@ -529,6 +658,9 @@ export class NotesComponent implements OnInit, OnDestroy {
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private obsidianImport = inject(ObsidianImportService);
+  private vaultDb = inject(VaultDbService);
+  private dialog = inject(DialogService);
   state = signal<NotesState>({
     root: createFolder('Notes'),
     archiveRoot: createFolder('Archive', undefined, true),
@@ -538,14 +670,22 @@ export class NotesComponent implements OnInit, OnDestroy {
     listCollapsed: false,
     sidebarOpenDesktop: true,
     sidebarOpenPhone: false,
+    source: { type: 'internal' },
+    vaultSelectedNodeId: null,
   });
   editingNodeId = signal<string | null>(null);
   editingName = signal('');
   bulkDeleteOpen = signal(false);
   wipeInstanceOpen = signal(false);
   pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  pendingVaultImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
+  vaultImportDestination = signal<'current' | 'new'>('new');
   importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   importMessage = signal<string | null>(null);
+  vaultImportStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
+  vaultImportMessage = signal<string | null>(null);
+  vaultImportProgress = signal<ObsidianImportProgress | null>(null);
+  vaultImportSummary = signal<ObsidianImportStats | null>(null);
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
   richFocused = signal(false);
@@ -555,6 +695,10 @@ export class NotesComponent implements OnInit, OnDestroy {
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
+  vaultTree = signal<VaultFileTreeNode[]>([]);
+  vaultFileContent = signal<string>('');
+  vaultPreviewHtml = signal<string>('');
+  vaultSelectedPath = signal<string | null>(null);
   private lastRemoteStorageChangeSeq = 0;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
@@ -596,11 +740,14 @@ export class NotesComponent implements OnInit, OnDestroy {
         sidebarOpenDesktop: sidebarDesktop,
         sidebarOpenPhone: sidebarPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
+        source: nextStored.source ?? ({ type: 'internal' } as const),
+        vaultSelectedNodeId: nextStored.vaultSelectedNodeId ?? null,
       };
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.persistState();
       this.syncRichSnapshot();
+      if (next.source?.type === 'vault') void this.refreshVaultTree();
       return;
     }
     const root = createFolder('Notes');
@@ -615,6 +762,8 @@ export class NotesComponent implements OnInit, OnDestroy {
       sidebarOpenDesktop: true,
       sidebarOpenPhone: this.isPhoneMode() ? false : this.state().sidebarOpenPhone,
       phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+      source: { type: 'internal' },
+      vaultSelectedNodeId: null,
     };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
@@ -646,6 +795,8 @@ export class NotesComponent implements OnInit, OnDestroy {
         sidebarOpenDesktop: sidebarDesktop,
         sidebarOpenPhone: sidebarPhone,
         phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
+        source: parsed.source ?? ({ type: 'internal' } as const),
+        vaultSelectedNodeId: parsed.vaultSelectedNodeId ?? null,
       };
       this.state.set(next);
       stateStore.set(this.instanceId, next);
@@ -653,6 +804,7 @@ export class NotesComponent implements OnInit, OnDestroy {
         this.persistState();
       }
       this.syncRichSnapshot();
+      if (next.source?.type === 'vault') void this.refreshVaultTree();
       return true;
     } catch {
       return false;
@@ -738,6 +890,264 @@ export class NotesComponent implements OnInit, OnDestroy {
 
   closeSettings() {
     this.instanceSettings.close(this.instanceId);
+  }
+
+  isVaultMode() {
+    return this.state().source?.type === 'vault';
+  }
+
+  currentVaultName() {
+    const source = this.state().source;
+    return source && source.type === 'vault' ? source.vaultName : '';
+  }
+
+  async refreshVaultTree() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultTree.set([]);
+      this.vaultFileContent.set('');
+      this.vaultSelectedPath.set(null);
+      return;
+    }
+    const tree = await this.vaultDb.getTree(source.vaultId);
+    this.vaultTree.set(tree);
+    const selectedId = this.state().vaultSelectedNodeId;
+    if (selectedId) {
+      await this.selectVaultNode(selectedId);
+    } else {
+      const firstFile = this.findFirstVaultFile(tree);
+      if (firstFile) {
+        await this.selectVaultNode(firstFile.id);
+      }
+    }
+  }
+
+  private findFirstVaultFile(nodes: VaultFileTreeNode[]): VaultFileTreeNode | null {
+    for (const node of nodes) {
+      if (node.type === 'file' && /\.md$/i.test(node.path)) return node;
+      if (node.children?.length) {
+        const child = this.findFirstVaultFile(node.children);
+        if (child) return child;
+      }
+    }
+    return null;
+  }
+
+  async selectVaultNode(nodeId: string) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    const file = await this.vaultDb.getMarkdownFile(nodeId);
+    if (!file) return;
+    this.vaultFileContent.set(file.content);
+    const node = await this.vaultDb.getNode(nodeId);
+    const selectedPath = node?.path ?? null;
+    if (selectedPath) {
+      const html = await this.renderVaultPreviewHtml(source.vaultId, file.content);
+      this.vaultPreviewHtml.set(html);
+    } else {
+      this.vaultPreviewHtml.set(this.renderMarkdown(file.content));
+    }
+    const nextState = { ...this.state(), vaultSelectedNodeId: nodeId };
+    this.state.set(nextState);
+    stateStore.set(this.instanceId, nextState);
+    this.vaultSelectedPath.set(selectedPath);
+    this.persistState();
+  }
+
+  exitVaultMode() {
+    this.vaultTree.set([]);
+    this.vaultFileContent.set('');
+    this.vaultPreviewHtml.set('');
+    this.vaultSelectedPath.set(null);
+    this.commit({ ...this.state(), source: { type: 'internal' }, vaultSelectedNodeId: null });
+  }
+
+  async queueVaultZipImport(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.pendingVaultImport.set({ file, input });
+    this.vaultImportStatus.set('idle');
+    this.vaultImportMessage.set(null);
+    this.vaultImportProgress.set(null);
+    await this.confirmVaultImport();
+  }
+
+  async startVaultFolderImport() {
+    if (typeof window === 'undefined' || !('showDirectoryPicker' in window)) {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.importVaultFolderUnsupported');
+      return;
+    }
+    try {
+      const handle = await (
+        window as Window & { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
+      ).showDirectoryPicker();
+      await this.runVaultImport({ type: 'folder', handle });
+    } catch {
+      // User canceled picker or browser blocked it.
+    }
+  }
+
+  async cloneCurrentVaultToNewInstance() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    try {
+      const cloned = await this.vaultDb.cloneVaultDeep(source.vaultId, {
+        name: `${source.vaultName} ${this.translate.instant('notes.copySuffix')}`,
+      });
+      await this.applyImportedVaultToDestination(
+        cloned.id,
+        cloned.name,
+        this.vaultImportSummary(),
+        'new',
+      );
+      this.vaultImportStatus.set('success');
+      this.vaultImportMessage.set('notes.cloneVaultSuccess');
+    } catch {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.cloneVaultFailed');
+    }
+  }
+
+  private async confirmVaultImport() {
+    const pending = this.pendingVaultImport();
+    if (!pending) return;
+    await this.runVaultImport({ type: 'zip', file: pending.file }, pending.input);
+  }
+
+  private async runVaultImport(
+    input: { type: 'zip'; file: File } | { type: 'folder'; handle: FileSystemDirectoryHandle },
+    inputElement?: HTMLInputElement,
+  ) {
+    if (!this.importGuard.start()) {
+      this.importLimitOpen.set(true);
+      return;
+    }
+    this.vaultImportStatus.set('loading');
+    this.vaultImportMessage.set('notes.importVaultLoading');
+    this.vaultImportSummary.set(null);
+    try {
+      const result = await this.obsidianImport.importObsidianVault(input, {
+        onProgress: (progress) => this.vaultImportProgress.set(progress),
+      });
+      await this.applyImportedVaultToDestination(
+        result.vaultId,
+        result.vaultName,
+        result.stats,
+        this.vaultImportDestination(),
+      );
+      this.vaultImportStatus.set('success');
+      this.vaultImportMessage.set('notes.importVaultSuccess');
+      this.vaultImportSummary.set(result.stats ?? null);
+    } catch {
+      this.vaultImportStatus.set('error');
+      this.vaultImportMessage.set('notes.importVaultFailed');
+    } finally {
+      if (inputElement) inputElement.value = '';
+      this.pendingVaultImport.set(null);
+      this.importGuard.finish();
+    }
+  }
+
+  private async applyImportedVaultToDestination(
+    vaultId: string,
+    vaultName: string,
+    stats: ObsidianImportStats | null,
+    destination: 'current' | 'new',
+  ) {
+    if (destination === 'new') {
+      await this.createNotesInstanceForVault(vaultId, vaultName);
+      if (stats) this.vaultImportSummary.set(stats);
+      return;
+    }
+    const next = {
+      ...this.state(),
+      source: { type: 'vault' as const, vaultId, vaultName },
+      vaultSelectedNodeId: null,
+    };
+    this.commit(next);
+    await this.refreshVaultTree();
+    if (stats) this.vaultImportSummary.set(stats);
+  }
+
+  private async createNotesInstanceForVault(vaultId: string, vaultName: string) {
+    const bounds = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    const created = this.dialog.createInstance('notes', bounds);
+    if (!created.ok || !created.instance) throw new Error('Unable to create Notes instance');
+    const instanceId = created.instance.id;
+    this.dialog.setTitleOverride(instanceId, `${vaultName}`);
+    const fresh = this.createDefaultStateForCurrentMode();
+    const nextState: NotesState = {
+      ...fresh,
+      source: { type: 'vault', vaultId, vaultName },
+      vaultSelectedNodeId: null,
+    };
+    stateStore.set(instanceId, nextState);
+    const key = buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), instanceId);
+    await this.storage.setItem(key, JSON.stringify(nextState));
+  }
+
+  private createDefaultStateForCurrentMode(): NotesState {
+    const root = createFolder('Notes');
+    const firstFolder = createFolder('New folder', root.id);
+    const firstNote = createNote('New note', firstFolder.id);
+    firstFolder.children = [firstNote];
+    root.children = [firstFolder];
+    return {
+      root,
+      archiveRoot: createFolder('Archive', undefined, true),
+      selectedId: firstNote.id,
+      selectedIds: [],
+      view: 'notes',
+      listCollapsed: false,
+      sidebarOpenDesktop: true,
+      sidebarOpenPhone: this.isPhoneMode() ? false : false,
+      phoneSidebarInit: this.isPhoneMode() ? true : undefined,
+      source: { type: 'internal' },
+      vaultSelectedNodeId: null,
+    };
+  }
+
+  private async renderVaultPreviewHtml(vaultId: string, markdown: string) {
+    const escaped = (text: string) =>
+      text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    const embeds: string[] = [];
+    const links: string[] = [];
+    let working = markdown.replace(/!\[\[([^[\]]+)\]\]/g, (_m, raw: string) => {
+      embeds.push(raw);
+      return `@@OB_EMBED_${embeds.length - 1}@@`;
+    });
+    working = working.replace(/\[\[([^[\]]+)\]\]/g, (_m, raw: string) => {
+      links.push(raw);
+      return `@@OB_LINK_${links.length - 1}@@`;
+    });
+    let html = this.renderMarkdown(working);
+    for (let i = 0; i < embeds.length; i += 1) {
+      const [pathRaw] = String(embeds[i]).split('|');
+      const targetPath = pathRaw.split('#')[0]?.trim();
+      const assetUrl = targetPath ? await this.vaultDb.getAssetUrl(vaultId, targetPath) : null;
+      const replacement = assetUrl
+        ? /\.(png|jpe?g|gif|webp|svg)$/i.test(targetPath ?? '')
+          ? `<img src="${escaped(assetUrl)}" alt="${escaped(targetPath ?? '')}" style="max-width:100%; display:block; margin:8px 0;" />`
+          : `<a href="${escaped(assetUrl)}" target="_blank" rel="noopener noreferrer">${escaped(targetPath ?? 'attachment')}</a>`
+        : `<span style="color:var(--color-muted)">[missing embed: ${escaped(targetPath ?? embeds[i])}]</span>`;
+      html = html.replace(`@@OB_EMBED_${i}@@`, replacement);
+    }
+    for (let i = 0; i < links.length; i += 1) {
+      const raw = String(links[i]);
+      const [targetWithHeading, alias] = raw.split('|');
+      const label = alias?.trim() || targetWithHeading.trim();
+      html = html.replace(
+        `@@OB_LINK_${i}@@`,
+        `<span style="text-decoration:underline; color:var(--color-primary, #1e88e5)">${escaped(label)}</span>`,
+      );
+    }
+    return html;
   }
 
   folderCount() {
