@@ -6,6 +6,12 @@ export interface VaultRecord {
   createdAt: number;
   source: { type: ObsidianImportSourceType; originalName?: string };
   cloneOfVaultId?: string | null;
+  cloudBeta?: {
+    enabled: boolean;
+    lastSyncedAt?: number | null;
+    lastSyncError?: string | null;
+    syncedMarkdownOnly?: boolean;
+  } | null;
 }
 
 export type VaultNodeType = 'folder' | 'file';

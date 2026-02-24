@@ -240,6 +240,42 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               </button>
             }
           </div>
+          <label style="display:inline-flex; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+            <input
+              type="checkbox"
+              [checked]="vaultImportCloudBeta()"
+              [disabled]="!vaultCloudBetaAvailable()"
+              (change)="vaultImportCloudBeta.set($any($event.target).checked)"
+            />
+            <span>
+              {{ 'notes.cloudBetaImportToggle' | translate }}
+              <small style="display:block; opacity:0.75;">
+                {{
+                  (vaultCloudBetaAvailable()
+                    ? 'notes.cloudBetaImportHelp'
+                    : 'notes.cloudBetaImportUnavailable') | translate
+                }}
+              </small>
+            </span>
+          </label>
+          @if (isVaultMode()) {
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <label style="display:inline-flex; align-items:center; gap:8px;">
+                <input
+                  type="checkbox"
+                  [checked]="vaultCloudBetaEnabled()"
+                  [disabled]="!vaultCloudBetaAvailable() || vaultCloudBetaSyncing()"
+                  (change)="toggleCurrentVaultCloudBeta($any($event.target).checked)"
+                />
+                <span>{{ 'notes.cloudBetaVaultToggle' | translate }}</span>
+              </label>
+              @if (vaultCloudBetaSyncing()) {
+                <small style="opacity:0.75;">{{ 'notes.cloudBetaSyncing' | translate }}</small>
+              } @else if (vaultCloudBetaStatusMessage()) {
+                <small style="opacity:0.75;">{{ vaultCloudBetaStatusMessage() ?? '' | translate }}</small>
+              }
+            </div>
+          }
           @if (importStatus() === 'loading') {
             <div style="opacity:0.7;">{{ 'dialogs.importing' | translate }}</div>
           } @else if (importStatus() === 'success') {
@@ -392,6 +428,13 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
           @if (isVaultMode()) {
             <div style="font-size:12px; opacity:0.7; margin: 10px 0;">
               {{ 'notes.vaultModeLabel' | translate }}: {{ currentVaultName() }}
+              <span style="margin-left:8px;">
+                {{
+                  (vaultCloudBetaEnabled()
+                    ? 'notes.vaultStorageCloudBeta'
+                    : 'notes.vaultStorageLocalDevice') | translate
+                }}
+              </span>
             </div>
             <ng-container
               *ngTemplateOutlet="vaultTreeTemplate; context: { $implicit: vaultTree(), depth: 0 }"
@@ -702,6 +745,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
   pendingVaultImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
   vaultImportDestination = signal<'current' | 'new' | 'splitTopLevel'>('new');
+  vaultImportCloudBeta = signal(false);
   importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   importMessage = signal<string | null>(null);
   vaultImportStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -724,6 +768,10 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultSelectedPath = signal<string | null>(null);
   vaultDirty = signal(false);
   vaultSaving = signal(false);
+  vaultCloudBetaEnabled = signal(false);
+  vaultCloudBetaSyncing = signal(false);
+  vaultCloudBetaStatusMessage = signal<string | null>(null);
+  vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
   private lastRemoteStorageChangeSeq = 0;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
@@ -934,8 +982,12 @@ export class NotesComponent implements OnInit, OnDestroy {
       this.vaultTree.set([]);
       this.vaultFileContent.set('');
       this.vaultSelectedPath.set(null);
+      this.vaultCloudBetaEnabled.set(false);
+      this.vaultCloudBetaStatusMessage.set(null);
       return;
     }
+    await this.vaultDb.ensureVaultAvailable(source.vaultId);
+    await this.refreshCurrentVaultCloudStatus();
     const fullTree = await this.vaultDb.getTree(source.vaultId);
     const tree = source.pathPrefix
       ? this.filterVaultTreeByPrefix(fullTree, source.pathPrefix)
@@ -992,7 +1044,11 @@ export class NotesComponent implements OnInit, OnDestroy {
   async selectVaultNode(nodeId: string) {
     const source = this.state().source;
     if (!source || source.type !== 'vault') return;
-    const file = await this.vaultDb.getMarkdownFile(nodeId);
+    let file = await this.vaultDb.getMarkdownFile(nodeId);
+    if (!file) {
+      await this.vaultDb.ensureVaultAvailable(source.vaultId);
+      file = await this.vaultDb.getMarkdownFile(nodeId);
+    }
     if (!file) return;
     this.vaultFileContent.set(file.content);
     this.vaultDraftContent.set(file.content);
@@ -1053,10 +1109,17 @@ export class NotesComponent implements OnInit, OnDestroy {
     const source = this.state().source;
     if (!source || source.type !== 'vault') return;
     try {
+      const sourceVault = await this.vaultDb.getVault(source.vaultId);
       const cloned = await this.vaultDb.cloneVault(source.vaultId, {
         name: `${source.vaultName} ${this.translate.instant('notes.copySuffix')}`,
         mode: 'cow',
       });
+      if (
+        this.vaultCloudBetaAvailable() &&
+        (this.vaultImportCloudBeta() || Boolean(sourceVault?.cloudBeta?.enabled))
+      ) {
+        await this.vaultDb.setVaultCloudBetaEnabled(cloned.id, true);
+      }
       await this.applyImportedVaultToDestination(
         cloned.id,
         cloned.name,
@@ -1092,6 +1155,9 @@ export class NotesComponent implements OnInit, OnDestroy {
       const result = await this.obsidianImport.importObsidianVault(input, {
         onProgress: (progress) => this.vaultImportProgress.set(progress),
       });
+      if (this.vaultImportCloudBeta() && this.vaultCloudBetaAvailable()) {
+        await this.vaultDb.setVaultCloudBetaEnabled(result.vaultId, true);
+      }
       await this.applyImportedVaultToDestination(
         result.vaultId,
         result.vaultName,
@@ -1300,7 +1366,54 @@ export class NotesComponent implements OnInit, OnDestroy {
       );
     } finally {
       this.vaultSaving.set(false);
+      await this.refreshCurrentVaultCloudStatus();
     }
+  }
+
+  async toggleCurrentVaultCloudBeta(enabled: boolean) {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') return;
+    if (!this.vaultCloudBetaAvailable()) return;
+    this.vaultCloudBetaSyncing.set(true);
+    this.vaultCloudBetaStatusMessage.set(null);
+    try {
+      await this.vaultDb.setVaultCloudBetaEnabled(source.vaultId, enabled);
+      this.vaultCloudBetaStatusMessage.set(
+        enabled ? 'notes.cloudBetaVaultEnabled' : 'notes.cloudBetaVaultDisabled',
+      );
+    } catch {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+    } finally {
+      this.vaultCloudBetaSyncing.set(false);
+      await this.refreshCurrentVaultCloudStatus();
+    }
+  }
+
+  private async refreshCurrentVaultCloudStatus() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultCloudBetaEnabled.set(false);
+      this.vaultCloudBetaStatusMessage.set(null);
+      return;
+    }
+    const vault = await this.vaultDb.getVault(source.vaultId);
+    const enabled = Boolean(vault?.cloudBeta?.enabled);
+    this.vaultCloudBetaEnabled.set(enabled);
+    if (!vault) {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultUnavailableLocal');
+      return;
+    }
+    if (!enabled) {
+      this.vaultCloudBetaStatusMessage.set('notes.vaultStorageLocalDevice');
+      return;
+    }
+    if (vault.cloudBeta?.lastSyncError) {
+      this.vaultCloudBetaStatusMessage.set('notes.cloudBetaVaultFailed');
+      return;
+    }
+    this.vaultCloudBetaStatusMessage.set(
+      vault.cloudBeta?.lastSyncedAt ? 'notes.cloudBetaVaultEnabled' : 'notes.cloudBetaSyncPending',
+    );
   }
 
   private findVaultNodeByBasename(

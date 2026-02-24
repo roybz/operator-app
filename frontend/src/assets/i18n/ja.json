@@ -325,7 +325,19 @@
     "importVaultDestinationSplitTopLevel": "Multiple Notes instances by top-level folder",
     "vaultSave": "Save vault file",
     "vaultSaving": "Saving...",
-    "vaultUnsaved": "Unsaved changes"
+    "vaultUnsaved": "Unsaved changes",
+    "cloudBetaImportToggle": "Store imported vault in cloud (beta)",
+    "cloudBetaImportHelp": "Beta: syncs vault structure and markdown to your account cloud storage. Attachments remain local on this device for now.",
+    "cloudBetaImportUnavailable": "Unavailable in guest/local-only/test mode. Requires authenticated cloud mode.",
+    "cloudBetaVaultToggle": "Store this imported vault in cloud (beta)",
+    "cloudBetaSyncing": "Syncing vault to cloud... ",
+    "cloudBetaVaultEnabled": "Cloud sync beta enabled",
+    "cloudBetaVaultDisabled": "Cloud sync beta disabled",
+    "cloudBetaVaultFailed": "Cloud sync beta failed",
+    "cloudBetaSyncPending": "Cloud sync pending",
+    "cloudBetaVaultUnavailableLocal": "Vault not found locally (restoring from cloud if available)",
+    "vaultStorageLocalDevice": "Stored locally on this device",
+    "vaultStorageCloudBeta": "Cloud sync beta (markdown + structure)"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",

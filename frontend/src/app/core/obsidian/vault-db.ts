@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import {
   AssetRecord,
   LinkIndexRecord,
@@ -9,9 +9,14 @@ import {
   VaultRecord,
 } from './vault-types';
 import { parseObsidianMarkdown, resolveObsidianLinkTarget } from './obsidian-parse';
+import { StorageService } from '../storage/storage.service';
+import { AuthService } from '../auth.service';
+import { getOpConfig } from '../op-config';
 
 const DB_NAME = 'operator-obsidian-vaults';
 const DB_VERSION = 2;
+const CLOUD_VAULT_PREFIX = 'op_obsidian_vault_cloud:v1';
+const CLOUD_CHUNK_TARGET_BYTES = 220 * 1024;
 
 const STORES = {
   vaults: 'vaults',
@@ -48,6 +53,9 @@ function uid(prefix: string) {
 export class VaultDbService {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private assetUrlCache = new Map<string, string>();
+  private storage = inject(StorageService);
+  private auth = inject(AuthService);
+  private cloudSyncInflight = new Map<string, Promise<void>>();
 
   private openDb() {
     if (this.dbPromise) return this.dbPromise;
@@ -129,6 +137,7 @@ export class VaultDbService {
       createdAt: Date.now(),
       source,
       cloneOfVaultId: null,
+      cloudBeta: null,
     };
     const tx = db.transaction([STORES.vaults], 'readwrite');
     tx.objectStore(STORES.vaults).put(record);
@@ -149,6 +158,40 @@ export class VaultDbService {
     const tx = db.transaction([STORES.vaults], 'readwrite');
     tx.objectStore(STORES.vaults).put(vault);
     await txDone(tx);
+  }
+
+  canUseCloudVaultSyncBeta() {
+    const config = getOpConfig();
+    if (config.storageMode !== 'remote') return false;
+    if (this.auth.guestModeOnly()) return false;
+    if (!this.auth.usesExternalAuth()) return false;
+    if (!this.auth.isLoggedIn()) return false;
+    if (this.auth.session().userId === 'u_guest') return false;
+    if (this.auth.orgSettings().testModeEnabled) return false;
+    return true;
+  }
+
+  async setVaultCloudBetaEnabled(vaultId: string, enabled: boolean) {
+    const vault = await this.getVault(vaultId);
+    if (!vault) return false;
+    vault.cloudBeta = {
+      enabled,
+      lastSyncedAt: enabled ? (vault.cloudBeta?.lastSyncedAt ?? null) : null,
+      lastSyncError: null,
+      syncedMarkdownOnly: true,
+    };
+    await this.putVault(vault);
+    if (enabled) {
+      await this.syncVaultToCloud(vaultId);
+    }
+    return true;
+  }
+
+  async ensureVaultAvailable(vaultId: string) {
+    const local = await this.getVault(vaultId);
+    if (local) return true;
+    if (!this.canUseCloudVaultSyncBeta()) return false;
+    return this.restoreVaultFromCloud(vaultId);
   }
 
   async listNodes(vaultId: string) {
@@ -194,6 +237,14 @@ export class VaultDbService {
       originalName: sourceVault.source.originalName ?? sourceVault.name,
     });
     clonedVault.cloneOfVaultId = sourceVault.id;
+    clonedVault.cloudBeta = sourceVault.cloudBeta?.enabled
+      ? {
+          enabled: true,
+          lastSyncedAt: null,
+          lastSyncError: null,
+          syncedMarkdownOnly: true,
+        }
+      : null;
     const db = await this.openDb();
     const tx = db.transaction([STORES.vaults], 'readwrite');
     tx.objectStore(STORES.vaults).put(clonedVault);
@@ -254,6 +305,9 @@ export class VaultDbService {
     for (let i = 0; i < nextLinks.length; i += 200)
       await this.putLinkIndex(nextLinks.slice(i, i + 200));
 
+    if (clonedVault.cloudBeta?.enabled && this.canUseCloudVaultSyncBeta()) {
+      void this.syncVaultToCloud(clonedVault.id);
+    }
     return clonedVault;
   }
 
@@ -365,7 +419,12 @@ export class VaultDbService {
       linkStore.put(link);
     }
     await txDone(tx);
-    return { record: nextRecord, previous: current };
+    const result = { record: nextRecord, previous: current };
+    const vault = await this.getVault(vaultId);
+    if (vault?.cloudBeta?.enabled && this.canUseCloudVaultSyncBeta()) {
+      void this.syncVaultToCloud(vaultId);
+    }
+    return result;
   }
 
   async putAssets(items: { asset: AssetRecord; blob: Blob }[]) {
@@ -471,5 +530,207 @@ export class VaultDbService {
       URL.revokeObjectURL(url);
       this.assetUrlCache.delete(key);
     }
+  }
+
+  async listUnresolvedLinks(vaultId: string) {
+    const links = await this.listLinks(vaultId);
+    return links.filter((link) => !link.targetPath);
+  }
+
+  async syncVaultToCloud(vaultId: string) {
+    if (!this.canUseCloudVaultSyncBeta()) return;
+    const existing = this.cloudSyncInflight.get(vaultId);
+    if (existing) return existing;
+    const run = this.syncVaultToCloudInternal(vaultId).catch(async (error) => {
+      const vault = await this.getVault(vaultId);
+      if (vault?.cloudBeta?.enabled) {
+        vault.cloudBeta = {
+          ...vault.cloudBeta,
+          lastSyncError: error instanceof Error ? error.message : 'sync_failed',
+          syncedMarkdownOnly: true,
+        };
+        await this.putVault(vault);
+      }
+    }).finally(() => {
+      this.cloudSyncInflight.delete(vaultId);
+    });
+    this.cloudSyncInflight.set(vaultId, run);
+    return run;
+  }
+
+  private async syncVaultToCloudInternal(vaultId: string) {
+    const vault = await this.getVault(vaultId);
+    if (!vault || !vault.cloudBeta?.enabled) return;
+    const [nodes, markdownFiles, links, assets] = await Promise.all([
+      this.listNodes(vaultId),
+      this.listMarkdownFiles(vaultId),
+      this.listLinks(vaultId),
+      this.listAssets(vaultId),
+    ]);
+    const updatedAt = Date.now();
+    const chunks = {
+      nodes: this.chunkJsonArray(nodes),
+      markdown: this.chunkJsonArray(markdownFiles),
+      links: this.chunkJsonArray(links),
+    };
+    const manifest = {
+      version: 1,
+      vaultId,
+      updatedAt,
+      vault: {
+        id: vault.id,
+        name: vault.name,
+        createdAt: vault.createdAt,
+        source: vault.source,
+        cloneOfVaultId: vault.cloneOfVaultId ?? null,
+      },
+      counts: {
+        nodes: nodes.length,
+        markdown: markdownFiles.length,
+        links: links.length,
+        assets: assets.length,
+      },
+      chunks: {
+        nodes: chunks.nodes.length,
+        markdown: chunks.markdown.length,
+        links: chunks.links.length,
+      },
+      assetsStoredInCloud: false,
+      assetsMetadataOnly: true,
+    };
+    const keysToKeep = new Set<string>([this.cloudIndexKey(vaultId), this.cloudManifestKey(vaultId)]);
+    for (let i = 0; i < chunks.nodes.length; i += 1) keysToKeep.add(this.cloudChunkKey(vaultId, 'nodes', i));
+    for (let i = 0; i < chunks.markdown.length; i += 1)
+      keysToKeep.add(this.cloudChunkKey(vaultId, 'markdown', i));
+    for (let i = 0; i < chunks.links.length; i += 1) keysToKeep.add(this.cloudChunkKey(vaultId, 'links', i));
+
+    const previousIndex = await this.storage.getJson<{ keys?: string[] } | null>(
+      this.cloudIndexKey(vaultId),
+      null,
+    );
+    await this.storage.setJson(this.cloudManifestKey(vaultId), manifest);
+    for (let i = 0; i < chunks.nodes.length; i += 1) {
+      await this.storage.setJson(this.cloudChunkKey(vaultId, 'nodes', i), chunks.nodes[i]);
+    }
+    for (let i = 0; i < chunks.markdown.length; i += 1) {
+      await this.storage.setJson(this.cloudChunkKey(vaultId, 'markdown', i), chunks.markdown[i]);
+    }
+    for (let i = 0; i < chunks.links.length; i += 1) {
+      await this.storage.setJson(this.cloudChunkKey(vaultId, 'links', i), chunks.links[i]);
+    }
+    await this.cleanupCloudVaultExtraKeys(previousIndex, keysToKeep);
+    await this.storage.setJson(this.cloudIndexKey(vaultId), {
+      vaultId,
+      updatedAt,
+      keys: Array.from(keysToKeep),
+    });
+
+    vault.cloudBeta = {
+      enabled: true,
+      lastSyncedAt: updatedAt,
+      lastSyncError: null,
+      syncedMarkdownOnly: true,
+    };
+    await this.putVault(vault);
+  }
+
+  private async restoreVaultFromCloud(vaultId: string) {
+    const manifest = await this.storage.getJson<{
+      version: number;
+      vaultId: string;
+      vault: Omit<VaultRecord, 'cloudBeta'>;
+      chunks: { nodes: number; markdown: number; links: number };
+      assetsStoredInCloud?: boolean;
+      assetsMetadataOnly?: boolean;
+    } | null>(this.cloudManifestKey(vaultId), null);
+    if (!manifest || manifest.vaultId !== vaultId) return false;
+
+    const [nodes, markdown, links] = await Promise.all([
+      this.loadCloudChunks<VaultNodeRecord>(vaultId, 'nodes', manifest.chunks.nodes),
+      this.loadCloudChunks<MarkdownFileRecord>(vaultId, 'markdown', manifest.chunks.markdown),
+      this.loadCloudChunks<LinkIndexRecord>(vaultId, 'links', manifest.chunks.links),
+    ]);
+    const restoredVault: VaultRecord = {
+      ...manifest.vault,
+      cloudBeta: {
+        enabled: true,
+        lastSyncedAt: Date.now(),
+        lastSyncError: null,
+        syncedMarkdownOnly: true,
+      },
+    };
+
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.vaults, STORES.nodes, STORES.markdown, STORES.links], 'readwrite');
+    tx.objectStore(STORES.vaults).put(restoredVault);
+    const nodeStore = tx.objectStore(STORES.nodes);
+    for (const row of nodes) nodeStore.put(row);
+    const mdStore = tx.objectStore(STORES.markdown);
+    for (const row of markdown) mdStore.put(row);
+    const linkStore = tx.objectStore(STORES.links);
+    for (const row of links) linkStore.put(row);
+    await txDone(tx);
+    return true;
+  }
+
+  private async cleanupCloudVaultExtraKeys(
+    previousIndex: { keys?: string[] } | null,
+    keysToKeep: Set<string>,
+  ) {
+    const previousKeys = Array.isArray(previousIndex?.keys) ? previousIndex.keys : [];
+    for (const key of previousKeys) {
+      if (!keysToKeep.has(key)) {
+        await this.storage.removeItem(key);
+      }
+    }
+  }
+
+  private chunkJsonArray<T>(items: T[]) {
+    const chunks: T[][] = [];
+    let current: T[] = [];
+    let currentBytes = 2; // []
+    for (const item of items) {
+      const json = JSON.stringify(item);
+      const bytes = this.byteLength(json) + (current.length ? 1 : 0);
+      if (current.length && currentBytes + bytes > CLOUD_CHUNK_TARGET_BYTES) {
+        chunks.push(current);
+        current = [];
+        currentBytes = 2;
+      }
+      current.push(item);
+      currentBytes += bytes;
+    }
+    if (current.length) chunks.push(current);
+    return chunks;
+  }
+
+  private async loadCloudChunks<T>(
+    vaultId: string,
+    section: 'nodes' | 'markdown' | 'links',
+    count: number,
+  ) {
+    const out: T[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const rows = await this.storage.getJson<T[]>(this.cloudChunkKey(vaultId, section, i), []);
+      out.push(...rows);
+    }
+    return out;
+  }
+
+  private cloudManifestKey(vaultId: string) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:manifest`;
+  }
+
+  private cloudIndexKey(vaultId: string) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:index`;
+  }
+
+  private cloudChunkKey(vaultId: string, section: 'nodes' | 'markdown' | 'links', index: number) {
+    return `${CLOUD_VAULT_PREFIX}:${vaultId}:${section}:${index}`;
+  }
+
+  private byteLength(value: string) {
+    if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(value).length;
+    return value.length * 2;
   }
 }
