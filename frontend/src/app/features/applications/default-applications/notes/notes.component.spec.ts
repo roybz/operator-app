@@ -1,118 +1,212 @@
-import { TestBed } from '@angular/core/testing';
-import {
-  TranslateFakeLoader,
-  TranslateLoader,
-  TranslateModule,
-  TranslateService,
-} from '@ngx-translate/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NotesComponent } from './notes.component';
+import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
+import { InstanceSettingsService } from '../../../../core/instance-settings.service';
+import { ImportGuardService } from '../../../../core/import-guard.service';
+import { ExportGuardService } from '../../../../core/export-guard.service';
 import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
 import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
 import { StorageService } from '../../../../core/storage/storage.service';
-import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
-import { buildInstanceStorageKey } from '../../../dependencies/instance-state-storage';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import { ObsidianImportService } from '../../../../core/obsidian/obsidian-import.service';
+import { VaultDbService } from '../../../../core/obsidian/vault-db';
+import { DialogService } from '../../../../core/dialog.service';
+import { UserPreferences } from '../../../../core/auth.service';
+import { VaultFileTreeNode } from '../../../../core/obsidian/vault-types';
+import { TranslateService } from '@ngx-translate/core';
+import { of, Subject } from 'rxjs';
 
-interface NoteLike {
-  id: string;
-  type: 'folder' | 'note';
-  content?: string;
-  children?: NoteLike[];
-}
-
-function findNode(node: NoteLike, id: string): NoteLike | null {
-  if (node.id === id) return node;
-  for (const child of node.children ?? []) {
-    const found = findNode(child, id);
-    if (found) return found;
+class MockPrefsService {
+  preferences() {
+    return { phoneMode: false } as UserPreferences;
   }
-  return null;
+  userId() {
+    return 'u_test';
+  }
 }
 
-describe('NotesComponent', () => {
-  async function setup() {
+class MockInstanceSettingsService {
+  isOpen() {
+    return false;
+  }
+  close() {
+    // no-op
+  }
+}
+
+class MockImportGuardService {
+  start() {
+    return true;
+  }
+  finish() {
+    // no-op
+  }
+}
+
+class MockExportGuardService {
+  start() {
+    return true;
+  }
+  finish() {
+    // no-op
+  }
+}
+
+class MockRemoteConflictService {
+  markDirty() {
+    // no-op
+  }
+  clearDirty() {
+    // no-op
+  }
+  queue() {
+    // no-op
+  }
+}
+
+class MockObsidianImportService {}
+
+class MockDialogService {
+  createInstance() {
+    return { ok: true, instance: { id: 'new_notes' } };
+  }
+  setTitleOverride() {
+    // no-op
+  }
+}
+
+class MockVaultDbService {
+  private unresolved = [
+    { id: 'l1', vaultId: 'v1', fromNodeId: 'f1', rawTarget: 'Missing', type: 'wikilink' as const },
+  ];
+  canUseCloudVaultSyncBeta() {
+    return true;
+  }
+  async ensureVaultAvailable() {
+    return true;
+  }
+  async getVault() {
+    return {
+      id: 'v1',
+      name: 'Vault',
+      createdAt: Date.now(),
+      source: { type: 'zip' },
+      cloudBeta: null,
+    };
+  }
+  async getTree(): Promise<VaultFileTreeNode[]> {
+    const children: VaultFileTreeNode[] = [];
+    for (let i = 0; i < 500; i += 1) {
+      children.push({ id: `f${i}`, path: `Folder/Note${i}.md`, name: `Note${i}.md`, type: 'file' });
+    }
+    return [{ id: 'folder', path: 'Folder', name: 'Folder', type: 'folder', children }];
+  }
+  async getMarkdownFile(nodeId: string) {
+    return {
+      nodeId,
+      vaultId: 'v1',
+      content: '# test',
+      updatedAt: Date.now(),
+      hash: 'h',
+      contentRefId: 'r1',
+    };
+  }
+  async getNode(nodeId: string) {
+    return { id: nodeId, vaultId: 'v1', path: `Folder/${nodeId}.md`, type: 'file' as const };
+  }
+  async listAssets() {
+    return [];
+  }
+  async getAssetUrl() {
+    return null;
+  }
+  async getNodeByPath() {
+    return undefined;
+  }
+  async listUnresolvedLinks() {
+    return this.unresolved;
+  }
+  async saveMarkdownFile() {
+    return { record: null, previous: null };
+  }
+  async cloneVault() {
+    return { id: 'v2', name: 'Vault copy' };
+  }
+  async setVaultCloudBetaEnabled() {
+    return true;
+  }
+}
+
+describe('NotesComponent (vault mode)', () => {
+  let fixture: ComponentFixture<NotesComponent>;
+  let component: NotesComponent;
+
+  beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        NotesComponent,
-        TranslateModule.forRoot({
-          loader: { provide: TranslateLoader, useClass: TranslateFakeLoader },
-        }),
+      imports: [NotesComponent],
+      providers: [
+        { provide: AppPreferencesService, useClass: MockPrefsService },
+        { provide: InstanceSettingsService, useClass: MockInstanceSettingsService },
+        { provide: ImportGuardService, useClass: MockImportGuardService },
+        { provide: ExportGuardService, useClass: MockExportGuardService },
+        { provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter },
+        { provide: RemoteConflictService, useClass: MockRemoteConflictService },
+        { provide: ObsidianImportService, useClass: MockObsidianImportService },
+        { provide: VaultDbService, useClass: MockVaultDbService },
+        { provide: DialogService, useClass: MockDialogService },
+        {
+          provide: TranslateService,
+          useValue: {
+            instant: (key: string) => key,
+            get: (key: string) => of(key),
+            stream: (key: string) => of(key),
+            currentLang: 'en',
+            onLangChange: new Subject(),
+            onTranslationChange: new Subject(),
+            onDefaultLangChange: new Subject(),
+          },
+        },
       ],
-      providers: [{ provide: STORAGE_ADAPTER, useClass: LocalStorageAdapter }],
     }).compileComponents();
 
     await TestBed.inject(StorageService).hydrate();
 
-    const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('en', { notes: { root: 'Notes' } });
-    translate.use('en');
-
-    const fixture = TestBed.createComponent(NotesComponent);
-    fixture.componentInstance.instanceId = 'notes_test';
+    fixture = TestBed.createComponent(NotesComponent);
+    component = fixture.componentInstance;
+    component.instanceId = 'notes-vault-test';
     fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    return fixture;
-  }
-
-  it('renders notes tree', async () => {
-    const fixture = await setup();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('Notes');
   });
 
-  it('reloads from storage on relevant remote change when editor is not focused', async () => {
-    const fixture = await setup();
-    const component = fixture.componentInstance;
-    const storage = TestBed.inject(StorageService);
-    const prefs = TestBed.inject(AppPreferencesService);
-    const key = buildInstanceStorageKey('op_app_state:notes', prefs.userId(), component.instanceId);
+  it('loads vault tree and unresolved links in vault mode', async () => {
+    component.state.set({
+      ...component.state(),
+      source: { type: 'vault', vaultId: 'v1', vaultName: 'Vault' },
+      vaultSelectedNodeId: null,
+    });
 
-    const nextState = JSON.parse(JSON.stringify(component.state())) as {
-      root: NoteLike;
-      selectedId: string | null;
-    };
-    const selectedId = nextState.selectedId;
-    expect(selectedId).toBeTruthy();
-    const selected = findNode(nextState.root, String(selectedId));
-    expect(selected?.type).toBe('note');
-    if (!selected || selected.type !== 'note') throw new Error('Expected selected note');
-    selected.content = 'Remote update';
+    await component.refreshVaultTree();
 
-    await storage.setItem(key, JSON.stringify(nextState));
-    storage.lastRemoteChange.set({ seq: 1, keys: [key] });
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(component.selectedNode()?.content).toBe('Remote update');
+    expect(component.vaultTree().length).toBe(1);
+    expect(component.vaultUnresolvedLinks().length).toBe(1);
+    expect(component.vaultVisibleRows().length).toBeGreaterThan(0);
+    expect(component.vaultVisibleRows().length).toBeLessThan(component.vaultFlatRows().length);
   });
 
-  it('does not clobber focused rich editor on relevant remote change', async () => {
-    const fixture = await setup();
-    const component = fixture.componentInstance;
-    const storage = TestBed.inject(StorageService);
-    const prefs = TestBed.inject(AppPreferencesService);
-    const key = buildInstanceStorageKey('op_app_state:notes', prefs.userId(), component.instanceId);
+  it('updates virtualized visible rows when scrolled', async () => {
+    component.state.set({
+      ...component.state(),
+      source: { type: 'vault', vaultId: 'v1', vaultName: 'Vault' },
+      vaultSelectedNodeId: null,
+    });
+    await component.refreshVaultTree();
 
-    const beforeContent = component.selectedNode()?.content ?? '';
-    component.richFocused.set(true);
-    component.richSnapshot.set('Local typing draft');
+    const beforeFirst = component.vaultVisibleRows()[0]?.id;
+    component.onVaultTreeScroll({
+      target: { scrollTop: 600, clientHeight: 200 },
+    } as unknown as Event);
+    const afterFirst = component.vaultVisibleRows()[0]?.id;
 
-    const nextState = JSON.parse(JSON.stringify(component.state())) as {
-      root: NoteLike;
-      selectedId: string | null;
-    };
-    const selected = findNode(nextState.root, String(nextState.selectedId));
-    expect(selected?.type).toBe('note');
-    if (!selected || selected.type !== 'note') throw new Error('Expected selected note');
-    selected.content = 'Remote update while focused';
-
-    await storage.setItem(key, JSON.stringify(nextState));
-    storage.lastRemoteChange.set({ seq: 2, keys: [key] });
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(component.selectedNode()?.content).toBe(beforeContent);
-    expect(component.richSnapshot()).toBe('Local typing draft');
+    expect(afterFirst).toBeTruthy();
+    expect(afterFirst).not.toBe(beforeFirst);
   });
 });

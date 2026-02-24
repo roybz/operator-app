@@ -32,6 +32,7 @@ import { VaultDbService } from '../../../../core/obsidian/vault-db';
 import {
   ObsidianImportProgress,
   ObsidianImportStats,
+  LinkIndexRecord,
   VaultFileTreeNode,
 } from '../../../../core/obsidian/vault-types';
 import { DialogService } from '../../../../core/dialog.service';
@@ -70,6 +71,12 @@ interface NotesState {
   phoneSidebarInit?: boolean;
   source?: NotesSource;
   vaultSelectedNodeId?: string | null;
+}
+
+interface VaultTreeFlatRow {
+  id: string;
+  node: VaultFileTreeNode;
+  depth: number;
 }
 
 const stateStore = new Map<string, NotesState>();
@@ -253,7 +260,8 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
                 {{
                   (vaultCloudBetaAvailable()
                     ? 'notes.cloudBetaImportHelp'
-                    : 'notes.cloudBetaImportUnavailable') | translate
+                    : 'notes.cloudBetaImportUnavailable'
+                  ) | translate
                 }}
               </small>
             </span>
@@ -272,7 +280,9 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
               @if (vaultCloudBetaSyncing()) {
                 <small style="opacity:0.75;">{{ 'notes.cloudBetaSyncing' | translate }}</small>
               } @else if (vaultCloudBetaStatusMessage()) {
-                <small style="opacity:0.75;">{{ vaultCloudBetaStatusMessage() ?? '' | translate }}</small>
+                <small style="opacity:0.75;">{{
+                  vaultCloudBetaStatusMessage() ?? '' | translate
+                }}</small>
               }
             </div>
           }
@@ -432,13 +442,78 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
                 {{
                   (vaultCloudBetaEnabled()
                     ? 'notes.vaultStorageCloudBeta'
-                    : 'notes.vaultStorageLocalDevice') | translate
+                    : 'notes.vaultStorageLocalDevice'
+                  ) | translate
                 }}
               </span>
             </div>
-            <ng-container
-              *ngTemplateOutlet="vaultTreeTemplate; context: { $implicit: vaultTree(), depth: 0 }"
-            ></ng-container>
+            <div
+              style="border:1px solid var(--color-border); border-radius:6px; overflow:auto; min-height:180px; max-height:320px;"
+              (scroll)="onVaultTreeScroll($event)"
+              #vaultTreeScrollHost
+            >
+              <div [style.height.px]="vaultTreeContentHeight()" style="position:relative;">
+                <div
+                  [style.transform]="
+                    'translateY(' + vaultVisibleStartIndex() * vaultTreeRowHeight + 'px)'
+                  "
+                  style="position:absolute; inset:0 auto auto 0; right:0;"
+                >
+                  @for (row of vaultVisibleRows(); track row.id) {
+                    <div
+                      style="display:flex; align-items:center; gap:6px; min-height:26px; padding-right:4px;"
+                      [style.marginLeft.px]="row.depth * 12"
+                    >
+                      @if (row.node.type === 'folder') {
+                        <span>📁</span>
+                        <span>{{ row.node.name }}</span>
+                      } @else {
+                        <button
+                          (click)="selectVaultNode(row.node.id)"
+                          [style.fontWeight]="
+                            state().vaultSelectedNodeId === row.node.id ? '700' : '400'
+                          "
+                          [title]="row.node.path"
+                        >
+                          {{ row.node.name }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+            <div
+              style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;"
+            >
+              <button (click)="vaultUnresolvedPanelOpen.set(!vaultUnresolvedPanelOpen())">
+                {{ 'notes.unresolvedLinks' | translate }}
+                ({{ vaultUnresolvedLinks().length }})
+              </button>
+            </div>
+            @if (vaultUnresolvedPanelOpen()) {
+              <div
+                style="border:1px solid var(--color-border); border-radius:6px; padding:8px; margin-top:6px; max-height:180px; overflow:auto; display:flex; flex-direction:column; gap:6px;"
+              >
+                @if (!vaultUnresolvedLinks().length) {
+                  <div style="font-size:12px; opacity:0.7;">
+                    {{ 'notes.unresolvedLinksEmpty' | translate }}
+                  </div>
+                } @else {
+                  @for (link of vaultUnresolvedLinks().slice(0, 100); track link.id) {
+                    <button
+                      style="text-align:left; display:flex; flex-direction:column; gap:2px;"
+                      (click)="openUnresolvedLinkSource(link)"
+                    >
+                      <span style="font-size:12px; font-weight:600;">{{ link.rawTarget }}</span>
+                      <span style="font-size:11px; opacity:0.7;">{{
+                        unresolvedLinkSourcePath(link)
+                      }}</span>
+                    </button>
+                  }
+                }
+              </div>
+            }
           }
 
           <div style="margin-top:auto; display:flex; flex-wrap:wrap; padding-left:20px;">
@@ -762,6 +837,22 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );
   vaultTree = signal<VaultFileTreeNode[]>([]);
+  vaultFlatRows = computed(() => this.flattenVaultTree(this.vaultTree()));
+  vaultVisibleRows = computed(() => {
+    const rows = this.vaultFlatRows();
+    const height = Math.max(this.vaultTreeViewportHeight(), this.vaultTreeRowHeight * 4);
+    const overscan = 10;
+    const start = Math.max(
+      0,
+      Math.floor(this.vaultTreeScrollTop() / this.vaultTreeRowHeight) - overscan,
+    );
+    const count = Math.ceil(height / this.vaultTreeRowHeight) + overscan * 2;
+    return rows.slice(start, start + count);
+  });
+  vaultVisibleStartIndex = computed(() =>
+    Math.max(0, Math.floor(this.vaultTreeScrollTop() / this.vaultTreeRowHeight) - 10),
+  );
+  vaultTreeContentHeight = computed(() => this.vaultFlatRows().length * this.vaultTreeRowHeight);
   vaultFileContent = signal<string>('');
   vaultDraftContent = signal<string>('');
   vaultPreviewHtml = signal<string>('');
@@ -772,6 +863,11 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultCloudBetaSyncing = signal(false);
   vaultCloudBetaStatusMessage = signal<string | null>(null);
   vaultCloudBetaAvailable = computed(() => this.vaultDb.canUseCloudVaultSyncBeta());
+  vaultUnresolvedLinks = signal<LinkIndexRecord[]>([]);
+  vaultUnresolvedPanelOpen = signal(false);
+  vaultTreeScrollTop = signal(0);
+  vaultTreeViewportHeight = signal(320);
+  readonly vaultTreeRowHeight = 26;
   private lastRemoteStorageChangeSeq = 0;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
@@ -993,6 +1089,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       ? this.filterVaultTreeByPrefix(fullTree, source.pathPrefix)
       : fullTree;
     this.vaultTree.set(tree);
+    await this.refreshVaultUnresolvedLinks();
     const selectedId = this.state().vaultSelectedNodeId;
     if (selectedId) {
       await this.selectVaultNode(selectedId);
@@ -1361,6 +1458,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       await this.vaultDb.saveMarkdownFile(nodeId, this.vaultDraftContent());
       this.vaultFileContent.set(this.vaultDraftContent());
       this.vaultDirty.set(false);
+      await this.refreshVaultUnresolvedLinks();
       this.vaultPreviewHtml.set(
         await this.renderVaultPreviewHtml(source.vaultId, this.vaultDraftContent()),
       );
@@ -1414,6 +1512,58 @@ export class NotesComponent implements OnInit, OnDestroy {
     this.vaultCloudBetaStatusMessage.set(
       vault.cloudBeta?.lastSyncedAt ? 'notes.cloudBetaVaultEnabled' : 'notes.cloudBetaSyncPending',
     );
+  }
+
+  onVaultTreeScroll(event: Event) {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    this.vaultTreeScrollTop.set(target.scrollTop || 0);
+    this.vaultTreeViewportHeight.set(target.clientHeight || 320);
+  }
+
+  unresolvedLinkSourcePath(link: LinkIndexRecord) {
+    const row = this.findVaultRowById(this.vaultFlatRows(), link.fromNodeId);
+    return row?.node.path ?? link.fromNodeId;
+  }
+
+  async openUnresolvedLinkSource(link: LinkIndexRecord) {
+    await this.selectVaultNode(link.fromNodeId);
+  }
+
+  private async refreshVaultUnresolvedLinks() {
+    const source = this.state().source;
+    if (!source || source.type !== 'vault') {
+      this.vaultUnresolvedLinks.set([]);
+      return;
+    }
+    const all = await this.vaultDb.listUnresolvedLinks(source.vaultId);
+    if (!source.pathPrefix) {
+      this.vaultUnresolvedLinks.set(all);
+      return;
+    }
+    const rows = this.flattenVaultTree(this.vaultTree());
+    this.vaultUnresolvedLinks.set(
+      all.filter((link) => {
+        const row = this.findVaultRowById(rows, link.fromNodeId);
+        return Boolean(
+          row &&
+          (row.node.path === source.pathPrefix ||
+            row.node.path.startsWith(`${source.pathPrefix}/`)),
+        );
+      }),
+    );
+  }
+
+  private flattenVaultTree(nodes: VaultFileTreeNode[], depth = 0, out: VaultTreeFlatRow[] = []) {
+    for (const node of nodes) {
+      out.push({ id: node.id, node, depth });
+      if (node.children?.length) this.flattenVaultTree(node.children, depth + 1, out);
+    }
+    return out;
+  }
+
+  private findVaultRowById(rows: VaultTreeFlatRow[], id: string) {
+    return rows.find((row) => row.id === id) ?? null;
   }
 
   private findVaultNodeByBasename(

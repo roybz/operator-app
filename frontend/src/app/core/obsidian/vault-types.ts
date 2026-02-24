@@ -35,6 +35,7 @@ export interface MarkdownFileRecord {
   nodeId: string;
   vaultId: string;
   content: string;
+  contentRefId?: string | null;
   frontmatterRaw?: string;
   frontmatter?: Record<string, unknown> | null;
   headingsIndex?: MarkdownHeadingIndex[];

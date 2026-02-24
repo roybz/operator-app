@@ -337,7 +337,9 @@
     "cloudBetaSyncPending": "Cloud sync pending",
     "cloudBetaVaultUnavailableLocal": "Vault not found locally (restoring from cloud if available)",
     "vaultStorageLocalDevice": "Stored locally on this device",
-    "vaultStorageCloudBeta": "Cloud sync beta (markdown + structure)"
+    "vaultStorageCloudBeta": "Cloud sync beta (markdown + structure)",
+    "unresolvedLinks": "Unresolved links",
+    "unresolvedLinksEmpty": "No unresolved links found in this vault view."
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",

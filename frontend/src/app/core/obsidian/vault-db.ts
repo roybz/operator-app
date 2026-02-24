@@ -14,7 +14,7 @@ import { AuthService } from '../auth.service';
 import { getOpConfig } from '../op-config';
 
 const DB_NAME = 'operator-obsidian-vaults';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const CLOUD_VAULT_PREFIX = 'op_obsidian_vault_cloud:v1';
 const CLOUD_CHUNK_TARGET_BYTES = 220 * 1024;
 
@@ -22,10 +22,16 @@ const STORES = {
   vaults: 'vaults',
   nodes: 'vault_nodes',
   markdown: 'vault_markdown',
+  markdownContent: 'vault_markdown_content',
   assets: 'vault_assets',
   blobs: 'vault_asset_blobs',
   links: 'vault_links',
 } as const;
+
+type StoredMarkdownFileRecord = Omit<MarkdownFileRecord, 'content'> & {
+  content?: string;
+  contentRefId?: string | null;
+};
 
 function reqToPromise<T>(request: IDBRequest<T>) {
   return new Promise<T>((resolve, reject) => {
@@ -93,6 +99,9 @@ export class VaultDbService {
         } else {
           const store = request.transaction?.objectStore(STORES.markdown);
           if (store) ensureIndex(store, 'byVaultId', 'vaultId');
+        }
+        if (!db.objectStoreNames.contains(STORES.markdownContent)) {
+          db.createObjectStore(STORES.markdownContent, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(STORES.assets)) {
           const store = db.createObjectStore(STORES.assets, { keyPath: 'id' });
@@ -205,7 +214,8 @@ export class VaultDbService {
     const db = await this.openDb();
     const tx = db.transaction([STORES.markdown], 'readonly');
     const index = tx.objectStore(STORES.markdown).index('byVaultId');
-    return (await reqToPromise(index.getAll(vaultId))) as MarkdownFileRecord[];
+    const rows = (await reqToPromise(index.getAll(vaultId))) as StoredMarkdownFileRecord[];
+    return Promise.all(rows.map((row) => this.hydrateMarkdownRecord(row)));
   }
 
   async listLinks(vaultId: string) {
@@ -222,7 +232,7 @@ export class VaultDbService {
     return (await reqToPromise(idx.getAll(vaultId))) as AssetRecord[];
   }
 
-  async cloneVaultDeep(vaultId: string, options?: { name?: string }) {
+  async cloneVaultDeep(vaultId: string, options?: { name?: string; mode?: 'deep' | 'cow' }) {
     const sourceVault = await this.getVault(vaultId);
     if (!sourceVault) throw new Error('Vault not found');
     const [nodes, markdownFiles, assets, links] = await Promise.all([
@@ -266,12 +276,21 @@ export class VaultDbService {
       parentId: node.parentId ? cloneNodeId(node.parentId) : undefined,
     }));
     const now = Date.now();
-    const nextMarkdown: MarkdownFileRecord[] = markdownFiles.map((file: MarkdownFileRecord) => ({
-      ...file,
-      nodeId: cloneNodeId(file.nodeId),
-      vaultId: clonedVault.id,
-      updatedAt: now,
-    }));
+    const nextMarkdown: StoredMarkdownFileRecord[] = [];
+    for (const file of markdownFiles) {
+      const sharedContentRefId =
+        options?.mode === 'cow'
+          ? await this.ensureMarkdownContentRefForRecord(file as StoredMarkdownFileRecord)
+          : null;
+      nextMarkdown.push({
+        ...file,
+        nodeId: cloneNodeId(file.nodeId),
+        vaultId: clonedVault.id,
+        updatedAt: now,
+        contentRefId: sharedContentRefId,
+        ...(options?.mode === 'cow' ? { content: undefined } : {}),
+      });
+    }
     const nextAssets: { asset: AssetRecord; blob: Blob }[] = [];
     for (const asset of assets) {
       nextAssets.push({
@@ -294,7 +313,7 @@ export class VaultDbService {
     for (let i = 0; i < nextNodes.length; i += 200)
       await this.putNodes(nextNodes.slice(i, i + 200));
     for (let i = 0; i < nextMarkdown.length; i += 100) {
-      await this.putMarkdownFiles(nextMarkdown.slice(i, i + 100));
+      await this.putMarkdownFiles(nextMarkdown.slice(i, i + 100) as MarkdownFileRecord[]);
     }
     if (nextAssets.length) {
       const txAssets = db.transaction([STORES.assets], 'readwrite');
@@ -312,9 +331,8 @@ export class VaultDbService {
   }
 
   async cloneVault(vaultId: string, options?: { name?: string; mode?: 'deep' | 'cow' }) {
-    // v1: assets are shared (immutable), markdown/nodes are deep-copied.
-    // This gives a safe demo-ready clone while keeping a stable API for future COW.
-    return this.cloneVaultDeep(vaultId, { name: options?.name });
+    // Assets remain shared (immutable). Markdown can now share content refs in COW mode.
+    return this.cloneVaultDeep(vaultId, { name: options?.name, mode: options?.mode ?? 'cow' });
   }
 
   async putNodes(nodes: VaultNodeRecord[]) {
@@ -329,9 +347,18 @@ export class VaultDbService {
   async putMarkdownFiles(files: MarkdownFileRecord[]) {
     if (!files.length) return;
     const db = await this.openDb();
-    const tx = db.transaction([STORES.markdown], 'readwrite');
+    const tx = db.transaction([STORES.markdown, STORES.markdownContent], 'readwrite');
     const store = tx.objectStore(STORES.markdown);
-    for (const file of files) store.put(file);
+    const contentStore = tx.objectStore(STORES.markdownContent);
+    for (const file of files as StoredMarkdownFileRecord[]) {
+      if (typeof file.content === 'string' && file.content.length > 0) {
+        const contentRefId = file.contentRefId ?? this.markdownContentRefId(file.hash);
+        contentStore.put({ id: contentRefId, content: file.content, hash: file.hash });
+        store.put({ ...file, contentRefId, content: undefined });
+      } else {
+        store.put(file);
+      }
+    }
     await txDone(tx);
   }
 
@@ -353,6 +380,7 @@ export class VaultDbService {
       nodeId,
       vaultId,
       content,
+      contentRefId: this.markdownContentRefId(parsed.hash),
       frontmatterRaw: parsed.frontmatterRaw,
       frontmatter: parsed.frontmatter,
       headingsIndex: parsed.headingsIndex,
@@ -407,8 +435,13 @@ export class VaultDbService {
     });
 
     const db = await this.openDb();
-    const tx = db.transaction([STORES.markdown, STORES.links], 'readwrite');
-    tx.objectStore(STORES.markdown).put(nextRecord);
+    const tx = db.transaction([STORES.markdown, STORES.markdownContent, STORES.links], 'readwrite');
+    tx.objectStore(STORES.markdownContent).put({
+      id: nextRecord.contentRefId,
+      content: nextRecord.content,
+      hash: nextRecord.hash,
+    });
+    tx.objectStore(STORES.markdown).put({ ...nextRecord, content: undefined });
     const linkStore = tx.objectStore(STORES.links);
     const byFromNode = linkStore.index('byFromNodeId');
     const existingLinkKeys = (await reqToPromise(byFromNode.getAllKeys(nodeId))) as IDBValidKey[];
@@ -480,9 +513,11 @@ export class VaultDbService {
   async getMarkdownFile(nodeId: string) {
     const db = await this.openDb();
     const tx = db.transaction([STORES.markdown], 'readonly');
-    return (await reqToPromise(tx.objectStore(STORES.markdown).get(nodeId))) as
-      | MarkdownFileRecord
+    const row = (await reqToPromise(tx.objectStore(STORES.markdown).get(nodeId))) as
+      | StoredMarkdownFileRecord
       | undefined;
+    if (!row) return undefined;
+    return this.hydrateMarkdownRecord(row);
   }
 
   async getNode(nodeId: string) {
@@ -541,19 +576,21 @@ export class VaultDbService {
     if (!this.canUseCloudVaultSyncBeta()) return;
     const existing = this.cloudSyncInflight.get(vaultId);
     if (existing) return existing;
-    const run = this.syncVaultToCloudInternal(vaultId).catch(async (error) => {
-      const vault = await this.getVault(vaultId);
-      if (vault?.cloudBeta?.enabled) {
-        vault.cloudBeta = {
-          ...vault.cloudBeta,
-          lastSyncError: error instanceof Error ? error.message : 'sync_failed',
-          syncedMarkdownOnly: true,
-        };
-        await this.putVault(vault);
-      }
-    }).finally(() => {
-      this.cloudSyncInflight.delete(vaultId);
-    });
+    const run = this.syncVaultToCloudInternal(vaultId)
+      .catch(async (error) => {
+        const vault = await this.getVault(vaultId);
+        if (vault?.cloudBeta?.enabled) {
+          vault.cloudBeta = {
+            ...vault.cloudBeta,
+            lastSyncError: error instanceof Error ? error.message : 'sync_failed',
+            syncedMarkdownOnly: true,
+          };
+          await this.putVault(vault);
+        }
+      })
+      .finally(() => {
+        this.cloudSyncInflight.delete(vaultId);
+      });
     this.cloudSyncInflight.set(vaultId, run);
     return run;
   }
@@ -598,11 +635,16 @@ export class VaultDbService {
       assetsStoredInCloud: false,
       assetsMetadataOnly: true,
     };
-    const keysToKeep = new Set<string>([this.cloudIndexKey(vaultId), this.cloudManifestKey(vaultId)]);
-    for (let i = 0; i < chunks.nodes.length; i += 1) keysToKeep.add(this.cloudChunkKey(vaultId, 'nodes', i));
+    const keysToKeep = new Set<string>([
+      this.cloudIndexKey(vaultId),
+      this.cloudManifestKey(vaultId),
+    ]);
+    for (let i = 0; i < chunks.nodes.length; i += 1)
+      keysToKeep.add(this.cloudChunkKey(vaultId, 'nodes', i));
     for (let i = 0; i < chunks.markdown.length; i += 1)
       keysToKeep.add(this.cloudChunkKey(vaultId, 'markdown', i));
-    for (let i = 0; i < chunks.links.length; i += 1) keysToKeep.add(this.cloudChunkKey(vaultId, 'links', i));
+    for (let i = 0; i < chunks.links.length; i += 1)
+      keysToKeep.add(this.cloudChunkKey(vaultId, 'links', i));
 
     const previousIndex = await this.storage.getJson<{ keys?: string[] } | null>(
       this.cloudIndexKey(vaultId),
@@ -661,7 +703,10 @@ export class VaultDbService {
     };
 
     const db = await this.openDb();
-    const tx = db.transaction([STORES.vaults, STORES.nodes, STORES.markdown, STORES.links], 'readwrite');
+    const tx = db.transaction(
+      [STORES.vaults, STORES.nodes, STORES.markdown, STORES.links],
+      'readwrite',
+    );
     tx.objectStore(STORES.vaults).put(restoredVault);
     const nodeStore = tx.objectStore(STORES.nodes);
     for (const row of nodes) nodeStore.put(row);
@@ -732,5 +777,40 @@ export class VaultDbService {
   private byteLength(value: string) {
     if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(value).length;
     return value.length * 2;
+  }
+
+  private markdownContentRefId(hash: string) {
+    return `mdc_${hash}`;
+  }
+
+  private async ensureMarkdownContentRefForRecord(record: StoredMarkdownFileRecord) {
+    if (record.contentRefId) return record.contentRefId;
+    if (typeof record.content !== 'string') return null;
+    const contentRefId = this.markdownContentRefId(record.hash);
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.markdown, STORES.markdownContent], 'readwrite');
+    tx.objectStore(STORES.markdownContent).put({
+      id: contentRefId,
+      content: record.content,
+      hash: record.hash,
+    });
+    tx.objectStore(STORES.markdown).put({ ...record, contentRefId, content: undefined });
+    await txDone(tx);
+    return contentRefId;
+  }
+
+  private async hydrateMarkdownRecord(row: StoredMarkdownFileRecord): Promise<MarkdownFileRecord> {
+    if (typeof row.content === 'string') {
+      return row as MarkdownFileRecord;
+    }
+    if (!row.contentRefId) {
+      return { ...(row as MarkdownFileRecord), content: '' };
+    }
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.markdownContent], 'readonly');
+    const contentRow = (await reqToPromise(
+      tx.objectStore(STORES.markdownContent).get(row.contentRefId),
+    )) as { id: string; content: string; hash?: string } | undefined;
+    return { ...(row as MarkdownFileRecord), content: contentRow?.content ?? '' };
   }
 }
