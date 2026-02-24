@@ -31,7 +31,7 @@ Guest mode remains local-only (`localStorage`) and does not use AWS storage.
 - Public self sign-up: disabled (`AllowAdminCreateUserOnly=true`)
 - OAuth flow: Authorization Code + PKCE
 - App client secret: disabled (SPA client)
-- Allowed scopes: `openid`, `email`, `profile`
+- Allowed scopes: `openid`, `email`, `profile`, `aws.cognito.signin.user.admin`
 - Callback URL (current): `https://plannerdemo.roy.bz/login`
 - Logout URL (current): `https://plannerdemo.roy.bz/login`
 
@@ -86,9 +86,18 @@ cognito: {
   clientId: '32bfn92gkldr6bhed85hjkfrgb',
   redirectUri: 'https://plannerdemo.roy.bz/login',
   logoutRedirectUri: 'https://plannerdemo.roy.bz/login',
-  scopes: ['openid', 'email', 'profile'],
+  scopes: ['openid', 'email', 'profile', 'aws.cognito.signin.user.admin'],
 }
 ```
+
+## Realtime (WebSocket) Notes
+
+Realtime invalidation is enabled via a separate WebSocket API and connection Lambdas.
+
+- WebSocket API URL: `wss://kor4dh9vtl.execute-api.us-east-1.amazonaws.com/prod`
+- If WebSocket connect fails, the frontend falls back to polling sync.
+- The Cognito access token must include `aws.cognito.signin.user.admin` because the connect Lambda
+  uses Cognito `GetUser` for token validation.
 
 ## Updating the Domain Later
 

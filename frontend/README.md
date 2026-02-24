@@ -1,85 +1,58 @@
-# OperatorApp
+# Operator App Frontend (Angular)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 21.1.0.
+Angular frontend for Operator App (multi-dialog workspace shell + bundled mini apps).
 
-## Development server
-
-To start a local development server, run:
+## Development
 
 ```bash
-ng serve
+npm install
+npm run start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Open `http://localhost:4200/`.
 
-## Code scaffolding
+## Common commands
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+- `npm run test:unit`
+- `npm run lint`
+- `npm run build`
+- `npm run test:e2e`
 
-```bash
-ng generate component component-name
-```
+## Runtime config
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Runtime config is served from `frontend/src/assets/op-config.js`.
 
-```bash
-ng generate --help
-```
+Important flags:
 
-## Building
+- `guestModeOnly`
+- `storageMode` (`local` / `remote`)
+- `storageApiBaseUrl`
+- `authProvider` (`local` / `cognito`)
+- `cognito.*`
+- `realtimeEnabled`
+- `realtimeWebSocketUrl`
+- `debugPerf`
 
-To build the project run:
+## Persistence and sync
 
-```bash
-ng build
-```
+- All persistence flows through `StorageService` + `StorageAdapter`.
+- Guest sessions are local-only.
+- Authenticated sessions can use remote storage (HTTP API).
+- Realtime sync is WebSocket-first with polling fallback.
+- App-instance persistence uses a shared queue helper:
+  - `src/app/core/realtime/instance-persist-queue.ts`
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Logout behavior (external auth)
 
-## Running unit tests
+When Cognito/external auth is enabled, `/logout` must trigger provider logout (not just local session
+clear) to avoid immediate silent re-login via Hosted UI session cookies.
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Debug perf instrumentation
 
-```bash
-ng test
-```
+Lifecycle/perf instrumentation for Universe and Workspace switching is available in debug mode.
 
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Debug Lifecycle/Perf Instrumentation
-
-Lifecycle/perf instrumentation for Universe and Workspace switching is available in debug mode and is OFF by default.
-
-- Config flag: `frontend/src/assets/op-config.js` -> `debugPerf: false`
+- Config flag: `src/assets/op-config.js` -> `debugPerf`
 - Local override:
   - Enable: `localStorage.setItem('op_debug_perf', '1')`
   - Disable: `localStorage.setItem('op_debug_perf', '0')`
-  - Reset to config default: `localStorage.removeItem('op_debug_perf')`
-
-When enabled, console summary lines are emitted per switch action:
-
-- `[Perf][UniverseSwitch] duration=... mounts=... destroys=... hostMounts=... hostDestroys=... dialogsBefore=... dialogsAfter=...`
-- `[Perf][WorkspaceSwitch] duration=... mounts=... destroys=... hostMounts=... hostDestroys=... dialogsBefore=... dialogsAfter=...`
-
-Implementation references:
-
-- `frontend/src/app/core/debug-perf.service.ts`
-- `frontend/src/app/app.ts`
-- `frontend/src/app/shared/dialog/dialog.component.ts`
-
-Long-running process rule:
-
-- Keep long-running process features (timers/sync/background loops) in `universeId`-keyed services/stores with explicit start/stop.
-- UI components may mount/unmount freely without owning the process lifecycle.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+  - Reset: `localStorage.removeItem('op_debug_perf')`
