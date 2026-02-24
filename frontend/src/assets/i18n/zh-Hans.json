@@ -322,7 +322,10 @@
     "cloneVaultToNewInstance": "Clone vault to new Notes instance",
     "cloneVaultSuccess": "Vault clone complete.",
     "cloneVaultFailed": "Vault clone failed.",
-    "importVaultDestinationSplitTopLevel": "Multiple Notes instances by top-level folder"
+    "importVaultDestinationSplitTopLevel": "Multiple Notes instances by top-level folder",
+    "vaultSave": "Save vault file",
+    "vaultSaving": "Saving...",
+    "vaultUnsaved": "Unsaved changes"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",

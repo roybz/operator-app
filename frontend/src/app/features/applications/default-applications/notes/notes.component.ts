@@ -426,12 +426,25 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
           <div style="font-size:12px; color:var(--color-muted);">
             {{ 'notes.vaultReadOnly' | translate }}
           </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button (click)="saveVaultFile()" [disabled]="!vaultDirty() || vaultSaving()">
+              {{
+                vaultSaving() ? ('notes.vaultSaving' | translate) : ('notes.vaultSave' | translate)
+              }}
+            </button>
+            @if (vaultDirty()) {
+              <span style="font-size:12px; color:var(--color-muted);">
+                {{ 'notes.vaultUnsaved' | translate }}
+              </span>
+            }
+          </div>
           <div
             style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; flex:1; min-height:260px;"
           >
             <textarea
-              [value]="vaultFileContent()"
-              readonly
+              [value]="vaultDraftContent()"
+              (input)="onVaultDraftInput($event)"
+              (keydown.control.s)="saveVaultFile(); $event.preventDefault()"
               style="border:1px solid var(--color-border); border-radius:6px; padding:10px; min-height:260px;"
             ></textarea>
             <div
@@ -706,8 +719,11 @@ export class NotesComponent implements OnInit, OnDestroy {
   );
   vaultTree = signal<VaultFileTreeNode[]>([]);
   vaultFileContent = signal<string>('');
+  vaultDraftContent = signal<string>('');
   vaultPreviewHtml = signal<string>('');
   vaultSelectedPath = signal<string | null>(null);
+  vaultDirty = signal(false);
+  vaultSaving = signal(false);
   private lastRemoteStorageChangeSeq = 0;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
@@ -979,6 +995,8 @@ export class NotesComponent implements OnInit, OnDestroy {
     const file = await this.vaultDb.getMarkdownFile(nodeId);
     if (!file) return;
     this.vaultFileContent.set(file.content);
+    this.vaultDraftContent.set(file.content);
+    this.vaultDirty.set(false);
     const node = await this.vaultDb.getNode(nodeId);
     const selectedPath = node?.path ?? null;
     if (selectedPath) {
@@ -997,8 +1015,10 @@ export class NotesComponent implements OnInit, OnDestroy {
   exitVaultMode() {
     this.vaultTree.set([]);
     this.vaultFileContent.set('');
+    this.vaultDraftContent.set('');
     this.vaultPreviewHtml.set('');
     this.vaultSelectedPath.set(null);
+    this.vaultDirty.set(false);
     this.commit({ ...this.state(), source: { type: 'internal' }, vaultSelectedNodeId: null });
   }
 
@@ -1257,6 +1277,30 @@ export class NotesComponent implements OnInit, OnDestroy {
     if (!basename) return;
     const fallback = this.findVaultNodeByBasename(this.vaultTree(), basename);
     if (fallback) await this.selectVaultNode(fallback.id);
+  }
+
+  onVaultDraftInput(event: Event) {
+    const target = event.target as HTMLTextAreaElement;
+    this.vaultDraftContent.set(target.value);
+    this.vaultDirty.set(target.value !== this.vaultFileContent());
+  }
+
+  async saveVaultFile() {
+    const source = this.state().source;
+    const nodeId = this.state().vaultSelectedNodeId;
+    if (!source || source.type !== 'vault' || !nodeId || !this.vaultDirty() || this.vaultSaving())
+      return;
+    this.vaultSaving.set(true);
+    try {
+      await this.vaultDb.saveMarkdownFile(nodeId, this.vaultDraftContent());
+      this.vaultFileContent.set(this.vaultDraftContent());
+      this.vaultDirty.set(false);
+      this.vaultPreviewHtml.set(
+        await this.renderVaultPreviewHtml(source.vaultId, this.vaultDraftContent()),
+      );
+    } finally {
+      this.vaultSaving.set(false);
+    }
   }
 
   private findVaultNodeByBasename(

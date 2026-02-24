@@ -8,9 +8,10 @@ import {
   VaultNodeRecord,
   VaultRecord,
 } from './vault-types';
+import { parseObsidianMarkdown, resolveObsidianLinkTarget } from './obsidian-parse';
 
 const DB_NAME = 'operator-obsidian-vaults';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   vaults: 'vaults',
@@ -54,29 +55,61 @@ export class VaultDbService {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
+        const ensureIndex = (
+          store: IDBObjectStore,
+          name: string,
+          keyPath: string | string[],
+          unique = false,
+        ) => {
+          if (!store.indexNames.contains(name)) {
+            store.createIndex(name, keyPath, { unique });
+          }
+        };
         if (!db.objectStoreNames.contains(STORES.vaults)) {
           db.createObjectStore(STORES.vaults, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(STORES.nodes)) {
           const store = db.createObjectStore(STORES.nodes, { keyPath: 'id' });
-          store.createIndex('byVaultId', 'vaultId', { unique: false });
-          store.createIndex('byVaultPath', ['vaultId', 'path'], { unique: true });
+          ensureIndex(store, 'byVaultId', 'vaultId');
+          ensureIndex(store, 'byVaultPath', ['vaultId', 'path'], true);
+        } else {
+          const store = request.transaction?.objectStore(STORES.nodes);
+          if (store) {
+            ensureIndex(store, 'byVaultId', 'vaultId');
+            ensureIndex(store, 'byVaultPath', ['vaultId', 'path'], true);
+          }
         }
         if (!db.objectStoreNames.contains(STORES.markdown)) {
           const store = db.createObjectStore(STORES.markdown, { keyPath: 'nodeId' });
-          store.createIndex('byVaultId', 'vaultId', { unique: false });
+          ensureIndex(store, 'byVaultId', 'vaultId');
+        } else {
+          const store = request.transaction?.objectStore(STORES.markdown);
+          if (store) ensureIndex(store, 'byVaultId', 'vaultId');
         }
         if (!db.objectStoreNames.contains(STORES.assets)) {
           const store = db.createObjectStore(STORES.assets, { keyPath: 'id' });
-          store.createIndex('byVaultId', 'vaultId', { unique: false });
-          store.createIndex('byVaultPath', ['vaultId', 'path'], { unique: true });
+          ensureIndex(store, 'byVaultId', 'vaultId');
+          ensureIndex(store, 'byVaultPath', ['vaultId', 'path'], true);
+        } else {
+          const store = request.transaction?.objectStore(STORES.assets);
+          if (store) {
+            ensureIndex(store, 'byVaultId', 'vaultId');
+            ensureIndex(store, 'byVaultPath', ['vaultId', 'path'], true);
+          }
         }
         if (!db.objectStoreNames.contains(STORES.blobs)) {
           db.createObjectStore(STORES.blobs, { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains(STORES.links)) {
           const store = db.createObjectStore(STORES.links, { keyPath: 'id' });
-          store.createIndex('byVaultId', 'vaultId', { unique: false });
+          ensureIndex(store, 'byVaultId', 'vaultId');
+          ensureIndex(store, 'byFromNodeId', 'fromNodeId');
+        } else {
+          const store = request.transaction?.objectStore(STORES.links);
+          if (store) {
+            ensureIndex(store, 'byVaultId', 'vaultId');
+            ensureIndex(store, 'byFromNodeId', 'fromNodeId');
+          }
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -255,6 +288,84 @@ export class VaultDbService {
     const store = tx.objectStore(STORES.links);
     for (const link of links) store.put(link);
     await txDone(tx);
+  }
+
+  async saveMarkdownFile(nodeId: string, content: string) {
+    const [node, current] = await Promise.all([this.getNode(nodeId), this.getMarkdownFile(nodeId)]);
+    if (!node || node.type !== 'file') throw new Error('Vault file not found');
+    const vaultId = node.vaultId;
+    const parsed = parseObsidianMarkdown(content);
+    const nextRecord: MarkdownFileRecord = {
+      nodeId,
+      vaultId,
+      content,
+      frontmatterRaw: parsed.frontmatterRaw,
+      frontmatter: parsed.frontmatter,
+      headingsIndex: parsed.headingsIndex,
+      updatedAt: Date.now(),
+      hash: parsed.hash,
+    };
+
+    const [allMarkdownFiles, allNodes] = await Promise.all([
+      this.listMarkdownFiles(vaultId),
+      this.listNodes(vaultId),
+    ]);
+    const pathLookup = new Map<string, string>();
+    const basenameLookup = new Map<string, string[]>();
+    const nodeById = new Map(allNodes.map((n) => [n.id, n] as const));
+    for (const file of allMarkdownFiles) {
+      const fileNode = nodeById.get(file.nodeId);
+      if (!fileNode) continue;
+      const lowerPath = fileNode.path.toLowerCase();
+      const lowerNoExt = lowerPath.replace(/\.md$/i, '');
+      pathLookup.set(lowerPath, file.nodeId);
+      pathLookup.set(lowerNoExt, file.nodeId);
+      const canonicalPath = fileNode.path;
+      const basename = lowerNoExt.split('/').pop() ?? lowerNoExt;
+      basenameLookup.set(basename, [...(basenameLookup.get(basename) ?? []), canonicalPath]);
+      basenameLookup.set(`${basename}.md`, [
+        ...(basenameLookup.get(`${basename}.md`) ?? []),
+        canonicalPath,
+      ]);
+    }
+    const currentPathLower = node.path.toLowerCase();
+    pathLookup.set(currentPathLower, nodeId);
+    pathLookup.set(currentPathLower.replace(/\.md$/i, ''), nodeId);
+
+    const nextLinks: LinkIndexRecord[] = parsed.links.map((link) => {
+      const resolved = resolveObsidianLinkTarget(
+        link.targetPathRaw,
+        node.path,
+        pathLookup,
+        basenameLookup,
+      );
+      return {
+        id: uid('vlink'),
+        vaultId,
+        fromNodeId: nodeId,
+        rawTarget: link.rawTarget,
+        targetPath: resolved.targetPath,
+        targetHeading: link.targetHeading,
+        alias: link.alias,
+        type: link.type,
+        ambiguous: resolved.ambiguous,
+      };
+    });
+
+    const db = await this.openDb();
+    const tx = db.transaction([STORES.markdown, STORES.links], 'readwrite');
+    tx.objectStore(STORES.markdown).put(nextRecord);
+    const linkStore = tx.objectStore(STORES.links);
+    const byFromNode = linkStore.index('byFromNodeId');
+    const existingLinkKeys = (await reqToPromise(byFromNode.getAllKeys(nodeId))) as IDBValidKey[];
+    for (const key of existingLinkKeys) {
+      linkStore.delete(key);
+    }
+    for (const link of nextLinks) {
+      linkStore.put(link);
+    }
+    await txDone(tx);
+    return { record: nextRecord, previous: current };
   }
 
   async putAssets(items: { asset: AssetRecord; blob: Blob }[]) {
