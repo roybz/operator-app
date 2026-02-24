@@ -83,12 +83,25 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                       <td style="padding:6px 0;">
                         <input
                           [value]="project.title"
-                          (input)="renameProject(project.id, $any($event.target).value)"
+                          (blur)="renameProject(project.id, $any($event.target).value)"
+                          (keydown.enter)="renameProject(project.id, $any($event.target).value)"
                           style="width:100%; padding:6px;"
                         />
                       </td>
                       <td style="padding:6px 0;">
                         <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                          <button
+                            (click)="moveProject(project.id, -1)"
+                            [disabled]="$index === 0"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            (click)="moveProject(project.id, 1)"
+                            [disabled]="$index === state().projects.length - 1"
+                          >
+                            ↓
+                          </button>
                           <button (click)="promptWipeProject(project.id)">
                             {{ 'todo.wipeProject' | translate }}
                           </button>
@@ -208,7 +221,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                     } @else {
                       <button
                         type="button"
-                        style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:text; background:transparent; border:none; padding:0; text-align:left;"
+                        style="font-weight:600; white-space:normal; overflow-wrap:anywhere; word-break:break-word; cursor:text; background:transparent; border:none; padding:0; text-align:left;"
                         [style.textDecoration]="t.completed ? 'line-through' : 'none'"
                         [style.opacity]="t.completed ? 0.6 : 1"
                         (click)="startEdit(t)"
@@ -730,6 +743,18 @@ export class TodoPageComponent implements OnInit {
     const nextProjects = nextState.projects.map((p) =>
       p.id === projectId ? { ...p, title: trimmed } : p,
     );
+    this.updateState({ ...nextState, projects: nextProjects });
+  }
+
+  moveProject(projectId: string, direction: -1 | 1) {
+    const nextState = this.state();
+    const currentIndex = nextState.projects.findIndex((p) => p.id === projectId);
+    if (currentIndex === -1) return;
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= nextState.projects.length) return;
+    const nextProjects = [...nextState.projects];
+    const [moved] = nextProjects.splice(currentIndex, 1);
+    nextProjects.splice(nextIndex, 0, moved);
     this.updateState({ ...nextState, projects: nextProjects });
   }
 

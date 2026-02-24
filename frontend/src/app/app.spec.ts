@@ -114,11 +114,11 @@ describe('App', () => {
     vi.spyOn(app.auth, 'isLoggedIn').mockReturnValue(true);
     vi.spyOn(app.auth, 'usesExternalAuth').mockReturnValue(true);
 
-    app.suppressRemoteChangeSignature = 'a|b';
+    app.suppressRemoteChangeSignature = 'op_prefs|op_session';
     app.suppressRemoteChangeUntil = Date.now() + 5_000;
     app.lastStorageRemoteChangeSeq = 0;
 
-    storage.lastRemoteChange.set({ seq: 1, keys: ['b', 'a'] });
+    storage.lastRemoteChange.set({ seq: 1, keys: ['op_session', 'op_prefs'] });
     fixture.detectChanges();
     await fixture.whenStable();
 

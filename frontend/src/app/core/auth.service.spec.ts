@@ -154,4 +154,16 @@ describe('AuthService external auth phone-mode behavior', () => {
     expect(syncedEntry.phoneMode).toBe(false);
     expect(auth.preferences().phoneMode).toBe(true);
   });
+
+  it('keeps login screen phone-mode checkbox in sync with external-auth in-app phone mode', () => {
+    const auth = TestBed.inject(AuthService);
+
+    auth.setLoginPhoneModePreference(false);
+    auth.applyLoginPhoneModePreference();
+
+    const current = auth.preferences();
+    auth.savePreferences({ ...current, phoneMode: true });
+
+    expect(auth.getLoginPhoneModePreference()).toBe(true);
+  });
 });

@@ -57,17 +57,61 @@ function defaultProject(todos: Todo[] = []): TodoProject {
   return { id: newId(), title: 'Project', todos };
 }
 
-function normalizeState(state: TodoState): TodoState {
-  const projects = state.projects?.length ? state.projects : [defaultProject()];
-  const activeProjectId = projects.some((p) => p.id === state.activeProjectId)
-    ? state.activeProjectId
-    : projects[0].id;
+function normalizeTodo(raw: unknown): Todo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const todo = raw as Partial<Todo>;
+  const id = typeof todo.id === 'string' && todo.id ? todo.id : newId();
+  const text = typeof todo.text === 'string' ? todo.text : '';
+  const createdAt = typeof todo.createdAt === 'string' && todo.createdAt ? todo.createdAt : new Date().toISOString();
+  const completed = Boolean(todo.completed);
+  const subtasks: TodoSubtask[] = [];
+  if (Array.isArray(todo.subtasks)) {
+    for (const sub of todo.subtasks) {
+      if (!sub || typeof sub !== 'object') continue;
+      const item = sub as Partial<TodoSubtask>;
+      subtasks.push({
+        id: typeof item.id === 'string' && item.id ? item.id : newId(),
+        text: typeof item.text === 'string' ? item.text : '',
+        completed: Boolean(item.completed),
+      });
+    }
+  }
+  return { id, text, createdAt, completed, subtasks };
+}
+
+function normalizeProject(raw: unknown): TodoProject | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const project = raw as Partial<TodoProject>;
+  const id = typeof project.id === 'string' && project.id ? project.id : newId();
+  const title = typeof project.title === 'string' && project.title.trim() ? project.title : 'Project';
+  const todos = Array.isArray(project.todos)
+    ? project.todos.map((todo) => normalizeTodo(todo)).filter((todo): todo is Todo => Boolean(todo))
+    : [];
+  return { id, title, todos };
+}
+
+function normalizeState(state: Partial<TodoState> | null | undefined): TodoState {
+  const projects =
+    Array.isArray(state?.projects) && state.projects.length
+      ? state.projects
+          .map((project) => normalizeProject(project))
+          .filter((project): project is TodoProject => Boolean(project))
+      : [];
+  const ensuredProjects = projects.length ? projects : [defaultProject()];
+  const activeProjectId =
+    typeof state?.activeProjectId === 'string' &&
+    ensuredProjects.some((p) => p.id === state.activeProjectId)
+      ? state.activeProjectId
+      : ensuredProjects[0].id;
   return {
     version: 2,
-    projectsEnabled: state.projectsEnabled ?? false,
-    projects,
+    projectsEnabled: Boolean(state?.projectsEnabled),
+    projects: ensuredProjects,
     activeProjectId,
-    subtaskCollapsed: state.subtaskCollapsed ?? {},
+    subtaskCollapsed:
+      state?.subtaskCollapsed && typeof state.subtaskCollapsed === 'object'
+        ? state.subtaskCollapsed
+        : {},
   };
 }
 
@@ -75,9 +119,9 @@ export function loadTodoState(storage: StorageLike, instanceId: string, userId: 
   const raw = storage.getItemSync(stateKey(instanceId, userId));
   if (raw) {
     try {
-      return normalizeState(JSON.parse(raw) as TodoState);
+      return normalizeState(JSON.parse(raw) as Partial<TodoState>);
     } catch {
-      // fall through to migration
+      // fall through to migration/fallback; do not overwrite storage on a bad read.
     }
   }
   const legacyTodos = readMockTodos(storage, instanceId, userId);
@@ -101,7 +145,6 @@ export function loadTodoState(storage: StorageLike, instanceId: string, userId: 
     activeProjectId: project.id,
     subtaskCollapsed: {},
   };
-  saveTodoState(storage, instanceId, userId, fallback);
   return fallback;
 }
 

@@ -577,6 +577,7 @@ export class AuthService {
   savePreferences(prefs: UserPreferences) {
     const effectiveId = this.effectiveUserId();
     if (!effectiveId) return;
+    this.setLoginPhoneModePreference(prefs.phoneMode);
     const universeId = this.getActiveUniverseId(effectiveId) ?? prefs.universeId;
     const key = this.universeKey(effectiveId, universeId || this.createUniverseId());
     if (this.usesExternalAuth()) {

@@ -1699,7 +1699,9 @@ export class AppComponent implements OnInit, OnDestroy {
       if (!event) return;
       if (event.seq <= this.lastStorageRemoteChangeSeq) return;
       this.lastStorageRemoteChangeSeq = event.seq;
-      const signature = this.changedKeysSignature(event.keys);
+      const shellKeys = event.keys.filter((key) => this.isShellRemoteRefreshKey(key));
+      if (shellKeys.length === 0) return;
+      const signature = this.changedKeysSignature(shellKeys);
       if (
         this.suppressRemoteChangeSignature &&
         this.suppressRemoteChangeSignature === signature &&
@@ -1710,14 +1712,14 @@ export class AppComponent implements OnInit, OnDestroy {
         return;
       }
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
-      const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(event.keys);
+      const dirtyOverlap = this.remoteConflict.hasDirtyOverlap(shellKeys);
       if (dirtyOverlap || recentLocalWrite) {
-        this.remoteConflict.queue(event.keys, dirtyOverlap ? 'dirty' : 'recent-local-write');
+        this.remoteConflict.queue(shellKeys, dirtyOverlap ? 'dirty' : 'recent-local-write');
         this.scheduleDeferredRemoteApply();
         this.remoteSyncApplyPending = false;
         return;
       }
-      void this.applyRemoteStorageChange(event.keys);
+      void this.applyRemoteStorageChange(shellKeys);
     });
 
     effect(() => {
@@ -1792,6 +1794,8 @@ export class AppComponent implements OnInit, OnDestroy {
     try {
       const changedKeys = await this.storage.hydrateAndGetChangedKeys();
       if (changedKeys.length === 0) return;
+      const shellKeys = changedKeys.filter((key) => this.isShellRemoteRefreshKey(key));
+      if (shellKeys.length === 0) return;
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       if (recentLocalWrite) return;
       this.remoteSyncApplyPending = true;
@@ -1905,6 +1909,23 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private changedKeysSignature(keys: string[]) {
     return [...keys].sort().join('|');
+  }
+
+  private isShellRemoteRefreshKey(key: string) {
+    return (
+      [
+        'op_users',
+        'op_session',
+        'op_prefs',
+        'op_preview_prefs',
+        'op_org_settings',
+        'op_universes',
+        'op_active_universe',
+        'op_invitees',
+      ].includes(key) ||
+      key.startsWith('op_dialog_state_v1:') ||
+      key.startsWith('op_preview_dialog_state_v1:')
+    );
   }
 
   updateCanvasBounds = () => {
