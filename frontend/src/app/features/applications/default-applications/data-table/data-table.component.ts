@@ -3,7 +3,9 @@ import {
   Component,
   ElementRef,
   Input,
+  OnDestroy,
   OnInit,
+  effect,
   ViewChild,
   computed,
   inject,
@@ -17,12 +19,17 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { ExportGuardService } from '../../../../core/export-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
 
 export type ColumnType = 'text' | 'number' | 'date' | 'emoji' | 'image' | 'url' | 'boolean';
@@ -456,7 +463,7 @@ const uid = (prefix: string) =>
     }
   `,
 })
-export class DataTableComponent implements OnInit, AfterViewInit {
+export class DataTableComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('scrollEl') scrollEl?: ElementRef<HTMLDivElement>;
   private host = inject(ElementRef);
   @Input({ required: true }) instanceId!: string;
@@ -467,6 +474,7 @@ export class DataTableComponent implements OnInit, AfterViewInit {
   private importGuard = inject(ImportGuardService);
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
 
   state = signal<DataTableState>(defaultState(this.translate));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
@@ -485,12 +493,30 @@ export class DataTableComponent implements OnInit, AfterViewInit {
   editingColumnNameDraft = signal('');
   editingCell = signal<{ rowId: string; columnId: string } | null>(null);
   editingCellDraft = signal('');
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      if (this.isLocallyEditing()) {
+        this.remoteConflict.queue([key], 'dirty');
+        return;
+      }
+      this.reloadFromStorage();
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as DataTableState;
@@ -509,7 +535,7 @@ export class DataTableComponent implements OnInit, AfterViewInit {
       this.state.set(next);
       stateStore.set(this.instanceId, next);
     }
-    this.persistState();
+    this.persistState({ immediate: true });
   }
 
   ngAfterViewInit() {
@@ -519,6 +545,10 @@ export class DataTableComponent implements OnInit, AfterViewInit {
       requestAnimationFrame(() => this.updateScrollShadows(el));
       setTimeout(() => this.updateScrollShadows(el), 0);
     }
+  }
+
+  ngOnDestroy() {
+    this.persistQueue.destroy();
   }
 
   closeSettings() {
@@ -884,6 +914,7 @@ export class DataTableComponent implements OnInit, AfterViewInit {
     const nextTables = [...this.state().tables, ...tables];
     const next = { ...this.state(), tables: nextTables };
     this.state.set(next);
+    stateStore.set(this.instanceId, next);
     this.persistState();
   }
 
@@ -910,8 +941,45 @@ export class DataTableComponent implements OnInit, AfterViewInit {
     };
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as DataTableState;
+      this.state.set(parsed);
+      stateStore.set(this.instanceId, parsed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private isLocallyEditing() {
+    return Boolean(this.editingCell() || this.editingColumnNameId());
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (!this.isLocallyEditing()) {
+        this.reloadFromStorage();
+      }
+      return 'handled' as const;
+    }
+    return undefined;
   }
 }

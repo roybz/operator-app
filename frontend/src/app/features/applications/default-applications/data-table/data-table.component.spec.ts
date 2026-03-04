@@ -12,6 +12,7 @@ import { UserPreferences } from '../../../../core/auth.service';
 import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
 import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { buildInstanceStorageKey } from '../../../dependencies/instance-state-storage';
 
 class MockPrefsService {
   preferences() {
@@ -40,6 +41,7 @@ interface TestDataTableRow {
 }
 
 interface TestDataTable {
+  id: string;
   columns: TestDataTableColumn[];
   rows: TestDataTableRow[];
 }
@@ -56,6 +58,8 @@ interface TestDataTableComponent {
   requestDeleteColumn(columnId: string): void;
   pendingDeleteColumnId(): string | null;
   confirmDeleteColumn(): void;
+  startCellEdit(rowId: string, columnId: string): void;
+  state(): { search: string };
 }
 
 describe('DataTableComponent', () => {
@@ -129,5 +133,40 @@ describe('DataTableComponent', () => {
     expect(component.pendingDeleteColumnId()).toBe(firstColumnId);
     component.confirmDeleteColumn();
     expect(component.activeTable().columns.some((col) => col.id === firstColumnId)).toBe(false);
+  });
+
+  it('defers remote apply while a cell is being edited', async () => {
+    const component = fixture.componentInstance as unknown as TestDataTableComponent;
+    const storage = TestBed.inject(StorageService);
+
+    component.addRow();
+    const table = component.activeTable();
+    const rowId = table.rows[0].id;
+    const columnId = table.columns[0].id;
+    component.startCellEdit(rowId, columnId);
+
+    const key = buildInstanceStorageKey('op_app_state:data_table', 'u_test', 'table-test');
+    await storage.setItem(
+      key,
+      JSON.stringify({
+        tables: table.id
+          ? [
+              {
+                ...table,
+                rows: [],
+              },
+            ]
+          : [],
+        activeTableId: table.id,
+        search: 'remote',
+        sortColumnId: null,
+        sortDirection: 'asc',
+      }),
+    );
+
+    storage.emitRemoteChange([key]);
+    await Promise.resolve();
+
+    expect(component.state().search).toBe('');
   });
 });

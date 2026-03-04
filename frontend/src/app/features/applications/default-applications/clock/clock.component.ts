@@ -15,10 +15,15 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 interface ClockEntry {
   id: string;
@@ -161,6 +166,7 @@ export class ClockComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   private interval?: number;
   private now = signal(new Date());
   state = signal<ClockState>({
@@ -169,6 +175,13 @@ export class ClockComponent implements OnInit, OnDestroy {
   });
   timeZoneOptions = signal<{ id: string; label: string }[]>([]);
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -176,13 +189,17 @@ export class ClockComponent implements OnInit, OnDestroy {
       const language = this.prefs.language() || fallback || 'en';
       this.translate.use(language);
     });
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
   }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as unknown;
@@ -212,7 +229,7 @@ export class ClockComponent implements OnInit, OnDestroy {
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.initializeOptions(tz);
-      this.persistState();
+      this.persistState({ immediate: true });
     }
 
     this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
@@ -220,6 +237,7 @@ export class ClockComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.interval) window.clearInterval(this.interval);
+    this.persistQueue.destroy();
   }
 
   closeSettings() {
@@ -339,9 +357,42 @@ export class ClockComponent implements OnInit, OnDestroy {
     return [preferred, ...filtered];
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const normalized = this.normalizeState(parsed);
+      this.state.set(normalized);
+      stateStore.set(this.instanceId, normalized);
+      this.initializeOptions(normalized.clocks[0]?.timeZone || this.prefs.timeZone());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   private normalizeState(raw: unknown): ClockState {

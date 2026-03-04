@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -6,9 +6,14 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 type TimerMode = 'stopwatch' | 'countdown' | 'pomodoro';
 type PomodoroPhase = 'work' | 'break' | 'longBreak';
@@ -195,14 +200,29 @@ export class TimerComponent implements OnInit, OnDestroy {
 
   private prefs = inject(AppPreferencesService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   state = signal<TimerState>(defaultState());
   private tickId?: number;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as TimerState;
@@ -219,11 +239,12 @@ export class TimerComponent implements OnInit, OnDestroy {
     } else {
       stateStore.set(this.instanceId, this.state());
     }
-    this.persistState();
+    this.persistState({ immediate: true });
   }
 
   ngOnDestroy() {
     if (this.tickId) window.clearInterval(this.tickId);
+    this.persistQueue.destroy();
   }
 
   private commit(next: TimerState) {
@@ -232,9 +253,40 @@ export class TimerComponent implements OnInit, OnDestroy {
     this.persistState();
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as TimerState;
+      this.state.set(parsed);
+      stateStore.set(this.instanceId, parsed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      try {
+        await this.storage.getItem(key);
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   setMode(mode: TimerMode) {
