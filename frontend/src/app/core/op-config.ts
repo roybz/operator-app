@@ -8,6 +8,16 @@ export interface OpCognitoConfig {
   sessionPersistence?: 'localStorage' | 'sessionStorage';
 }
 
+export interface OpCapabilityConfig {
+  auth?: boolean;
+  realtime?: boolean;
+  cloudVault?: boolean;
+  billingGuard?: boolean;
+  shareLinks?: boolean;
+  publicSignupPrepared?: boolean;
+  publicSignupEnabled?: boolean;
+}
+
 export interface OpRuntimeConfig {
   apiBaseUrl?: string;
   storageMode?: 'local' | 'remote';
@@ -21,11 +31,46 @@ export interface OpRuntimeConfig {
   cloudVaultAttachmentUploadMaxTotalBytes?: number;
   cloudVaultAttachmentUploadMaxAssetBytes?: number;
   authProvider?: 'local' | 'cognito';
+  publicSignupPrepared?: boolean;
+  publicSignupEnabled?: boolean;
+  capabilities?: OpCapabilityConfig;
   cognito?: OpCognitoConfig;
+}
+
+export interface OpRuntimeCapabilities {
+  auth: boolean;
+  realtime: boolean;
+  cloudVault: boolean;
+  billingGuard: boolean;
+  shareLinks: boolean;
+  publicSignupPrepared: boolean;
+  publicSignupEnabled: boolean;
 }
 
 export function getOpConfig(): OpRuntimeConfig {
   if (typeof window === 'undefined') return {};
   const config = (window as Window & { __OP_CONFIG__?: OpRuntimeConfig }).__OP_CONFIG__;
   return config ?? {};
+}
+
+export function getOpCapabilities(config = getOpConfig()): OpRuntimeCapabilities {
+  const capabilities = config.capabilities ?? {};
+  const authProvider = config.authProvider ?? 'local';
+  const authDefault = authProvider === 'local' || Boolean(config.cognito?.enabled !== false);
+  const publicSignupPrepared = Boolean(
+    capabilities.publicSignupPrepared ?? config.publicSignupPrepared,
+  );
+  const publicSignupEnabled = Boolean(
+    capabilities.publicSignupEnabled ?? config.publicSignupEnabled,
+  );
+
+  return {
+    auth: Boolean(capabilities.auth ?? authDefault),
+    realtime: Boolean(capabilities.realtime ?? config.realtimeEnabled),
+    cloudVault: Boolean(capabilities.cloudVault ?? true),
+    billingGuard: Boolean(capabilities.billingGuard ?? true),
+    shareLinks: Boolean(capabilities.shareLinks ?? true),
+    publicSignupPrepared,
+    publicSignupEnabled: publicSignupPrepared && publicSignupEnabled,
+  };
 }

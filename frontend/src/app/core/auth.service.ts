@@ -6,6 +6,7 @@ import packageJson from '../../../package.json';
 import { StorageService } from './storage/storage.service';
 import { CognitoOidcService } from './auth/cognito-oidc.service';
 import { writeWithConflictRetry } from './storage/remote-write-utils';
+import { getOpCapabilities } from './op-config';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -445,7 +446,8 @@ export class AuthService {
   }
 
   usesExternalAuth(): boolean {
-    return this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();
+    const capabilities = getOpCapabilities();
+    return capabilities.auth && this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();
   }
 
   canUsePasswordLogin(): boolean {
@@ -454,6 +456,22 @@ export class AuthService {
 
   async startExternalLogin() {
     await this.cognitoOidc.startLogin();
+  }
+
+  async startExternalSignup(): Promise<{ ok: boolean; message?: string }> {
+    if (!this.isPublicSignupEnabled()) {
+      return { ok: false, message: 'auth.error.generic' };
+    }
+    await this.cognitoOidc.startSignup();
+    return { ok: true };
+  }
+
+  isPublicSignupPrepared(): boolean {
+    return getOpCapabilities().publicSignupPrepared;
+  }
+
+  isPublicSignupEnabled(): boolean {
+    return getOpCapabilities().publicSignupEnabled;
   }
 
   startExternalLogout() {
@@ -1234,7 +1252,11 @@ export class AuthService {
       'user';
     if (actualRole !== 'admin') {
       this.sessionSignal.set(
-        this.normalizeSessionState({ userId: validUserId, previewUserId: null, previewPersist: false }),
+        this.normalizeSessionState({
+          userId: validUserId,
+          previewUserId: null,
+          previewPersist: false,
+        }),
       );
     }
 
@@ -1555,10 +1577,18 @@ export class AuthService {
 
   private safeJson<T>(key: string, fallback: T): T {
     if (key === SESSION_KEY) {
-      return this.storage.getJsonSyncValidated(key, fallback, isSessionStateContract as (value: unknown) => value is T);
+      return this.storage.getJsonSyncValidated(
+        key,
+        fallback,
+        isSessionStateContract as (value: unknown) => value is T,
+      );
     }
     if (key === ORG_SETTINGS_KEY) {
-      return this.storage.getJsonSyncValidated(key, fallback, isOrgSettingsContract as (value: unknown) => value is T);
+      return this.storage.getJsonSyncValidated(
+        key,
+        fallback,
+        isOrgSettingsContract as (value: unknown) => value is T,
+      );
     }
     return this.storage.getJsonSync(key, fallback);
   }
@@ -2149,7 +2179,8 @@ export class AuthService {
   }
 
   private normalizeSessionState(
-    value: Partial<SessionState> & Pick<SessionState, 'userId' | 'previewUserId' | 'previewPersist'>,
+    value: Partial<SessionState> &
+      Pick<SessionState, 'userId' | 'previewUserId' | 'previewPersist'>,
   ): SessionState {
     return {
       userId: value.userId ?? null,

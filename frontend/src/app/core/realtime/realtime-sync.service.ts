@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { CognitoOidcService } from '../auth/cognito-oidc.service';
-import { getOpConfig } from '../op-config';
+import { getOpCapabilities, getOpConfig } from '../op-config';
 import { UniverseEventHubService } from '../events/universe-event-hub.service';
 import { ClientObservabilityService } from '../observability/client-observability.service';
 
@@ -28,7 +28,8 @@ export class RealtimeSyncService {
 
   isConfigured() {
     const config = getOpConfig();
-    return Boolean(config.realtimeEnabled && config.realtimeWsUrl);
+    const capabilities = getOpCapabilities(config);
+    return Boolean(capabilities.realtime && config.realtimeEnabled && config.realtimeWsUrl);
   }
 
   async start() {

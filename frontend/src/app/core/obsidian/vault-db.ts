@@ -11,7 +11,7 @@ import {
 import { parseObsidianMarkdown, resolveObsidianLinkTarget } from './obsidian-parse';
 import { StorageService } from '../storage/storage.service';
 import { AuthService } from '../auth.service';
-import { getOpConfig } from '../op-config';
+import { getOpCapabilities, getOpConfig } from '../op-config';
 
 const DB_NAME = 'operator-obsidian-vaults';
 const DB_VERSION = 3;
@@ -185,7 +185,9 @@ export class VaultDbService {
 
   canUseCloudVaultSyncBeta() {
     const config = getOpConfig();
+    const capabilities = getOpCapabilities(config);
     if (config.storageMode !== 'remote') return false;
+    if (!capabilities.cloudVault) return false;
     if (this.auth.guestModeOnly()) return false;
     if (!this.auth.usesExternalAuth()) return false;
     if (!this.auth.isLoggedIn()) return false;

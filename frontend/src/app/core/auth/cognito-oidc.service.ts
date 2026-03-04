@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { getOpConfig, type OpCognitoConfig } from '../op-config';
+import { getOpCapabilities, getOpConfig, type OpCognitoConfig } from '../op-config';
 
 interface StoredCognitoSession {
   accessToken: string;
@@ -34,7 +34,12 @@ export class CognitoOidcService {
   readonly authenticated = signal(Boolean(this.sessionSignal()));
 
   isEnabled() {
-    return this.authProvider() === 'cognito' && Boolean(this.config().enabled !== false);
+    const capabilities = getOpCapabilities();
+    return (
+      capabilities.auth &&
+      this.authProvider() === 'cognito' &&
+      Boolean(this.config().enabled !== false)
+    );
   }
 
   authProvider() {
@@ -104,6 +109,14 @@ export class CognitoOidcService {
   }
 
   async startLogin() {
+    await this.startAuthorizeFlow();
+  }
+
+  async startSignup() {
+    await this.startAuthorizeFlow({ screenHint: 'signup' });
+  }
+
+  private async startAuthorizeFlow(options?: { screenHint?: 'signup' }) {
     if (!this.isEnabled() || !this.isConfigured() || typeof window === 'undefined') return;
     this.clearLogoutMarker();
     const state = this.randomString(32);
@@ -121,6 +134,9 @@ export class CognitoOidcService {
     authorize.searchParams.set('code_challenge_method', 'S256');
     authorize.searchParams.set('code_challenge', challenge);
     authorize.searchParams.set('prompt', 'login');
+    if (options?.screenHint === 'signup') {
+      authorize.searchParams.set('screen_hint', 'signup');
+    }
     window.location.assign(authorize.toString());
   }
 
@@ -299,7 +315,11 @@ export class CognitoOidcService {
       const now = Date.now();
       const idTokenExp = this.jwtExpiryTimestamp(parsed.idToken);
       const accessTokenExp = this.jwtExpiryTimestamp(parsed.accessToken);
-      const maxExpiry = Math.min(parsed.expiresAt, idTokenExp ?? parsed.expiresAt, accessTokenExp ?? parsed.expiresAt);
+      const maxExpiry = Math.min(
+        parsed.expiresAt,
+        idTokenExp ?? parsed.expiresAt,
+        accessTokenExp ?? parsed.expiresAt,
+      );
       if (now >= maxExpiry && !parsed.refreshToken) return null;
       return parsed;
     } catch {

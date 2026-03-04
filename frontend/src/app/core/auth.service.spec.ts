@@ -141,6 +141,9 @@ class MockExternalCognitoOidcService {
   async startLogin() {
     // test double
   }
+  async startSignup() {
+    // test double
+  }
 }
 
 describe('AuthService external auth phone-mode behavior', () => {
@@ -161,6 +164,11 @@ describe('AuthService external auth phone-mode behavior', () => {
     await TestBed.inject(StorageService).hydrate();
     const auth = TestBed.inject(AuthService);
     await auth.hydrate();
+  });
+
+  afterEach(() => {
+    const w = window as Window & { __OP_CONFIG__?: unknown };
+    delete w.__OP_CONFIG__;
   });
 
   it('applies login phone mode to device-local prefs for external auth without sync apply flag', async () => {
@@ -291,5 +299,43 @@ describe('AuthService external auth phone-mode behavior', () => {
     storage.setItem = originalSetItem;
     storage.getItem = originalGetItem;
     storage.getItemSync = originalGetItemSync;
+  });
+
+  it('keeps public signup disabled when prepared=true but enabled=false', async () => {
+    const w = window as Window & {
+      __OP_CONFIG__?: { publicSignupPrepared?: boolean; publicSignupEnabled?: boolean };
+    };
+    w.__OP_CONFIG__ = { publicSignupPrepared: true, publicSignupEnabled: false };
+    const auth = TestBed.inject(AuthService);
+
+    expect(auth.isPublicSignupPrepared()).toBe(true);
+    expect(auth.isPublicSignupEnabled()).toBe(false);
+    const result = await auth.startExternalSignup();
+    expect(result.ok).toBe(false);
+  });
+
+  it('starts external signup only when capability is prepared and enabled', async () => {
+    const w = window as Window & {
+      __OP_CONFIG__?: {
+        authProvider?: 'cognito';
+        publicSignupPrepared?: boolean;
+        publicSignupEnabled?: boolean;
+      };
+    };
+    w.__OP_CONFIG__ = {
+      authProvider: 'cognito',
+      publicSignupPrepared: true,
+      publicSignupEnabled: true,
+    };
+    const auth = TestBed.inject(AuthService);
+    const cognito = TestBed.inject(CognitoOidcService) as unknown as {
+      startSignup: () => Promise<void>;
+    };
+    const signupSpy = vi.spyOn(cognito, 'startSignup').mockResolvedValue();
+
+    const result = await auth.startExternalSignup();
+
+    expect(result.ok).toBe(true);
+    expect(signupSpy).toHaveBeenCalledTimes(1);
   });
 });

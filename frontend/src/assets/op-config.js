@@ -11,6 +11,17 @@ window.__OP_CONFIG__ = {
   cloudVaultAttachmentUploadMaxTotalBytes: 1572864, // 1.5 MB beta cap
   cloudVaultAttachmentUploadMaxAssetBytes: 393216, // 384 KB per attachment beta cap
   authProvider: 'cognito', // 'local' | 'cognito'
+  publicSignupPrepared: true, // signup flow plumbing can exist
+  publicSignupEnabled: false, // keep disabled until pricing/onboarding is ready
+  capabilities: {
+    auth: true,
+    realtime: true,
+    cloudVault: true,
+    billingGuard: true,
+    shareLinks: true,
+    publicSignupPrepared: true,
+    publicSignupEnabled: false,
+  },
   cognito: {
     enabled: true,
     domain: 'https://operator-app-roy-2026.auth.us-east-1.amazoncognito.com',
