@@ -1,3 +1,19 @@
+## Cognitive Principles
+
+Operator follows eight cognitive primitives:
+
+- Salience
+- Visual Permanence
+- Retrieval Latency
+- Context Bandwidth
+- Structural Coherence
+- Feedback Loops
+- Cognitive Momentum
+- Collective Intelligence
+
+All contributions should reinforce at least one of these primitives.
+Features that increase informational entropy should be avoided.
+
 # Operator App - AI Contributor Notes
 
 This repository contains a standalone Angular frontend in `frontend/`.
