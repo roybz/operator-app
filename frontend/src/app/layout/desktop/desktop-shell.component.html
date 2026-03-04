@@ -1,0 +1,189 @@
+<aside
+  class="desktop-shell"
+  [style.width]="navOpen ? '267px' : '0'"
+  [style.padding]="navOpen ? '16px' : '0'"
+  [style.overflowY]="navOpen ? 'auto' : 'hidden'"
+>
+  @if (navOpen) {
+    <div class="desktop-shell__content">
+      <button type="button" class="desktop-shell__btn" (click)="toggleNav.emit()">
+        {{ navOpen ? ('nav.collapse' | translate) : ('nav.expand' | translate) }}
+      </button>
+      <button
+        type="button"
+        class="desktop-shell__btn"
+        (click)="toggleDialogsHidden.emit()"
+        [disabled]="settingsOpen || !canEdit"
+        [class.desktop-shell__btn--dimmed]="settingsOpen || !canEdit"
+      >
+        {{ dialogsHidden ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate) }}
+      </button>
+
+      <div class="desktop-shell__reset">
+        <button
+          type="button"
+          class="desktop-shell__btn desktop-shell__btn--full"
+          (click)="toggleResetMenu.emit()"
+          [disabled]="settingsOpen || !canEdit"
+          [class.desktop-shell__btn--dimmed]="settingsOpen || !canEdit"
+        >
+          {{ 'dialogs.reset' | translate }}
+        </button>
+        @if (resetMenuOpen) {
+          <div class="desktop-shell__reset-actions">
+            <button
+              type="button"
+              class="desktop-shell__btn"
+              (click)="resetLeft.emit()"
+              [disabled]="settingsOpen || !canEdit"
+              [class.desktop-shell__btn--dimmed]="settingsOpen || !canEdit"
+            >
+              {{ 'dialogs.resetLeft' | translate }}
+            </button>
+            <button
+              type="button"
+              class="desktop-shell__btn"
+              (click)="resetMiddle.emit()"
+              [disabled]="settingsOpen || !canEdit"
+              [class.desktop-shell__btn--dimmed]="settingsOpen || !canEdit"
+            >
+              {{ 'dialogs.resetMiddle' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+
+      <div class="desktop-shell__divider"></div>
+
+      <div class="desktop-shell__apps">
+        <app-app-list
+          [apps]="apps"
+          [instancesByApp]="instancesByApp"
+          [deleteTargetActive]="deleteTargetActive"
+          [actionsDisabled]="settingsOpen || !canEdit"
+          [phoneMode]="false"
+          (openApp)="openApp.emit($event)"
+          (restore)="restore.emit($event)"
+          (duplicate)="duplicate.emit($event)"
+          (toggleLock)="toggleLock.emit($event)"
+          (archive)="archive.emit($event)"
+          (unarchive)="unarchive.emit($event)"
+        />
+      </div>
+
+      <div class="desktop-shell__footer">
+        <div class="desktop-shell__display-header">
+          <span class="desktop-shell__display-label">{{ 'canvas.display' | translate }}</span>
+          <button
+            type="button"
+            class="desktop-shell__gear"
+            (click)="toggleDisplayOptions()"
+            (mouseenter)="displayOptionsHovered = true"
+            (mouseleave)="displayOptionsHovered = false"
+            [style.background]="displayOptionsOpen ? 'var(--color-bg)' : 'transparent'"
+            [style.opacity]="displayOptionsHovered || displayOptionsOpen ? 1 : 0.6"
+            title="Display settings"
+            aria-label="Display settings"
+          >
+            ?
+          </button>
+        </div>
+
+        @if (displayOptionsOpen) {
+          <app-device-mode-toggle [checked]="phoneMode" (changed)="phoneModeToggle.emit($event)" />
+
+          @if (!phoneMode && showViewportSizingControls) {
+            <label class="desktop-shell__mode-label">
+              <span class="desktop-shell__display-label">{{ 'canvas.mode' | translate }}</span>
+              <select [value]="canvasMode" (change)="canvasModeChange.emit($event)">
+                <option value="follow">{{ 'canvas.modeFollow' | translate }}</option>
+                <option value="locked">{{ 'canvas.modeLocked' | translate }}</option>
+              </select>
+            </label>
+
+            @if (isCanvasLocked) {
+              <div class="desktop-shell__canvas-size-row">
+                <input
+                  type="number"
+                  [value]="canvasDraftWidth"
+                  (input)="canvasDraftWidthChange.emit($any($event.target).valueAsNumber)"
+                  min="1024"
+                  max="20000"
+                  class="desktop-shell__size-input"
+                />
+                <span>�</span>
+                <input
+                  type="number"
+                  [value]="canvasDraftHeight"
+                  (input)="canvasDraftHeightChange.emit($any($event.target).valueAsNumber)"
+                  min="768"
+                  max="20000"
+                  class="desktop-shell__size-input"
+                />
+                <button
+                  type="button"
+                  (click)="applyCanvasSize.emit()"
+                  [disabled]="!canvasDraftDirty"
+                >
+                  {{ 'canvas.updateSize' | translate }}
+                </button>
+              </div>
+            }
+          }
+
+          @if (!phoneMode && showZoomControls) {
+            <div
+              class="desktop-shell__zoom-controls"
+              [class.desktop-shell__zoom-controls--divider]="showCanvasDivider"
+            >
+              <button
+                type="button"
+                class="desktop-shell__btn"
+                (click)="resetZoom.emit()"
+                [disabled]="settingsOpen"
+                [class.desktop-shell__btn--dimmed]="settingsOpen"
+              >
+                {{ 'canvas.originalScale' | translate }}
+              </button>
+              <button
+                type="button"
+                class="desktop-shell__btn"
+                (click)="zoomOut.emit()"
+                [disabled]="settingsOpen"
+                [class.desktop-shell__btn--dimmed]="settingsOpen"
+              >
+                {{ 'canvas.zoomOut' | translate }}
+              </button>
+              <button
+                type="button"
+                class="desktop-shell__btn"
+                (click)="zoomIn.emit()"
+                [disabled]="settingsOpen"
+                [class.desktop-shell__btn--dimmed]="settingsOpen"
+              >
+                {{ 'canvas.zoomIn' | translate }}
+              </button>
+            </div>
+          }
+        }
+
+        <button
+          type="button"
+          class="desktop-shell__btn"
+          (click)="toggleSettings.emit()"
+          [disabled]="!canOpenSettings"
+          [class.desktop-shell__btn--dimmed]="!canOpenSettings"
+          [style.cursor]="!canOpenSettings ? 'not-allowed' : 'pointer'"
+        >
+          {{ 'nav.settings' | translate }}
+        </button>
+        <button type="button" class="desktop-shell__btn" (click)="openLicense.emit()">
+          {{ 'nav.license' | translate }}
+        </button>
+        <button type="button" class="desktop-shell__btn" (click)="logout.emit()">
+          {{ 'nav.logout' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+</aside>
