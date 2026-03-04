@@ -11,6 +11,7 @@ import { STORAGE_ADAPTER } from './core/storage/storage-adapter';
 import { LocalStorageAdapter } from './core/storage/local-storage.adapter';
 import { StorageService } from './core/storage/storage.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
+import { AuthService } from './core/auth.service';
 import { vi } from 'vitest';
 
 type OpWindow = Window & {
@@ -143,9 +144,12 @@ describe('App', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance as unknown as {
       remoteConflictBannerVisible: { set: (v: boolean) => void };
-      remoteConflictPending: { set: (v: { keys: string[]; reason: string } | null) => void };
+      remoteConflict: RemoteConflictService;
+      auth: AuthService;
     };
-    app.remoteConflictPending.set({ keys: ['op_session'], reason: 'dirty' });
+    vi.spyOn(app.auth, 'isLoggedIn').mockReturnValue(true);
+    fixture.detectChanges();
+    app.remoteConflict.queue(['op_session'], 'dirty');
     app.remoteConflictBannerVisible.set(true);
     fixture.detectChanges();
 

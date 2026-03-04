@@ -26,15 +26,12 @@ export interface AppGroup {
   imports: [CommonModule, TranslateModule],
   template: `
     <div class="app-list" (pointerdown)="closeActions()">
-      <div
-        class="app-list__scroll"
-      >
+      <div class="app-list__scroll">
         @for (app of apps; track app.id) {
           <div class="app-row" [attr.data-app-id]="app.id">
             <button
               class="app-list__toggle"
               [class.app-list__control--phone]="phoneMode"
-              [class.app-list__control--compact]="phoneMode"
               (click)="toggleCollapsed(app.id); $event.stopPropagation()"
               [disabled]="actionsDisabled"
               [title]="
@@ -79,9 +76,7 @@ export interface AppGroup {
                         [disabled]="actionsDisabled"
                         title="{{ 'dialogs.unarchive' | translate }}"
                       >
-                        <span class="app-list__action-icon app-list__action-icon--unarchive"
-                          >⤴︎</span
-                        >
+                        <span class="app-list__action-icon">⤴︎</span>
                       </button>
                     }
                   } @else {
@@ -106,9 +101,7 @@ export interface AppGroup {
                           (click)="onDuplicate(instance.id)"
                           [disabled]="actionsDisabled"
                         >
-                          <span class="app-list__action-icon app-list__action-icon--duplicate"
-                            >⧉</span
-                          >
+                          <span class="app-list__action-icon">⧉</span>
                           <span>{{ 'dialogs.duplicate' | translate }}</span>
                         </button>
                         <button
@@ -116,7 +109,7 @@ export interface AppGroup {
                           (click)="onToggleLock(instance.id)"
                           [disabled]="deleteTargetActive || actionsDisabled"
                         >
-                          <span class="app-list__action-icon app-list__action-icon--lock">
+                          <span class="app-list__action-icon">
                             {{ instance.deleteLocked ? '🔒' : '🔓' }}
                           </span>
                           <span>
@@ -262,12 +255,6 @@ export interface AppGroup {
         font-size: 20px;
       }
 
-      .app-list__control--compact {
-        width: 22px;
-        height: 22px;
-        font-size: 14px;
-      }
-
       .app-list__icon--add:hover {
         border: 1px solid var(--color-border);
         border-radius: 6px;
@@ -382,10 +369,6 @@ export interface AppGroup {
         font-size: 15px;
       }
 
-      :host-context(.phone-mode) .app-instance__action span {
-        font-size: 15px;
-      }
-
       .app-instance__action,
       .app-instance__unarchive {
         display: flex;
@@ -424,15 +407,6 @@ export interface AppGroup {
         font-style: italic;
         opacity: 0.7;
         margin-top: 4px;
-      }
-
-      .app-list__toggle:focus-visible,
-      .app-list__icon--add:focus-visible,
-      .app-instance__kebab:focus-visible,
-      .app-instance__action:focus-visible,
-      .app-instance__name:focus-visible {
-        outline: none;
-        box-shadow: none;
       }
     `,
   ],
