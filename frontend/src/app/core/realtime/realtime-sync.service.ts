@@ -5,10 +5,21 @@ import { UniverseEventHubService } from '../events/universe-event-hub.service';
 import { ClientObservabilityService } from '../observability/client-observability.service';
 
 type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
+export type RealtimeConnectivityState =
+  | 'idle'
+  | 'connected'
+  | 'degraded-polling'
+  | 'offline-buffering'
+  | 'reconciling';
 
 interface RealtimeEvent {
   type: string;
   [key: string]: unknown;
+}
+
+interface BufferedWrite {
+  key: string;
+  run: () => Promise<void>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -22,8 +33,15 @@ export class RealtimeSyncService {
   private sessionNonce = '';
   private eventSeq = 0;
   private reconnectAttempt = 0;
+  private readonly reconnectWindowMs = 60_000;
+  private readonly reconnectStormThreshold = 8;
+  private reconnectWindowStart = 0;
+  private reconnectWindowAttempts = 0;
+  private readonly bufferedWrites: BufferedWrite[] = [];
+  private flushingBufferedWrites = false;
 
   readonly status = signal<RealtimeStatus>('idle');
+  readonly connectivity = signal<RealtimeConnectivityState>('idle');
   readonly lastEvent = signal<{ seq: number; payload: RealtimeEvent } | null>(null);
 
   isConfigured() {
@@ -36,6 +54,7 @@ export class RealtimeSyncService {
     this.shouldBeConnected = true;
     if (!this.isConfigured()) {
       this.status.set('idle');
+      this.connectivity.set('idle');
       return;
     }
     if (
@@ -63,6 +82,20 @@ export class RealtimeSyncService {
       this.socket = null;
     }
     this.status.set('idle');
+    this.connectivity.set('idle');
+  }
+
+  async enqueueBufferedWrite(key: string, run: () => Promise<void>) {
+    if (this.connectivity() === 'connected') {
+      await run();
+      return;
+    }
+    this.bufferedWrites.push({ key, run });
+    this.connectivity.set('offline-buffering');
+    this.observability.logWarn('realtime.buffered_write_queued', {
+      key,
+      queueDepth: this.bufferedWrites.length,
+    });
   }
 
   private async connect() {
@@ -70,6 +103,7 @@ export class RealtimeSyncService {
     const wsUrl = await this.buildUrl();
     if (!wsUrl) {
       this.status.set('idle');
+      this.connectivity.set('idle');
       return;
     }
     this.status.set('connecting');
@@ -80,9 +114,13 @@ export class RealtimeSyncService {
     socket.onopen = () => {
       if (this.socket !== socket) return;
       this.status.set('connected');
+      this.connectivity.set(this.bufferedWrites.length ? 'reconciling' : 'connected');
       this.observability.logInfo('realtime.connected', { reconnectAttempt: this.reconnectAttempt });
       this.reconnectAttempt = 0;
+      this.reconnectWindowStart = 0;
+      this.reconnectWindowAttempts = 0;
       this.clearReconnect();
+      void this.flushBufferedWrites();
     };
 
     socket.onmessage = (event) => {
@@ -109,6 +147,7 @@ export class RealtimeSyncService {
     socket.onerror = () => {
       if (this.socket !== socket) return;
       this.status.set('disconnected');
+      this.connectivity.set('degraded-polling');
       this.observability.logWarn('realtime.socket_error');
     };
 
@@ -116,6 +155,7 @@ export class RealtimeSyncService {
       if (this.socket !== socket) return;
       this.socket = null;
       this.status.set(this.shouldBeConnected ? 'disconnected' : 'idle');
+      this.connectivity.set(this.shouldBeConnected ? 'degraded-polling' : 'idle');
       this.observability.logWarn('realtime.closed', { shouldReconnect: this.shouldBeConnected });
       if (this.shouldBeConnected) this.scheduleReconnect();
     };
@@ -140,9 +180,26 @@ export class RealtimeSyncService {
   private scheduleReconnect() {
     if (typeof window === 'undefined') return;
     if (this.reconnectTimer) return;
+    const now = Date.now();
+    if (!this.reconnectWindowStart || now - this.reconnectWindowStart > this.reconnectWindowMs) {
+      this.reconnectWindowStart = now;
+      this.reconnectWindowAttempts = 0;
+    }
+    this.reconnectWindowAttempts += 1;
     const attempt = this.reconnectAttempt++;
-    const delayMs = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 4));
-    this.observability.logInfo('realtime.reconnect_scheduled', { attempt, delayMs });
+    const baseDelayMs = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 4));
+    const jitter = Math.floor(Math.random() * Math.max(1, Math.floor(baseDelayMs * 0.25)));
+    let delayMs = baseDelayMs + jitter;
+    if (this.reconnectWindowAttempts > this.reconnectStormThreshold) {
+      delayMs = Math.max(delayMs, 60_000);
+      this.connectivity.set('degraded-polling');
+      this.observability.logWarn('realtime.reconnect_storm_guard', {
+        attempt,
+        reconnectWindowAttempts: this.reconnectWindowAttempts,
+        delayMs,
+      });
+    }
+    this.observability.logInfo('realtime.reconnect_scheduled', { attempt, delayMs, jitter });
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.shouldBeConnected) return;
@@ -165,6 +222,31 @@ export class RealtimeSyncService {
       return parsed;
     } catch {
       return null;
+    }
+  }
+
+  private async flushBufferedWrites() {
+    if (this.flushingBufferedWrites) return;
+    if (!this.bufferedWrites.length) {
+      this.connectivity.set('connected');
+      return;
+    }
+    this.flushingBufferedWrites = true;
+    try {
+      while (this.bufferedWrites.length) {
+        const next = this.bufferedWrites.shift();
+        if (!next) break;
+        await next.run();
+      }
+      this.connectivity.set('connected');
+      this.observability.logInfo('realtime.buffered_write_flush_completed');
+    } catch (error) {
+      this.connectivity.set('offline-buffering');
+      this.observability.logWarn('realtime.buffered_write_flush_failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
+    } finally {
+      this.flushingBufferedWrites = false;
     }
   }
 }

@@ -113,8 +113,9 @@ describe('RealtimeSyncService', () => {
     const socket1 = MockWebSocket.instances[0];
     socket1.open();
     socket1.close();
+    expect(service.connectivity()).toBe('degraded-polling');
 
-    await new Promise((resolve) => setTimeout(resolve, 2200));
+    await new Promise((resolve) => setTimeout(resolve, 2800));
     expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2);
 
     service.stop();
@@ -125,5 +126,31 @@ describe('RealtimeSyncService', () => {
     await new Promise((resolve) => setTimeout(resolve, 2100));
     expect(MockWebSocket.instances.length).toBeGreaterThanOrEqual(2);
     expect(service.status()).toBe('idle');
+    expect(service.connectivity()).toBe('idle');
+  });
+
+  it('buffers writes while offline and flushes in order on reconnect', async () => {
+    (window as Window & { __OP_CONFIG__?: unknown }).__OP_CONFIG__ = {
+      realtimeEnabled: true,
+      realtimeWsUrl: 'wss://example.test/ws',
+    };
+    const service = TestBed.inject(RealtimeSyncService);
+    const writes: string[] = [];
+
+    await service.enqueueBufferedWrite('a', async () => {
+      writes.push('a');
+    });
+    await service.enqueueBufferedWrite('b', async () => {
+      writes.push('b');
+    });
+    expect(service.connectivity()).toBe('offline-buffering');
+
+    await service.start();
+    const socket = MockWebSocket.instances[0];
+    socket.open();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(writes).toEqual(['a', 'b']);
+    expect(service.connectivity()).toBe('connected');
   });
 });
