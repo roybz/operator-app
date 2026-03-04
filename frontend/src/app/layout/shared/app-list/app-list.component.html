@@ -20,7 +20,7 @@
               : ('dialogs.collapseList' | translate)
           "
         >
-          {{ isCollapsed(app.id) ? '?' : '?' }}
+          {{ isCollapsed(app.id) ? '▸' : '▾' }}
         </button>
         <span class="app-list__app-icon">{{ app.icon }}</span>
         <span class="app-list__name">{{ app.labelKey | translate }}</span>
@@ -61,7 +61,7 @@
                     title="{{ 'dialogs.unarchive' | translate }}"
                     [attr.aria-label]="'dialogs.unarchive' | translate"
                   >
-                    <span class="app-list__action-icon">?</span>
+                    <span class="app-list__action-icon">&#8630;</span>
                   </button>
                 }
               } @else {
@@ -89,7 +89,7 @@
                       (click)="onDuplicate(instance.id)"
                       [disabled]="actionsDisabled"
                     >
-                      <span class="app-list__action-icon">?</span>
+                      <span class="app-list__action-icon">&#10697;</span>
                       <span>{{ 'dialogs.duplicate' | translate }}</span>
                     </button>
                     <button
@@ -99,7 +99,7 @@
                       [disabled]="deleteTargetActive || actionsDisabled"
                     >
                       <span class="app-list__action-icon">
-                        {{ instance.deleteLocked ? '??' : '??' }}
+                        {{ instance.deleteLocked ? '🔓' : '🔒' }}
                       </span>
                       <span>
                         {{
@@ -115,7 +115,7 @@
                       (click)="onArchive(instance.id)"
                       [disabled]="actionsDisabled"
                     >
-                      <span class="app-list__action-icon">??</span>
+                      <span class="app-list__action-icon">&#128230;</span>
                       <span>{{ 'dialogs.archive' | translate }}</span>
                     </button>
                   </div>

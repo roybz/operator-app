@@ -126,7 +126,10 @@ export interface UniverseItem {
 
       .topbar__universe-toggle {
         margin-left: 6px;
-        font-size: 10px;
+        font-size: 15px;
+        line-height: 1;
+        min-width: 22px;
+        min-height: 22px;
       }
 
       .topbar__overlay-dismiss {
