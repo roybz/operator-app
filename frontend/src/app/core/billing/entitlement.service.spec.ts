@@ -40,4 +40,3 @@ describe('EntitlementService', () => {
     expect(result.code).toBe('guest_mode_only');
   });
 });
-

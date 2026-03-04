@@ -70,4 +70,3 @@ Define implementation-linked compliance artifacts for pre-launch readiness while
 - Remote API access path: `frontend/src/app/core/storage/remote-storage.adapter.ts`
 - Realtime reliability path: `frontend/src/app/core/realtime/realtime-sync.service.ts`
 - Cloud vault beta guards: `frontend/src/app/core/obsidian/vault-db.ts`, `frontend/src/app/core/billing/entitlement.service.ts`
-

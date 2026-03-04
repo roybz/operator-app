@@ -78,10 +78,7 @@ import { TranslateModule } from '@ngx-translate/core';
       (keydown.enter)="canceled.emit()"
       (keydown.space)="canceled.emit()"
     >
-      <div
-        class="confirm-dialog__panel"
-        (pointerdown)="$event.stopPropagation()"
-      >
+      <div class="confirm-dialog__panel" (pointerdown)="$event.stopPropagation()">
         <div class="confirm-dialog__header">
           <button
             class="confirm-dialog__close"

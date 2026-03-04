@@ -117,11 +117,7 @@ export class StorageService {
     }
   }
 
-  getJsonSyncValidated<T>(
-    key: string,
-    fallback: T,
-    validator: (value: unknown) => value is T,
-  ): T {
+  getJsonSyncValidated<T>(key: string, fallback: T, validator: (value: unknown) => value is T): T {
     const raw = this.getItemSync(key);
     if (!raw) return fallback;
     try {
@@ -168,7 +164,9 @@ export class StorageService {
   }
 
   private async applyMigrations() {
-    const applied = parseAppliedStorageMigrations(this.cache.get(STORAGE_MIGRATION_STATE_KEY) ?? null);
+    const applied = parseAppliedStorageMigrations(
+      this.cache.get(STORAGE_MIGRATION_STATE_KEY) ?? null,
+    );
     const { touchedKeys, newlyApplied } = applyBuiltInStorageMigrations(this.cache, applied);
     if (touchedKeys.length === 0 && newlyApplied.length === 0) return;
 

@@ -21,8 +21,7 @@ export const Default: Story = {};
 export const DestructiveConfirm: Story = {
   args: {
     title: 'Delete workspace',
-    message:
-      'This action is permanent and cannot be undone.\nPlease confirm to continue deletion.',
+    message: 'This action is permanent and cannot be undone.\nPlease confirm to continue deletion.',
     confirmLabel: 'Delete permanently',
   },
   parameters: {

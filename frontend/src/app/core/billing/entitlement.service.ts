@@ -19,9 +19,9 @@ export class EntitlementService {
     if (!caps.cloudVault) return { status: 'denied', code: 'cloud_vault_disabled' };
     if (this.auth.guestModeOnly()) return { status: 'denied', code: 'guest_mode_only' };
     if (!this.auth.isLoggedIn()) return { status: 'denied', code: 'auth_required' };
-    if (this.auth.session().userId === 'u_guest') return { status: 'denied', code: 'guest_account' };
+    if (this.auth.session().userId === 'u_guest')
+      return { status: 'denied', code: 'guest_account' };
     if (this.auth.orgSettings().testModeEnabled) return { status: 'denied', code: 'test_mode' };
     return { status: 'granted' };
   }
 }
-

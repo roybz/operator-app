@@ -79,4 +79,3 @@ If a deployment regresses sync stability:
 1. Revert latest sync/adapter commit.
 2. Keep API online and fallback polling enabled.
 3. Verify guest/local mode remains fully usable.
-

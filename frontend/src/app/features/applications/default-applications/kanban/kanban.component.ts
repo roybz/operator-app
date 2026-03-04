@@ -159,12 +159,15 @@ export function normalizeKanbanStateForSync(
     ? state.activeBoardId
     : normalizedBoards[0].id;
   const selectedCardId =
-    state.selectedCardId && normalizedBoards.some((board) => Boolean(board.cards[state.selectedCardId!]))
+    state.selectedCardId &&
+    normalizedBoards.some((board) => Boolean(board.cards[state.selectedCardId!]))
       ? state.selectedCardId
       : null;
   const selectedColumnId =
     state.selectedColumnId &&
-    normalizedBoards.some((board) => board.columns.some((column) => column.id === state.selectedColumnId))
+    normalizedBoards.some((board) =>
+      board.columns.some((column) => column.id === state.selectedColumnId),
+    )
       ? state.selectedColumnId
       : null;
 
@@ -194,8 +197,12 @@ export function mergeKanbanStatesForSync(
       continue;
     }
     const cards = { ...remoteBoard.cards, ...localBoard.cards };
-    const remoteColumnsById = new Map(remoteBoard.columns.map((column) => [column.id, column] as const));
-    const localColumnsById = new Map(localBoard.columns.map((column) => [column.id, column] as const));
+    const remoteColumnsById = new Map(
+      remoteBoard.columns.map((column) => [column.id, column] as const),
+    );
+    const localColumnsById = new Map(
+      localBoard.columns.map((column) => [column.id, column] as const),
+    );
     const columns: KanbanColumn[] = [];
     for (const remoteColumn of remoteBoard.columns) {
       const localColumn = localColumnsById.get(remoteColumn.id);
@@ -1588,19 +1595,16 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
       try {
         const raw = await this.storage.getItem(key);
         if (raw) {
-          remoteState = normalizeKanbanStateForSync(
-            JSON.parse(raw) as KanbanState,
-            () => this.createDefaultBoard(),
+          remoteState = normalizeKanbanStateForSync(JSON.parse(raw) as KanbanState, () =>
+            this.createDefaultBoard(),
           );
         }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
       }
       if (remoteState) {
-        const mergedState = mergeKanbanStatesForSync(
-          remoteState,
-          this.state(),
-          () => this.createDefaultBoard(),
+        const mergedState = mergeKanbanStatesForSync(remoteState, this.state(), () =>
+          this.createDefaultBoard(),
         );
         this.state.set(mergedState);
         stateStore.set(this.instanceId, mergedState);

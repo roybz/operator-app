@@ -138,7 +138,8 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
           <div style="display:grid; gap:6px; font-size: 13px;">
             <div>
               Requests/minute:
-              {{ quotaUsage().requestRateCount }} / {{ quotaUsage().requestRateLimit || quotaLimits().requestsPerMinute }}
+              {{ quotaUsage().requestRateCount }} /
+              {{ quotaUsage().requestRateLimit || quotaLimits().requestsPerMinute }}
             </div>
             <div>
               Realtime channels:
@@ -149,7 +150,9 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
             <div>
               Vault attachments total: {{ formatBytes(quotaLimits().vaultAttachmentTotalBytes) }}
             </div>
-            <div>Single attachment cap: {{ formatBytes(quotaLimits().vaultAttachmentAssetBytes) }}</div>
+            <div>
+              Single attachment cap: {{ formatBytes(quotaLimits().vaultAttachmentAssetBytes) }}
+            </div>
           </div>
           <div style="margin-top: 8px; font-size: 12px; opacity: 0.7;">
             Need larger limits? Contact us before enabling public signup.

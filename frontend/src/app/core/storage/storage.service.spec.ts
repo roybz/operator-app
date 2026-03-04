@@ -91,9 +91,13 @@ describe('StorageService', () => {
     adapter.store.set('contract_key', JSON.stringify({ ok: false }));
     await service.hydrate();
 
-    const value = service.getJsonSyncValidated('contract_key', { ok: true }, (raw): raw is { ok: true } => {
-      return !!raw && typeof raw === 'object' && (raw as { ok?: unknown }).ok === true;
-    });
+    const value = service.getJsonSyncValidated(
+      'contract_key',
+      { ok: true },
+      (raw): raw is { ok: true } => {
+        return !!raw && typeof raw === 'object' && (raw as { ok?: unknown }).ok === true;
+      },
+    );
 
     expect(value).toEqual({ ok: true });
   });

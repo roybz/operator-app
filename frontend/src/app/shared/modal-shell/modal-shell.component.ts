@@ -65,4 +65,3 @@ export class ModalShellComponent {
     this.closed.emit();
   }
 }
-

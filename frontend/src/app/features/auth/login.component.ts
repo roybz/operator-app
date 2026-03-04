@@ -416,7 +416,9 @@ export class LoginComponent {
     this.error.set(null);
     const result = await this.auth.startExternalSignup();
     if (!result.ok) {
-      this.error.set(result.message ? this.translate.instant(result.message) : 'Unable to sign up.');
+      this.error.set(
+        result.message ? this.translate.instant(result.message) : 'Unable to sign up.',
+      );
     }
   }
 

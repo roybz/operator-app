@@ -1,0 +1,8 @@
+**/node_modules
+**/dist
+**/storybook-static
+**/coverage
+**/.angular
+**/.cache
+**/test-results
+**/playwright-report

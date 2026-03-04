@@ -13,7 +13,9 @@ describe('CalendarComponent conflict merge', () => {
             color: '#60a5fa',
             visible: true,
             sourceUrl: '',
-            events: [{ id: 'evt_1', title: 'Remote event', start: '2026-02-24', end: '2026-02-24' }],
+            events: [
+              { id: 'evt_1', title: 'Remote event', start: '2026-02-24', end: '2026-02-24' },
+            ],
           },
         ],
         showSettingsDesktop: false,

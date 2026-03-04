@@ -173,7 +173,10 @@ export function parseTodoState(raw: string): TodoState | null {
   }
 }
 
-function mergeSubtasks(remote: TodoSubtask[] | undefined, local: TodoSubtask[] | undefined): TodoSubtask[] {
+function mergeSubtasks(
+  remote: TodoSubtask[] | undefined,
+  local: TodoSubtask[] | undefined,
+): TodoSubtask[] {
   const remoteList = Array.isArray(remote) ? remote : [];
   const localList = Array.isArray(local) ? local : [];
   const remoteMap = new Map(remoteList.map((item) => [item.id, item] as const));
@@ -215,8 +218,12 @@ function mergeTodos(remote: Todo[] | undefined, local: Todo[] | undefined): Todo
 export function mergeTodoStates(remoteState: TodoState, localState: TodoState): TodoState {
   const remote = normalizeState(remoteState);
   const local = normalizeState(localState);
-  const localProjectsById = new Map(local.projects.map((project) => [project.id, project] as const));
-  const remoteProjectsById = new Map(remote.projects.map((project) => [project.id, project] as const));
+  const localProjectsById = new Map(
+    local.projects.map((project) => [project.id, project] as const),
+  );
+  const remoteProjectsById = new Map(
+    remote.projects.map((project) => [project.id, project] as const),
+  );
 
   const mergedProjects: TodoProject[] = [];
   for (const remoteProject of remote.projects) {

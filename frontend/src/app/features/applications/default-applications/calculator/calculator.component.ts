@@ -74,7 +74,10 @@ const normalizeCalculatorState = (
   candidate: Partial<CalculatorState> | null | undefined,
   fallback: CalculatorState,
 ): CalculatorState => ({
-  display: typeof candidate?.display === 'string' && candidate.display.trim() ? candidate.display : fallback.display,
+  display:
+    typeof candidate?.display === 'string' && candidate.display.trim()
+      ? candidate.display
+      : fallback.display,
   accumulator:
     typeof candidate?.accumulator === 'number' && Number.isFinite(candidate.accumulator)
       ? candidate.accumulator
@@ -106,7 +109,9 @@ const normalizeCalculatorState = (
       ? candidate.currencyTo
       : fallback.currencyTo,
   currencyResult:
-    typeof candidate?.currencyResult === 'string' ? candidate.currencyResult : fallback.currencyResult,
+    typeof candidate?.currencyResult === 'string'
+      ? candidate.currencyResult
+      : fallback.currencyResult,
   currencyError:
     typeof candidate?.currencyError === 'string' || candidate?.currencyError === null
       ? candidate.currencyError

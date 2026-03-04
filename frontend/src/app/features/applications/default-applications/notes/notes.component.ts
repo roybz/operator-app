@@ -94,7 +94,11 @@ const cloneNoteTree = (node: NoteNode, parentId?: string): NoteNode => {
   return copy;
 };
 
-const mergeNoteTreesForSync = (remoteNode: NoteNode, localNode: NoteNode, parentId?: string): NoteNode => {
+const mergeNoteTreesForSync = (
+  remoteNode: NoteNode,
+  localNode: NoteNode,
+  parentId?: string,
+): NoteNode => {
   const remote = cloneNoteTree(remoteNode, parentId);
   const local = cloneNoteTree(localNode, parentId);
   if (remote.type === 'note' && local.type === 'note') {
@@ -139,13 +143,18 @@ const mergeNoteTreesForSync = (remoteNode: NoteNode, localNode: NoteNode, parent
   };
 };
 
-export const mergeNotesStatesForSync = (remoteState: NotesState, localState: NotesState): NotesState => ({
+export const mergeNotesStatesForSync = (
+  remoteState: NotesState,
+  localState: NotesState,
+): NotesState => ({
   ...remoteState,
   ...localState,
   root: mergeNoteTreesForSync(remoteState.root, localState.root),
   archiveRoot: mergeNoteTreesForSync(remoteState.archiveRoot, localState.archiveRoot),
   selectedId: localState.selectedId ?? remoteState.selectedId,
-  selectedIds: Array.from(new Set([...(remoteState.selectedIds ?? []), ...(localState.selectedIds ?? [])])),
+  selectedIds: Array.from(
+    new Set([...(remoteState.selectedIds ?? []), ...(localState.selectedIds ?? [])]),
+  ),
   view: localState.view,
   listCollapsed: localState.listCollapsed,
   sidebarOpenDesktop: localState.sidebarOpenDesktop,

@@ -23,11 +23,11 @@ Operator is designed to **bring structure to human information environments**.
 
 Modern knowledge work suffers from a form of informational entropy:
 
-* scattered documents
-* fragmented tools
-* hidden context
-* high retrieval friction
-* constant context switching
+- scattered documents
+- fragmented tools
+- hidden context
+- high retrieval friction
+- constant context switching
 
 These conditions degrade cognition.
 
@@ -43,11 +43,11 @@ The goal is not merely to store information, but to **strengthen the signal rela
 
 Human cognition operates under strong constraints:
 
-* limited working memory
-* attention bottlenecks
-* retrieval friction
-* context loss
-* environmental entropy
+- limited working memory
+- attention bottlenecks
+- retrieval friction
+- context loss
+- environmental entropy
 
 Traditional tools address these problems poorly because they are built as **document containers**, not as **cognitive environments**.
 
@@ -57,10 +57,10 @@ Operator is built under a different assumption:
 
 Operator therefore focuses on:
 
-* spatial cognition
-* signal amplification
-* context preservation
-* interaction continuity
+- spatial cognition
+- signal amplification
+- context preservation
+- interaction continuity
 
 ---
 
@@ -70,10 +70,10 @@ Information systems tend naturally toward disorder.
 
 Examples include:
 
-* unstructured folders
-* forgotten notes
-* disconnected tools
-* knowledge fragmentation
+- unstructured folders
+- forgotten notes
+- disconnected tools
+- knowledge fragmentation
 
 This is **informational entropy**.
 
@@ -81,10 +81,10 @@ Without deliberate structure, knowledge environments decay over time.
 
 Operator's core purpose is to **counteract this entropy** by creating environments where information:
 
-* remains visible
-* remains connected
-* remains retrievable
-* remains meaningful
+- remains visible
+- remains connected
+- remains retrievable
+- remains meaningful
 
 ---
 
@@ -108,11 +108,11 @@ Important information must stand out within the environment.
 
 Mechanisms may include:
 
-* visual contrast
-* spatial prominence
-* motion or animation
-* color differentiation
-* priority placement
+- visual contrast
+- spatial prominence
+- motion or animation
+- color differentiation
+- priority placement
 
 Salience increases the probability that critical information enters conscious attention.
 
@@ -142,10 +142,10 @@ Low latency allows fluid cognition.
 
 Operator aims to minimize:
 
-* navigation depth
-* loading delays
-* interface friction
-* tool switching
+- navigation depth
+- loading delays
+- interface friction
+- tool switching
 
 The ideal pathway is:
 
@@ -165,11 +165,11 @@ Operator enables users to view related information simultaneously.
 
 Examples include:
 
-* notes
-* diagrams
-* datasets
-* tasks
-* AI suggestions
+- notes
+- diagrams
+- datasets
+- tasks
+- AI suggestions
 
 High context bandwidth allows patterns and relationships to emerge naturally.
 
@@ -181,11 +181,11 @@ Information should organize into meaningful structures.
 
 Operator encourages:
 
-* clusters
-* relationships
-* hierarchies
-* spatial groupings
-* semantic links
+- clusters
+- relationships
+- hierarchies
+- spatial groupings
+- semantic links
 
 These structures stabilize knowledge and prevent informational decay.
 
@@ -197,10 +197,10 @@ Humans learn and adapt through feedback.
 
 Operator should clearly signal:
 
-* action results
-* progress
-* completion
-* system responses
+- action results
+- progress
+- completion
+- system responses
 
 Feedback stabilizes behavior and strengthens productive workflows.
 
@@ -212,10 +212,10 @@ Deep thinking requires continuity.
 
 Momentum is broken by:
 
-* tool switching
-* searching for files
-* context resets
-* fragmented workflows
+- tool switching
+- searching for files
+- context resets
+- fragmented workflows
 
 Operator aims to preserve cognitive flow by maintaining working environments where tasks, knowledge, and tools coexist.
 
@@ -227,9 +227,9 @@ Operator is designed to support **multi-agent cognition**.
 
 Future environments may include:
 
-* human users
-* AI agents
-* shared workspaces
+- human users
+- AI agents
+- shared workspaces
 
 Knowledge structures may emerge collaboratively through interaction.
 
@@ -255,10 +255,10 @@ This rule protects the system from **feature entropy**.
 
 Operator is intended to become a **structured cognitive environment** where:
 
-* information remains visible
-* knowledge structures evolve over time
-* humans and AI collaborate
-* cognition is amplified rather than fragmented
+- information remains visible
+- knowledge structures evolve over time
+- humans and AI collaborate
+- cognition is amplified rather than fragmented
 
 The system is not simply a productivity tool.
 
@@ -272,10 +272,10 @@ Operator exists to strengthen the relationship between **human cognition and acc
 
 By designing around cognitive primitives rather than features, Operator aims to create an environment where:
 
-* knowledge persists
-* structure emerges
-* thought flows uninterrupted
-* collaboration becomes natural
+- knowledge persists
+- structure emerges
+- thought flows uninterrupted
+- collaboration becomes natural
 
 In a world of growing informational chaos, Operator attempts to restore **structure, clarity, and signal strength** to the human knowledge landscape.
 
@@ -291,10 +291,10 @@ The following relationships guide architectural decisions.
 
 Implemented through:
 
-* visual hierarchy
-* component emphasis
-* priority states
-* spatial placement
+- visual hierarchy
+- component emphasis
+- priority states
+- spatial placement
 
 UI components should expose a **salience level** that controls visual prominence.
 
@@ -304,10 +304,10 @@ UI components should expose a **salience level** that controls visual prominence
 
 Implemented through:
 
-* spatial window placement
-* persistent workspaces
-* minimized hidden state
-* draggable tool instances
+- spatial window placement
+- persistent workspaces
+- minimized hidden state
+- draggable tool instances
 
 Operator treats the workspace like a **physical desk**, not a stack of tabs.
 
@@ -317,10 +317,10 @@ Operator treats the workspace like a **physical desk**, not a stack of tabs.
 
 Implemented through:
 
-* shallow navigation depth
-* in-place editing
-* instance reuse
-* local-first interactions when possible
+- shallow navigation depth
+- in-place editing
+- instance reuse
+- local-first interactions when possible
 
 The architecture favors **instant access over nested navigation**.
 
@@ -330,9 +330,9 @@ The architecture favors **instant access over nested navigation**.
 
 Implemented through:
 
-* multiple concurrent app instances
-* flexible layout grids
-* overlapping information views
+- multiple concurrent app instances
+- flexible layout grids
+- overlapping information views
 
 Users should be able to see multiple information sources **without leaving the workspace**.
 
@@ -342,9 +342,9 @@ Users should be able to see multiple information sources **without leaving the w
 
 Implemented through:
 
-* universes (workspace containers)
-* structured instance state
-* consistent persistence models
+- universes (workspace containers)
+- structured instance state
+- consistent persistence models
 
 Operator’s universe model provides **stable structural boundaries for knowledge environments**.
 
@@ -354,9 +354,9 @@ Operator’s universe model provides **stable structural boundaries for knowledg
 
 Implemented through:
 
-* interaction confirmations
-* state change indicators
-* persistence signals
+- interaction confirmations
+- state change indicators
+- persistence signals
 
 The system continuously communicates **state and progress** to the user.
 
@@ -366,9 +366,9 @@ The system continuously communicates **state and progress** to the user.
 
 Implemented through:
 
-* minimized context switching
-* persistent workspaces
-* stable state management
+- minimized context switching
+- persistent workspaces
+- stable state management
 
 Users should be able to continue thinking **without reconstructing their working environment**.
 
@@ -378,10 +378,10 @@ Users should be able to continue thinking **without reconstructing their working
 
 Future implementations may include:
 
-* multi-user universes
-* shared workspace editing
-* AI agent participation
-* collaborative knowledge structures
+- multi-user universes
+- shared workspace editing
+- AI agent participation
+- collaborative knowledge structures
 
 Operator is designed to evolve into a **multi-agent cognitive environment**.
 

@@ -16,7 +16,10 @@ describe('CognitoOidcService signup guard', () => {
     };
     const service = new CognitoOidcService();
     const authorizeSpy = vi
-      .spyOn(service as unknown as { startAuthorizeFlow: (arg?: unknown) => Promise<void> }, 'startAuthorizeFlow')
+      .spyOn(
+        service as unknown as { startAuthorizeFlow: (arg?: unknown) => Promise<void> },
+        'startAuthorizeFlow',
+      )
       .mockResolvedValue();
 
     await service.startSignup();
@@ -33,7 +36,10 @@ describe('CognitoOidcService signup guard', () => {
     };
     const service = new CognitoOidcService();
     const authorizeSpy = vi
-      .spyOn(service as unknown as { startAuthorizeFlow: (arg?: unknown) => Promise<void> }, 'startAuthorizeFlow')
+      .spyOn(
+        service as unknown as { startAuthorizeFlow: (arg?: unknown) => Promise<void> },
+        'startAuthorizeFlow',
+      )
       .mockResolvedValue();
 
     await service.startSignup();

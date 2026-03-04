@@ -62,7 +62,9 @@ const normalizeTimerState = (
   fallback: TimerState,
 ): TimerState => ({
   mode:
-    candidate?.mode === 'countdown' || candidate?.mode === 'pomodoro' || candidate?.mode === 'stopwatch'
+    candidate?.mode === 'countdown' ||
+    candidate?.mode === 'pomodoro' ||
+    candidate?.mode === 'stopwatch'
       ? candidate.mode
       : fallback.mode,
   running: typeof candidate?.running === 'boolean' ? candidate.running : fallback.running,

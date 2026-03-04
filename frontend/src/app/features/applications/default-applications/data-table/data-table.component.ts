@@ -102,7 +102,10 @@ const defaultState = (translate: TranslateService): DataTableState => {
   };
 };
 
-const normalizeColumn = (candidate: Partial<DataColumn> | null | undefined, fallbackName: string) => {
+const normalizeColumn = (
+  candidate: Partial<DataColumn> | null | undefined,
+  fallbackName: string,
+) => {
   if (!candidate || typeof candidate !== 'object') return null;
   const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : uid('col');
   const type =
@@ -117,7 +120,8 @@ const normalizeColumn = (candidate: Partial<DataColumn> | null | undefined, fall
       : 'text';
   return {
     id,
-    name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : fallbackName,
+    name:
+      typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : fallbackName,
     type,
   } as DataColumn;
 };
@@ -161,7 +165,10 @@ const normalizeTable = (
     : [];
   return {
     id,
-    name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : defaultTableName,
+    name:
+      typeof candidate.name === 'string' && candidate.name.trim()
+        ? candidate.name
+        : defaultTableName,
     columns,
     rows,
   } as DataTable;
@@ -190,7 +197,9 @@ const normalizeDataTableState = (
     search: typeof candidate?.search === 'string' ? candidate.search : fallback.search,
     sortColumnId:
       typeof candidate?.sortColumnId === 'string' &&
-      safeTables.some((table) => table.columns.some((column) => column.id === candidate.sortColumnId))
+      safeTables.some((table) =>
+        table.columns.some((column) => column.id === candidate.sortColumnId),
+      )
         ? candidate.sortColumnId
         : null,
     sortDirection: candidate?.sortDirection === 'desc' ? 'desc' : 'asc',
@@ -204,7 +213,10 @@ const mergeRowsForSync = (remoteRows: DataRow[], localRows: DataRow[]) => {
   }
   for (const row of localRows) {
     const existing = mergedRows.get(row.id);
-    mergedRows.set(row.id, existing ? { ...existing, ...row, values: { ...existing.values, ...row.values } } : row);
+    mergedRows.set(
+      row.id,
+      existing ? { ...existing, ...row, values: { ...existing.values, ...row.values } } : row,
+    );
   }
   return Array.from(mergedRows.values());
 };

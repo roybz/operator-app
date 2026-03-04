@@ -78,7 +78,9 @@ const defaultState = (): CalendarState => ({
   selectedCalendarId: null,
 });
 
-const normalizeCalendarEvent = (event: Partial<CalendarEvent> | null | undefined): CalendarEvent | null => {
+const normalizeCalendarEvent = (
+  event: Partial<CalendarEvent> | null | undefined,
+): CalendarEvent | null => {
   if (!event || typeof event !== 'object') return null;
   const id = typeof event.id === 'string' && event.id.trim() ? event.id : null;
   const title = typeof event.title === 'string' && event.title.trim() ? event.title : null;
@@ -92,7 +94,9 @@ const normalizeCalendarEvent = (event: Partial<CalendarEvent> | null | undefined
   };
 };
 
-const normalizeCalendar = (calendar: Partial<ExternalCalendar> | null | undefined): ExternalCalendar | null => {
+const normalizeCalendar = (
+  calendar: Partial<ExternalCalendar> | null | undefined,
+): ExternalCalendar | null => {
   if (!calendar || typeof calendar !== 'object') return null;
   const id = typeof calendar.id === 'string' && calendar.id.trim() ? calendar.id : null;
   const name = typeof calendar.name === 'string' && calendar.name.trim() ? calendar.name : null;
@@ -143,9 +147,14 @@ const normalizeCalendarState = (
       ? candidate.selectedCalendarId
       : null;
   return {
-    viewDate: typeof candidate?.viewDate === 'string' && candidate.viewDate.trim() ? candidate.viewDate : fallback.viewDate,
+    viewDate:
+      typeof candidate?.viewDate === 'string' && candidate.viewDate.trim()
+        ? candidate.viewDate
+        : fallback.viewDate,
     viewMode:
-      candidate?.viewMode === 'week' || candidate?.viewMode === 'day' || candidate?.viewMode === 'month'
+      candidate?.viewMode === 'week' ||
+      candidate?.viewMode === 'day' ||
+      candidate?.viewMode === 'month'
         ? candidate.viewMode
         : fallback.viewMode,
     calendars,

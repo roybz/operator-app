@@ -63,7 +63,7 @@ import type { Meta, StoryObj } from '@storybook/angular';
         </label>
         <label>
           Password
-          <input class="login-button" type="password" placeholder="••••••••" />
+          <input class="login-button" type="password" placeholder="ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½" />
         </label>
       }
 

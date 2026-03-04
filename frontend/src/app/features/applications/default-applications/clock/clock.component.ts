@@ -71,7 +71,9 @@ const normalizeClockState = (
   const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const formatValue = rawObj['format'];
   const format =
-    formatValue === '24h' || formatValue === '12h' ? (formatValue as '12h' | '24h') : fallbackFormat;
+    formatValue === '24h' || formatValue === '12h'
+      ? (formatValue as '12h' | '24h')
+      : fallbackFormat;
   const clocksValue = rawObj['clocks'];
   if (Array.isArray(clocksValue) && clocksValue.length) {
     const clocks = clocksValue.map((clock) => {

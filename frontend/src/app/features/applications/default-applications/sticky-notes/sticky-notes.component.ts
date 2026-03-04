@@ -69,8 +69,10 @@ const normalizeStickyState = (
   fallback: StickyNoteState,
 ): StickyNoteState => ({
   content: typeof candidate?.content === 'string' ? candidate.content : fallback.content,
-  mode: candidate?.mode === 'markdown' || candidate?.mode === 'rich' ? candidate.mode : fallback.mode,
-  visualMode: typeof candidate?.visualMode === 'boolean' ? candidate.visualMode : fallback.visualMode,
+  mode:
+    candidate?.mode === 'markdown' || candidate?.mode === 'rich' ? candidate.mode : fallback.mode,
+  visualMode:
+    typeof candidate?.visualMode === 'boolean' ? candidate.visualMode : fallback.visualMode,
   locked: typeof candidate?.locked === 'boolean' ? candidate.locked : fallback.locked,
   fontSize:
     typeof candidate?.fontSize === 'number' && Number.isFinite(candidate.fontSize)

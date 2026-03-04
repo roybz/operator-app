@@ -44,7 +44,7 @@ import { CommonModule } from '@angular/common';
     <div class="overlay">
       <div class="overlay__content">
         <div class="overlay__header">
-          <button class="overlay__close" (click)="closed.emit()">×</button>
+          <button class="overlay__close" (click)="closed.emit()">ï¿½</button>
         </div>
         <ng-content></ng-content>
       </div>

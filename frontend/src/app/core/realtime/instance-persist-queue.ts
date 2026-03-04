@@ -94,7 +94,10 @@ export class InstancePersistQueue {
               this.maxBackoffMs,
             );
             const retryAfterMs = getRemoteStorageRetryAfterMs(error) ?? 0;
-            this.backoffMs = Math.min(Math.max(exponentialBackoffMs, retryAfterMs), this.maxBackoffMs);
+            this.backoffMs = Math.min(
+              Math.max(exponentialBackoffMs, retryAfterMs),
+              this.maxBackoffMs,
+            );
             this.queued = true;
             this.scheduleFlush(this.backoffMs);
             break;

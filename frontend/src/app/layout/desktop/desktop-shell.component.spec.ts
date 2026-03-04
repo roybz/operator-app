@@ -43,16 +43,21 @@ describe('DesktopShellComponent visual states', () => {
   });
 
   it('disables edit controls when canEdit is false', () => {
-    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ) as HTMLButtonElement[];
     const disabledCount = buttons.filter((button) => button.disabled).length;
     expect(disabledCount).toBeGreaterThan(0);
   });
 
   it('disables settings button when canOpenSettings is false', () => {
-    const labels = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    const settingsButton = labels.find((button) => button.textContent?.toLowerCase().includes('nav.settings'));
+    const labels = Array.from(
+      fixture.nativeElement.querySelectorAll('button'),
+    ) as HTMLButtonElement[];
+    const settingsButton = labels.find((button) =>
+      button.textContent?.toLowerCase().includes('nav.settings'),
+    );
     if (!settingsButton) return;
     expect(settingsButton.disabled).toBe(true);
   });
 });
-

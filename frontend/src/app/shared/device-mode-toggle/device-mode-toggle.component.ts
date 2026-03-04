@@ -8,7 +8,12 @@ import { TranslateModule } from '@ngx-translate/core';
   imports: [CommonModule, TranslateModule],
   template: `
     <label class="mode-toggle">
-      <input type="checkbox" [checked]="checked" [disabled]="disabled" (change)="changed.emit($event)" />
+      <input
+        type="checkbox"
+        [checked]="checked"
+        [disabled]="disabled"
+        (change)="changed.emit($event)"
+      />
       <span>{{ labelKey | translate }}</span>
     </label>
   `,
@@ -28,4 +33,3 @@ export class DeviceModeToggleComponent {
   @Input() labelKey = 'phone.modeLabel';
   @Output() changed = new EventEmitter<Event>();
 }
-

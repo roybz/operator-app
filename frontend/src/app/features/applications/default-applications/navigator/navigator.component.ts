@@ -92,10 +92,14 @@ const normalizeTab = (candidate: Partial<NavigatorTab> | null | undefined): Navi
   const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : null;
   if (!id) return null;
   const history = Array.isArray(candidate.history)
-    ? candidate.history.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    ? candidate.history.filter(
+        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+      )
     : [];
   const fallbackUrl =
-    typeof candidate.url === 'string' && candidate.url.trim().length > 0 ? candidate.url : ABOUT_BLANK;
+    typeof candidate.url === 'string' && candidate.url.trim().length > 0
+      ? candidate.url
+      : ABOUT_BLANK;
   const safeHistory = history.length ? history : [fallbackUrl];
   const index =
     typeof candidate.historyIndex === 'number' && Number.isFinite(candidate.historyIndex)
@@ -114,16 +118,21 @@ const normalizeTab = (candidate: Partial<NavigatorTab> | null | undefined): Navi
   };
 };
 
-const normalizeNavigatorState = (candidate: Partial<NavigatorState> | null | undefined): NavigatorState => {
+const normalizeNavigatorState = (
+  candidate: Partial<NavigatorState> | null | undefined,
+): NavigatorState => {
   const tabs = Array.isArray(candidate?.tabs)
-    ? candidate.tabs.map((tab) => normalizeTab(tab)).filter((tab): tab is NavigatorTab => Boolean(tab))
+    ? candidate.tabs
+        .map((tab) => normalizeTab(tab))
+        .filter((tab): tab is NavigatorTab => Boolean(tab))
     : [];
   if (!tabs.length) {
     const fallback = createTab(ABOUT_BLANK);
     return { tabs: [fallback], activeTabId: fallback.id };
   }
   const activeTabId =
-    typeof candidate?.activeTabId === 'string' && tabs.some((tab) => tab.id === candidate.activeTabId)
+    typeof candidate?.activeTabId === 'string' &&
+    tabs.some((tab) => tab.id === candidate.activeTabId)
       ? candidate.activeTabId
       : tabs[0].id;
   return { tabs, activeTabId };
@@ -162,7 +171,7 @@ export const mergeNavigatorStatesForSync = (
   const mergedTabs = Array.from(tabs.values());
   const activeTabId = mergedTabs.some((tab) => tab.id === localState.activeTabId)
     ? localState.activeTabId
-    : mergedTabs[0]?.id ?? '';
+    : (mergedTabs[0]?.id ?? '');
   return { tabs: mergedTabs, activeTabId };
 };
 

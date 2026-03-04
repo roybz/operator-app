@@ -69,9 +69,7 @@ interface StickyCard {
         <div class="sticky-banner sticky-banner--warn">Remote card update deferred until idle.</div>
       }
       @if (readonly) {
-        <div class="sticky-banner sticky-banner--readonly">
-          Locked/readonly collaborator mode.
-        </div>
+        <div class="sticky-banner sticky-banner--readonly">Locked/readonly collaborator mode.</div>
       }
       <div class="sticky-grid">
         @if (!cards.length) {
