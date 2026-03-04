@@ -7,24 +7,37 @@ import { LlmPencilLeaseService } from './llm-pencil-lease.service';
 describe('LlmPencilLeaseService', () => {
   const context = { universeOwnerId: 'u_owner', universeId: 'u1' };
   const store = new Map<string, unknown>();
-  const holderState = new Map<string, { id: string; username: string; role: 'invitee' } | null>();
+  const holderState = new Map<string, { id: string; username: string; role: 'observer' | 'invitee' } | null>();
 
   const authStub = {
     canGrantPencil: vi.fn(() => true),
     session: vi.fn(() => ({ userId: 'u_admin' })),
     getUniverseEditHolder: vi.fn((universeId: string) => holderState.get(universeId) ?? null),
     setUniverseEditHolder: vi.fn(
-      (universeId: string, holder: { id: string; username: string; role: 'invitee' } | null) => {
+      (
+        universeId: string,
+        holder: { id: string; username: string; role: 'observer' | 'invitee' } | null,
+      ) => {
         holderState.set(universeId, holder);
       },
     ),
   };
   const storageStub = {
+    getItem: vi.fn(async (key: string) => {
+      const value = store.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
+    getItemSync: vi.fn((key: string) => {
+      const value = store.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
     getJson: vi.fn(async (key: string, fallback: unknown) =>
       store.has(key) ? (store.get(key) ?? null) : fallback,
     ),
-    setJson: vi.fn(async (key: string, value: unknown) => {
-      store.set(key, value);
+    setItem: vi.fn(async (key: string, value: string) => {
+      store.set(key, JSON.parse(value));
     }),
   };
 
@@ -53,7 +66,7 @@ describe('LlmPencilLeaseService', () => {
     expect(authStub.setUniverseEditHolder).toHaveBeenCalledWith('u1', {
       id: 'r1',
       username: 'Agent One',
-      role: 'invitee',
+      role: 'observer',
     });
   });
 

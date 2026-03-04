@@ -644,17 +644,42 @@ export class AppComponent implements OnInit, OnDestroy {
       universeEditHolderId: this.universeEditHolder()?.id ?? null,
     });
   });
+  activePresence = computed<UniversePresenceEntry[]>(() => {
+    const holder = this.universeEditHolder();
+    const userId = this.auth.session().userId;
+    const presence = this.universePresence();
+    if (!holder || holder.id === userId) return presence;
+    if (presence.some((entry) => entry.id === holder.id)) return presence;
+    const ownerId = this.universeOwnerId();
+    return [
+      ...presence,
+      {
+        id: holder.id,
+        username: holder.username,
+        role: holder.role,
+        ownerId: ownerId ?? '',
+        lastSeen: Date.now(),
+        activeMode: 'edit',
+      },
+    ];
+  });
+  activeUsersOnline = computed(() =>
+    this.activePresence().filter((entry) => entry.role === 'invitee' || entry.role === 'observer'),
+  );
   inviteesOnline = computed(() =>
-    this.universePresence().filter((entry) => entry.role === 'invitee'),
+    this.activePresence().filter((entry) => entry.role === 'invitee'),
   );
   guestCount = computed(
-    () => this.universePresence().filter((entry) => entry.role === 'guest').length,
+    () => this.activePresence().filter((entry) => entry.role === 'guest').length,
   );
   observerCount = computed(
-    () => this.universePresence().filter((entry) => entry.role === 'observer').length,
+    () => this.activePresence().filter((entry) => entry.role === 'observer').length,
   );
   hasUniverseParticipants = computed(
-    () => this.inviteesOnline().length > 0 || this.guestCount() > 0 || this.observerCount() > 0,
+    () =>
+      this.activeUsersOnline().length > 0 ||
+      this.guestCount() > 0 ||
+      this.observerCount() > 0,
   );
   isMainGuest = computed(() => this.auth.actualUser()?.id === 'u_guest');
   showUniverseBar = computed(() => this.auth.isLoggedIn() && this.multiUserEnabled());

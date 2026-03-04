@@ -643,7 +643,7 @@
         [style.maxHeight]="phoneMode() ? '18vh' : null"
         [style.padding]="phoneMode() ? '8px 10px' : null"
       >
-        @if (phoneMode() && !inviteesOnline().length) {
+        @if (phoneMode() && !activeUsersOnline().length) {
           <div
             style="
               width: 100%;
@@ -664,9 +664,9 @@
           [style.display]="phoneMode() ? 'none' : 'flex'"
           style="align-items: center; gap: 8px; flex: 1; min-width: 0"
         >
-          @if (inviteesOnline().length) {
+          @if (activeUsersOnline().length) {
             <div style="display: flex; gap: 8px; flex-wrap: wrap">
-              @for (invitee of inviteesOnline(); track invitee.id) {
+              @for (invitee of activeUsersOnline(); track invitee.id) {
                 <div
                   class="universe-chip"
                   [class.universe-chip--active]="universeEditHolder()?.id === invitee.id"
