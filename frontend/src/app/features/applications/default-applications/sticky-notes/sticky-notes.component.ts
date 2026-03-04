@@ -64,6 +64,56 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
   textColor: '',
 });
 
+const normalizeStickyState = (
+  candidate: Partial<StickyNoteState> | null | undefined,
+  fallback: StickyNoteState,
+): StickyNoteState => ({
+  content: typeof candidate?.content === 'string' ? candidate.content : fallback.content,
+  mode: candidate?.mode === 'markdown' || candidate?.mode === 'rich' ? candidate.mode : fallback.mode,
+  visualMode: typeof candidate?.visualMode === 'boolean' ? candidate.visualMode : fallback.visualMode,
+  locked: typeof candidate?.locked === 'boolean' ? candidate.locked : fallback.locked,
+  fontSize:
+    typeof candidate?.fontSize === 'number' && Number.isFinite(candidate.fontSize)
+      ? Math.min(64, Math.max(10, candidate.fontSize))
+      : fallback.fontSize,
+  colorEnabled:
+    typeof candidate?.colorEnabled === 'boolean' ? candidate.colorEnabled : fallback.colorEnabled,
+  bgColor: typeof candidate?.bgColor === 'string' ? candidate.bgColor : fallback.bgColor,
+  textColor: typeof candidate?.textColor === 'string' ? candidate.textColor : fallback.textColor,
+});
+
+const mergeStickyContent = (remote: string, local: string) => {
+  const remoteTrimmed = remote.trim();
+  const localTrimmed = local.trim();
+  if (!remoteTrimmed) return local;
+  if (!localTrimmed) return remote;
+  if (remoteTrimmed === localTrimmed) return local;
+  if (local.includes(remoteTrimmed)) return local;
+  if (remote.includes(localTrimmed)) return remote;
+  return `${localTrimmed}\n\n--- Remote update ---\n${remoteTrimmed}`;
+};
+
+export const mergeStickyStatesForSync = (
+  remoteState: Partial<StickyNoteState> | null | undefined,
+  localState: StickyNoteState,
+  fallback: StickyNoteState,
+): StickyNoteState => {
+  const remote = normalizeStickyState(remoteState, fallback);
+  const local = normalizeStickyState(localState, fallback);
+  return {
+    ...remote,
+    ...local,
+    content: mergeStickyContent(remote.content, local.content),
+    mode: local.mode,
+    visualMode: local.visualMode,
+    locked: local.locked,
+    fontSize: local.fontSize,
+    colorEnabled: local.colorEnabled,
+    bgColor: local.bgColor,
+    textColor: local.textColor,
+  };
+};
+
 @Component({
   selector: 'app-sticky-notes',
   standalone: true,
@@ -313,7 +363,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as StickyNoteState;
-        this.state.set({ ...fallback, ...parsed });
+        this.state.set(normalizeStickyState(parsed, fallback));
         this.syncRichSnapshot();
         stateStore.set(this.instanceId, this.state());
         return;
@@ -323,7 +373,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...fallback, ...stored });
+      this.state.set(normalizeStickyState(stored, fallback));
       this.syncRichSnapshot();
     } else {
       this.state.set(fallback);
@@ -509,7 +559,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as StickyNoteState;
-      const next = { ...fallback, ...parsed };
+      const next = normalizeStickyState(parsed, fallback);
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.syncRichSnapshot();
@@ -533,10 +583,25 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState(this.prefs.preferences().stickyNoteDefaultMode ?? 'rich');
+      let remoteState: StickyNoteState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeStickyState(JSON.parse(raw) as StickyNoteState, fallback);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeStickyStatesForSync(remoteState, this.state(), fallback);
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.syncRichSnapshot();
+        if (!this.isLocallyEditing()) {
+          this.persistState({ immediate: true });
+        }
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage();
