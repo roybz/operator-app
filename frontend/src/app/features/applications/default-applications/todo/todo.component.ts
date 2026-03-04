@@ -21,6 +21,8 @@ import {
   createSubtask,
   createTodoItem,
   loadTodoState,
+  mergeTodoStates,
+  parseTodoState,
   serializeTodoState,
 } from './todo-api';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -1054,7 +1056,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.updateState(nextState);
   }
 
-  private updateState(nextState: TodoState) {
+  private updateState(nextState: TodoState, options?: { suppressPersist?: boolean }) {
     const ensuredProjects = nextState.projects.length
       ? nextState.projects
       : [this.defaultProject()];
@@ -1070,7 +1072,9 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.todos.set(this.activeProject(next)?.todos ?? []);
     this.subtaskCollapsed.set(collapsed);
     this.syncSubtaskCollapse(this.activeProject(next)?.todos ?? []);
-    this.persistState();
+    if (!options?.suppressPersist) {
+      this.persistState();
+    }
   }
 
   private activeProject(state = this.state()) {
@@ -1357,10 +1361,22 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: TodoState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = parseTodoState(raw);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const mergedState = mergeTodoStates(remoteState, this.state());
+        this.updateState(mergedState, { suppressPersist: true });
+        if (!this.isLocallyEditing()) {
+          this.persistState({ immediate: true });
+        }
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         await this.reload({ suppressNormalizationPersist: true });
