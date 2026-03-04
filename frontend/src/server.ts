@@ -12,10 +12,7 @@ const browserDistFolder = join(import.meta.dirname, '../browser');
 const app = express();
 const angularApp = new AngularNodeAppEngine();
 
-function parseCspDirective(
-  envName: string,
-  fallback: string,
-): string {
+function parseCspDirective(envName: string, fallback: string): string {
   const raw = process.env[envName];
   if (!raw) return fallback;
   const trimmed = raw.trim();
@@ -32,6 +29,7 @@ function buildContentSecurityPolicy() {
     `style-src ${parseCspDirective('OP_CSP_STYLE_SRC', "'self' 'unsafe-inline'")}`,
     `img-src ${parseCspDirective('OP_CSP_IMG_SRC', "'self' data: blob: https:")}`,
     `font-src ${parseCspDirective('OP_CSP_FONT_SRC', "'self' data:")}`,
+    `frame-src ${parseCspDirective('OP_CSP_FRAME_SRC', "'none'")}`,
     `connect-src ${parseCspDirective('OP_CSP_CONNECT_SRC', "'self' https: wss:")}`,
     `form-action ${parseCspDirective('OP_CSP_FORM_ACTION', "'self'")}`,
     `upgrade-insecure-requests`,

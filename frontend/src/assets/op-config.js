@@ -13,12 +13,15 @@ window.__OP_CONFIG__ = {
   authProvider: 'cognito', // 'local' | 'cognito'
   publicSignupPrepared: true, // signup flow plumbing can exist
   publicSignupEnabled: false, // keep disabled until pricing/onboarding is ready
+  navigatorEnabled: false, // deprecated by default (can be re-enabled for local testing)
+  navigatorAllowedOrigins: [],
   capabilities: {
     auth: true,
     realtime: true,
     cloudVault: true,
     billingGuard: true,
     shareLinks: true,
+    navigatorApp: false,
     publicSignupPrepared: true,
     publicSignupEnabled: false,
   },

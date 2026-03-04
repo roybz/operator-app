@@ -30,6 +30,7 @@ export const APP_REGISTRY: Record<AppDefinition['id'], AppDefinition> = {
     labelKey: 'apps.navigator',
     icon: '🧭',
     defaultSize: { x: 0, y: 0, width: 720, height: 520 },
+    deprecated: true,
   },
   notes: {
     id: 'notes',

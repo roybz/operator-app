@@ -8,9 +8,9 @@ export const RESERVED_TOPBAR_HEIGHT = 48;
 export const RESERVED_WORKSPACE_HEIGHT = 72;
 export const PHONE_MODE_BOOT_KEY = 'op_phone_mode_boot';
 
-export const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
+export const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon, deprecated }) => ({
   id,
-  labelKey,
+  labelKey: deprecated ? 'settings.navigatorBeta' : labelKey,
   icon,
 }));
 
@@ -28,4 +28,3 @@ export const createFallbackRect = (width: number, height: number): DOMRect => {
     toJSON: () => ({}),
   } as DOMRect;
 };
-

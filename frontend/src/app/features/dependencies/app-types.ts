@@ -22,4 +22,5 @@ export interface AppDefinition {
   labelKey: string;
   icon: string;
   defaultSize: DialogRect;
+  deprecated?: boolean;
 }

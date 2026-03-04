@@ -76,6 +76,7 @@ import { RemoteApplyPipeline } from './core/realtime/remote-apply-pipeline';
 import { EventOutboxService } from './core/events/event-outbox.service';
 import { ContextFieldStoreService } from './core/events/context-field-store.service';
 import { ClientObservabilityService } from './core/observability/client-observability.service';
+import { getOpCapabilities, getOpConfig } from './core/op-config';
 import {
   APP_GROUPS,
   PHONE_MODE_BOOT_KEY,
@@ -639,7 +640,16 @@ export class AppComponent implements OnInit, OnDestroy {
   siteTitle = computed(() => this.auth.orgSettings().siteTitle || 'Operator App');
   siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
-  visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
+  visibleAppGroups = computed(() => {
+    const hiddenByConfig = new Set<string>();
+    const capabilities = getOpCapabilities(getOpConfig());
+    if (!capabilities.navigatorApp) {
+      hiddenByConfig.add('navigator');
+    }
+    return APP_GROUPS.filter(
+      (app) => !this.disabledApps().has(app.id) && !hiddenByConfig.has(app.id),
+    );
+  });
   instancesByApp = computed(() => ({
     kanban: this.dialogService.getAppInstances('kanban', { includeArchived: true }),
     todo: this.dialogService.getAppInstances('todo', { includeArchived: true }),

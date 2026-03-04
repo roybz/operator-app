@@ -14,6 +14,7 @@ export interface OpCapabilityConfig {
   cloudVault?: boolean;
   billingGuard?: boolean;
   shareLinks?: boolean;
+  navigatorApp?: boolean;
   publicSignupPrepared?: boolean;
   publicSignupEnabled?: boolean;
 }
@@ -33,6 +34,8 @@ export interface OpRuntimeConfig {
   authProvider?: 'local' | 'cognito';
   publicSignupPrepared?: boolean;
   publicSignupEnabled?: boolean;
+  navigatorEnabled?: boolean;
+  navigatorAllowedOrigins?: string[];
   capabilities?: OpCapabilityConfig;
   cognito?: OpCognitoConfig;
 }
@@ -43,6 +46,7 @@ export interface OpRuntimeCapabilities {
   cloudVault: boolean;
   billingGuard: boolean;
   shareLinks: boolean;
+  navigatorApp: boolean;
   publicSignupPrepared: boolean;
   publicSignupEnabled: boolean;
 }
@@ -70,6 +74,7 @@ export function getOpCapabilities(config = getOpConfig()): OpRuntimeCapabilities
     cloudVault: Boolean(capabilities.cloudVault ?? true),
     billingGuard: Boolean(capabilities.billingGuard ?? true),
     shareLinks: Boolean(capabilities.shareLinks ?? true),
+    navigatorApp: Boolean(capabilities.navigatorApp ?? config.navigatorEnabled ?? false),
     publicSignupPrepared,
     publicSignupEnabled: publicSignupPrepared && publicSignupEnabled,
   };

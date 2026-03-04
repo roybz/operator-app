@@ -14,6 +14,7 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { getOpCapabilities, getOpConfig } from '../../../../core/op-config';
 
 interface NavigatorTab {
   id: string;
@@ -30,8 +31,30 @@ interface NavigatorState {
 
 const stateStore = new Map<string, NavigatorState>();
 const STORAGE_PREFIX = 'op_app_state:navigator';
-// Temporarily disabled to prevent iframe navigation misuse.
-const NAVIGATION_DISABLED = true;
+const ABOUT_BLANK = 'about:blank';
+
+const getNavigatorPolicy = () => {
+  const config = getOpConfig();
+  const capabilities = getOpCapabilities(config);
+  const allowedOrigins = (config.navigatorAllowedOrigins ?? [])
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length > 0);
+  const enabled = capabilities.navigatorApp && Boolean(config.navigatorEnabled);
+  return { enabled, allowedOrigins };
+};
+
+const isAllowedNavigatorUrl = (value: string, allowedOrigins: string[]) => {
+  if (value === ABOUT_BLANK) return true;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') return false;
+    if (!allowedOrigins.length) return false;
+    const origin = parsed.origin.toLowerCase();
+    return allowedOrigins.some((allowed) => allowed.toLowerCase() === origin);
+  } catch {
+    return false;
+  }
+};
 
 export function clearNavigatorState(instanceId: string, storage: StorageService) {
   clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
@@ -139,7 +162,8 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   private remoteConflict = inject(RemoteConflictService);
   state = signal<NavigatorState>({ tabs: [], activeTabId: '' });
   language = signal('en');
-  navigationDisabled = NAVIGATION_DISABLED;
+  private readonly navigatorPolicy = getNavigatorPolicy();
+  navigationDisabled = !this.navigatorPolicy.enabled;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -179,7 +203,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
       this.state.set({ ...stored, tabs: stored.tabs.map((tab) => ({ ...tab })) });
       return;
     }
-    const initialUrl = 'about:blank';
+    const initialUrl = ABOUT_BLANK;
     const tab = createTab(initialUrl);
     const next = { tabs: [tab], activeTabId: tab.id };
     this.state.set(next);
@@ -216,7 +240,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   closeTab(id: string) {
     const tabs = this.state().tabs.filter((tab) => tab.id !== id);
     if (!tabs.length) {
-      const fallback = createTab('about:blank');
+      const fallback = createTab(ABOUT_BLANK);
       this.commit({ tabs: [fallback], activeTabId: fallback.id });
       return;
     }
@@ -225,7 +249,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   }
 
   navigate(event: Event) {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const input = (event.target as HTMLInputElement).value.trim();
     if (!input) return;
     const url = input.includes('://') ? input : `https://${input}`;
@@ -244,7 +268,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   }
 
   goBack() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active || active.historyIndex === 0) return;
     const nextIndex = active.historyIndex - 1;
@@ -253,7 +277,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   }
 
   goForward() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active || active.historyIndex >= active.history.length - 1) return;
     const nextIndex = active.historyIndex + 1;
@@ -262,7 +286,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active) return;
     this.updateTab({ ...active });
@@ -314,7 +338,10 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   }
 
   safeUrl(url?: string): SafeResourceUrl {
-    const next = NAVIGATION_DISABLED ? 'about:blank' : (url ?? 'about:blank');
+    const candidate = this.navigationDisabled ? ABOUT_BLANK : (url ?? ABOUT_BLANK);
+    const next = isAllowedNavigatorUrl(candidate, this.navigatorPolicy.allowedOrigins)
+      ? candidate
+      : ABOUT_BLANK;
     return this.sanitizer.bypassSecurityTrustResourceUrl(next);
   }
 }
