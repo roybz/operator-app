@@ -777,6 +777,16 @@ export class AppComponent implements OnInit, OnDestroy {
         this.performLogoutRouteRedirect();
       });
     effect(() => {
+      if (typeof window === 'undefined') return;
+      if (!this.auth.ready()) return;
+      if (!this.auth.isLoggedIn()) return;
+      if (this.forceLoggedOut()) return;
+      if (this.auth.universeContext()) return;
+      if (window.location.pathname === '/login') {
+        void this.router.navigateByUrl('/', { replaceUrl: true });
+      }
+    });
+    effect(() => {
       if (typeof document === 'undefined') return;
       document.title = this.siteTitle();
       this.updateFavicon(this.siteLogoEmoji());
