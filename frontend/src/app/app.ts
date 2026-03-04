@@ -72,8 +72,10 @@ import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
 import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
+import { RemoteApplyPipeline } from './core/realtime/remote-apply-pipeline';
 import { EventOutboxService } from './core/events/event-outbox.service';
 import { ContextFieldStoreService } from './core/events/context-field-store.service';
+import { ClientObservabilityService } from './core/observability/client-observability.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -1153,6 +1155,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly remoteConflict = inject(RemoteConflictService);
   private readonly eventOutbox = inject(EventOutboxService);
   private readonly contextFields = inject(ContextFieldStoreService);
+  private readonly observability = inject(ClientObservabilityService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1244,6 +1247,26 @@ export class AppComponent implements OnInit, OnDestroy {
   private deferredRemoteApplyBannerTimer?: number;
   private suppressRemoteChangeSignature: string | null = null;
   private suppressRemoteChangeUntil = 0;
+  private readonly remoteApplyPipeline = new RemoteApplyPipeline({
+    flush: async (keys) => {
+      await this.applyRemoteStorageChange(keys);
+    },
+    onFlushStart: (keys) => {
+      this.remoteSyncApplyPending = true;
+      this.observability.logInfo('remote.apply.flush_started', { keyCount: keys.length });
+    },
+    onFlushComplete: (keys) => {
+      this.remoteSyncApplyPending = false;
+      this.observability.logInfo('remote.apply.flush_completed', { keyCount: keys.length });
+    },
+    onError: (error, keys) => {
+      this.remoteSyncApplyPending = false;
+      this.observability.logWarn('remote.apply.flush_error', {
+        keyCount: keys.length,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
+    },
+  });
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
@@ -1705,6 +1728,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.clearDeferredRemoteApplyTimers();
         this.remoteConflict.clearPending();
         this.remoteConflictBannerVisible.set(false);
+        this.remoteApplyPipeline.clear();
         this.realtimeSync.stop();
         return;
       }
@@ -1759,7 +1783,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.remoteSyncApplyPending = false;
         return;
       }
-      void this.applyRemoteStorageChange(shellKeys);
+      this.remoteApplyPipeline.schedule(shellKeys);
     });
 
     effect(() => {
@@ -1823,6 +1847,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (this.remoteSyncInterval) window.clearInterval(this.remoteSyncInterval);
     this.clearDeferredRemoteApplyTimers();
+    this.remoteApplyPipeline.destroy();
     this.realtimeSync.stop();
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.scheduleCanvasBoundsUpdate);
@@ -1849,9 +1874,12 @@ export class AppComponent implements OnInit, OnDestroy {
       if (shellKeys.length === 0) return;
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       if (recentLocalWrite) return;
-      this.remoteSyncApplyPending = true;
-    } catch {
+      this.remoteApplyPipeline.schedule(shellKeys);
+    } catch (error) {
       // Ignore transient network/auth issues and retry on next interval.
+      this.observability.logWarn('remote.poll.failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
     } finally {
       this.remoteSyncInFlight = false;
     }
@@ -1888,6 +1916,16 @@ export class AppComponent implements OnInit, OnDestroy {
       if (shouldRefreshDialogs || shouldRefreshAuth) {
         await this.dialogService.hydrate();
       }
+      this.observability.logInfo('remote.apply.completed', {
+        keyCount: changedKeys.length,
+        force: Boolean(options?.force),
+      });
+    } catch (error) {
+      this.observability.logWarn('remote.apply.failed', {
+        keyCount: changedKeys.length,
+        force: Boolean(options?.force),
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
     } finally {
       this.remoteSyncApplyPending = false;
     }

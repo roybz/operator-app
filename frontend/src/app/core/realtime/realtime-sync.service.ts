@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { CognitoOidcService } from '../auth/cognito-oidc.service';
 import { getOpConfig } from '../op-config';
 import { UniverseEventHubService } from '../events/universe-event-hub.service';
+import { ClientObservabilityService } from '../observability/client-observability.service';
 
 type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -14,6 +15,7 @@ interface RealtimeEvent {
 export class RealtimeSyncService {
   private cognitoOidc = inject(CognitoOidcService);
   private eventHub = inject(UniverseEventHubService);
+  private observability = inject(ClientObservabilityService);
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private shouldBeConnected = false;
@@ -70,12 +72,14 @@ export class RealtimeSyncService {
       return;
     }
     this.status.set('connecting');
+    this.observability.logInfo('realtime.connecting');
     const socket = new WebSocket(wsUrl);
     this.socket = socket;
 
     socket.onopen = () => {
       if (this.socket !== socket) return;
       this.status.set('connected');
+      this.observability.logInfo('realtime.connected', { reconnectAttempt: this.reconnectAttempt });
       this.reconnectAttempt = 0;
       this.clearReconnect();
     };
@@ -104,12 +108,14 @@ export class RealtimeSyncService {
     socket.onerror = () => {
       if (this.socket !== socket) return;
       this.status.set('disconnected');
+      this.observability.logWarn('realtime.socket_error');
     };
 
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
       this.status.set(this.shouldBeConnected ? 'disconnected' : 'idle');
+      this.observability.logWarn('realtime.closed', { shouldReconnect: this.shouldBeConnected });
       if (this.shouldBeConnected) this.scheduleReconnect();
     };
   }
@@ -135,6 +141,7 @@ export class RealtimeSyncService {
     if (this.reconnectTimer) return;
     const attempt = this.reconnectAttempt++;
     const delayMs = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 4));
+    this.observability.logInfo('realtime.reconnect_scheduled', { attempt, delayMs });
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.shouldBeConnected) return;
