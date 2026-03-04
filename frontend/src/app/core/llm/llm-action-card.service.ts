@@ -4,6 +4,7 @@ import { StorageService } from '../storage/storage.service';
 import { LlmOrchestratorService } from './llm-orchestrator.service';
 import { LlmPolicyService } from './llm-policy.service';
 import { LlmActionCard, LlmAllowedActionType, LlmContext, LlmProviderRequest } from './llm-types';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 const ACTION_CARD_KEY_PREFIX = 'op_llm_action_cards_v1';
 const MAX_ACTION_CARDS = 250;
@@ -52,7 +53,7 @@ export class LlmActionCardService {
     };
     const current = await this.list(context);
     const next = [card, ...current].slice(0, MAX_ACTION_CARDS);
-    await this.storage.setJson(this.key(context), next);
+    await this.persistWithConflictRetry(this.key(context), next);
     return { ok: true, card };
   }
 
@@ -142,7 +143,7 @@ export class LlmActionCardService {
   }
 
   async clear(context: LlmContext): Promise<void> {
-    await this.storage.setJson(this.key(context), []);
+    await this.persistWithConflictRetry(this.key(context), []);
   }
 
   private async updateCard(
@@ -158,7 +159,7 @@ export class LlmActionCardService {
       return updated;
     });
     if (!updated) return { ok: false };
-    await this.storage.setJson(this.key(context), next);
+    await this.persistWithConflictRetry(this.key(context), next);
     return { ok: true, card: updated };
   }
 
@@ -167,6 +168,31 @@ export class LlmActionCardService {
   }
 
   private uid(prefix: string): string {
-    return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(8);
+      cryptoObj.getRandomValues(bytes);
+      let result = '';
+      for (const byte of bytes) {
+        result += chars[byte % chars.length];
+      }
+      return `${prefix}_${result}`;
+    }
+    const fallback = Date.now().toString(36);
+    return `${prefix}_${fallback.padEnd(8, '0').slice(0, 8)}`;
+  }
+
+  private async persistWithConflictRetry(key: string, value: LlmActionCard[]): Promise<void> {
+    const serialized = JSON.stringify(value);
+    await writeWithConflictRetry({
+      key,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(key),
+      write: (payload) => this.storage.setItem(key, payload),
+      refresh: async () => {
+        await this.storage.getItem(key);
+      },
+    });
   }
 }

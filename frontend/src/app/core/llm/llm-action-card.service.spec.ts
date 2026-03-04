@@ -9,12 +9,16 @@ import { LlmPolicyService } from './llm-policy.service';
 describe('LlmActionCardService', () => {
   const memory = new Map<string, string>();
   const storageStub = {
+    getItem: vi.fn(async (key: string) => {
+      return memory.has(key) ? memory.get(key) : null;
+    }),
+    getItemSync: vi.fn((key: string) => memory.get(key) ?? null),
     getJson: vi.fn(async <T>(key: string, fallback: T): Promise<T> => {
       const raw = memory.get(key);
       return raw ? (JSON.parse(raw) as T) : fallback;
     }),
-    setJson: vi.fn(async (key: string, value: unknown) => {
-      memory.set(key, JSON.stringify(value));
+    setItem: vi.fn(async (key: string, value: string) => {
+      memory.set(key, value);
     }),
   };
   const authStub = {
