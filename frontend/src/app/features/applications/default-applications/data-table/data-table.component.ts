@@ -102,6 +102,166 @@ const defaultState = (translate: TranslateService): DataTableState => {
   };
 };
 
+const normalizeColumn = (candidate: Partial<DataColumn> | null | undefined, fallbackName: string) => {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : uid('col');
+  const type =
+    candidate.type === 'number' ||
+    candidate.type === 'date' ||
+    candidate.type === 'emoji' ||
+    candidate.type === 'image' ||
+    candidate.type === 'url' ||
+    candidate.type === 'boolean' ||
+    candidate.type === 'text'
+      ? candidate.type
+      : 'text';
+  return {
+    id,
+    name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : fallbackName,
+    type,
+  } as DataColumn;
+};
+
+const normalizeRow = (
+  candidate: Partial<DataRow> | null | undefined,
+  validColumnIds: Set<string>,
+) => {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : uid('row');
+  const values: Record<string, string> = {};
+  if (candidate.values && typeof candidate.values === 'object') {
+    for (const [columnId, value] of Object.entries(candidate.values)) {
+      if (!validColumnIds.has(columnId)) continue;
+      values[columnId] = String(value ?? '');
+    }
+  }
+  return { id, values } as DataRow;
+};
+
+const normalizeTable = (
+  candidate: Partial<DataTable> | null | undefined,
+  defaultTableName: string,
+  defaultColumnName: string,
+) => {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : uid('table');
+  const columns = Array.isArray(candidate.columns)
+    ? candidate.columns
+        .map((column) => normalizeColumn(column, defaultColumnName))
+        .filter((column): column is DataColumn => Boolean(column))
+    : [];
+  if (!columns.length) {
+    columns.push({ id: uid('col'), name: defaultColumnName, type: 'text' });
+  }
+  const validColumnIds = new Set(columns.map((column) => column.id));
+  const rows = Array.isArray(candidate.rows)
+    ? candidate.rows
+        .map((row) => normalizeRow(row, validColumnIds))
+        .filter((row): row is DataRow => Boolean(row))
+    : [];
+  return {
+    id,
+    name: typeof candidate.name === 'string' && candidate.name.trim() ? candidate.name : defaultTableName,
+    columns,
+    rows,
+  } as DataTable;
+};
+
+const normalizeDataTableState = (
+  candidate: Partial<DataTableState> | null | undefined,
+  fallback: DataTableState,
+  defaultTableName: string,
+  defaultColumnName: string,
+): DataTableState => {
+  const tables = Array.isArray(candidate?.tables)
+    ? candidate.tables
+        .map((table) => normalizeTable(table, defaultTableName, defaultColumnName))
+        .filter((table): table is DataTable => Boolean(table))
+    : fallback.tables;
+  const safeTables = tables.length ? tables : fallback.tables;
+  const activeTableId =
+    typeof candidate?.activeTableId === 'string' &&
+    safeTables.some((table) => table.id === candidate.activeTableId)
+      ? candidate.activeTableId
+      : safeTables[0].id;
+  return {
+    tables: safeTables,
+    activeTableId,
+    search: typeof candidate?.search === 'string' ? candidate.search : fallback.search,
+    sortColumnId:
+      typeof candidate?.sortColumnId === 'string' &&
+      safeTables.some((table) => table.columns.some((column) => column.id === candidate.sortColumnId))
+        ? candidate.sortColumnId
+        : null,
+    sortDirection: candidate?.sortDirection === 'desc' ? 'desc' : 'asc',
+  };
+};
+
+const mergeRowsForSync = (remoteRows: DataRow[], localRows: DataRow[]) => {
+  const mergedRows = new Map<string, DataRow>();
+  for (const row of remoteRows) {
+    mergedRows.set(row.id, row);
+  }
+  for (const row of localRows) {
+    const existing = mergedRows.get(row.id);
+    mergedRows.set(row.id, existing ? { ...existing, ...row, values: { ...existing.values, ...row.values } } : row);
+  }
+  return Array.from(mergedRows.values());
+};
+
+const mergeColumnsForSync = (remoteColumns: DataColumn[], localColumns: DataColumn[]) => {
+  const mergedColumns = new Map<string, DataColumn>();
+  for (const column of remoteColumns) {
+    mergedColumns.set(column.id, column);
+  }
+  for (const column of localColumns) {
+    mergedColumns.set(column.id, column);
+  }
+  return Array.from(mergedColumns.values());
+};
+
+export const mergeDataTableStatesForSync = (
+  remoteState: DataTableState,
+  localState: DataTableState,
+): DataTableState => {
+  const tables = new Map<string, DataTable>();
+  for (const table of remoteState.tables) {
+    tables.set(table.id, table);
+  }
+  for (const table of localState.tables) {
+    const existing = tables.get(table.id);
+    if (!existing) {
+      tables.set(table.id, table);
+      continue;
+    }
+    const columns = mergeColumnsForSync(existing.columns, table.columns);
+    const columnIds = new Set(columns.map((column) => column.id));
+    const rows = mergeRowsForSync(existing.rows, table.rows).map((row) => {
+      const values: Record<string, string> = {};
+      for (const [columnId, value] of Object.entries(row.values)) {
+        if (!columnIds.has(columnId)) continue;
+        values[columnId] = String(value ?? '');
+      }
+      return { ...row, values };
+    });
+    tables.set(table.id, {
+      ...existing,
+      ...table,
+      columns,
+      rows,
+    });
+  }
+  return {
+    ...remoteState,
+    ...localState,
+    tables: Array.from(tables.values()),
+    activeTableId: localState.activeTableId,
+    search: localState.search,
+    sortColumnId: localState.sortColumnId,
+    sortDirection: localState.sortDirection,
+  };
+};
+
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -516,10 +676,18 @@ export class DataTableComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit() {
+    const fallback = defaultState(this.translate);
+    const defaultTableName = this.translate.instant('dataTable.defaultTable');
+    const defaultColumnName = this.translate.instant('dataTable.defaultColumn');
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as DataTableState;
+        const parsed = normalizeDataTableState(
+          JSON.parse(raw) as DataTableState,
+          fallback,
+          defaultTableName,
+          defaultColumnName,
+        );
         this.state.set(parsed);
         stateStore.set(this.instanceId, parsed);
         return;
@@ -529,9 +697,11 @@ export class DataTableComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set(stored);
+      this.state.set(
+        normalizeDataTableState(stored, fallback, defaultTableName, defaultColumnName),
+      );
     } else {
-      const next = defaultState(this.translate);
+      const next = fallback;
       this.state.set(next);
       stateStore.set(this.instanceId, next);
     }
@@ -950,10 +1120,18 @@ export class DataTableComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private reloadFromStorage() {
+    const fallback = defaultState(this.translate);
+    const defaultTableName = this.translate.instant('dataTable.defaultTable');
+    const defaultColumnName = this.translate.instant('dataTable.defaultColumn');
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (!raw) return false;
     try {
-      const parsed = JSON.parse(raw) as DataTableState;
+      const parsed = normalizeDataTableState(
+        JSON.parse(raw) as DataTableState,
+        fallback,
+        defaultTableName,
+        defaultColumnName,
+      );
       this.state.set(parsed);
       stateStore.set(this.instanceId, parsed);
       return true;
@@ -970,10 +1148,29 @@ export class DataTableComponent implements OnInit, AfterViewInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState(this.translate);
+      const defaultTableName = this.translate.instant('dataTable.defaultTable');
+      const defaultColumnName = this.translate.instant('dataTable.defaultColumn');
+      let remoteState: DataTableState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeDataTableState(
+            JSON.parse(raw) as DataTableState,
+            fallback,
+            defaultTableName,
+            defaultColumnName,
+          );
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState && !this.isLocallyEditing()) {
+        const merged = mergeDataTableStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState({ immediate: true });
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage();

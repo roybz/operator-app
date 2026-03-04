@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { DataTableComponent } from './data-table.component';
+import { DataTableComponent, mergeDataTableStatesForSync } from './data-table.component';
 import {
   TranslateFakeLoader,
   TranslateLoader,
@@ -168,5 +168,51 @@ describe('DataTableComponent', () => {
     await Promise.resolve();
 
     expect(component.state().search).toBe('');
+  });
+
+  it('merges remote/local table states without dropping local edits', () => {
+    const merged = mergeDataTableStatesForSync(
+      {
+        tables: [
+          {
+            id: 't1',
+            name: 'Remote table',
+            columns: [{ id: 'c1', name: 'Task', type: 'text' }],
+            rows: [{ id: 'r1', values: { c1: 'Remote value' } }],
+          },
+        ],
+        activeTableId: 't1',
+        search: '',
+        sortColumnId: null,
+        sortDirection: 'asc',
+      },
+      {
+        tables: [
+          {
+            id: 't1',
+            name: 'Local table',
+            columns: [
+              { id: 'c1', name: 'Task', type: 'text' },
+              { id: 'c2', name: 'Done', type: 'boolean' },
+            ],
+            rows: [
+              { id: 'r1', values: { c1: 'Local value', c2: 'true' } },
+              { id: 'r2', values: { c1: 'Another row' } },
+            ],
+          },
+        ],
+        activeTableId: 't1',
+        search: 'local',
+        sortColumnId: 'c1',
+        sortDirection: 'desc',
+      },
+    );
+
+    expect(merged.search).toBe('local');
+    expect(merged.sortDirection).toBe('desc');
+    expect(merged.tables[0].name).toBe('Local table');
+    expect(merged.tables[0].columns.map((column) => column.id)).toEqual(['c1', 'c2']);
+    expect(merged.tables[0].rows.find((row) => row.id === 'r1')?.values['c1']).toBe('Local value');
+    expect(merged.tables[0].rows.find((row) => row.id === 'r2')?.values['c1']).toBe('Another row');
   });
 });
