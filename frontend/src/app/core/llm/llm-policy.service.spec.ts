@@ -4,6 +4,7 @@ import { AuthService } from '../auth.service';
 import { StorageService } from '../storage/storage.service';
 import { LlmPolicyService } from './llm-policy.service';
 import { UserRole } from '../auth.service';
+import { LlmModeGuardService } from './llm-mode-guard.service';
 
 describe('LlmPolicyService', () => {
   const context = { universeOwnerId: 'u_admin', universeId: 'u1' };
@@ -34,6 +35,15 @@ describe('LlmPolicyService', () => {
     }),
   };
 
+  const modeGuardStub = {
+    isCloudLlmAllowed: vi.fn(() => {
+      if (authState.guestModeOnly) return false;
+      if (authState.testModeEnabled) return false;
+      const role = authState.actualUser?.role;
+      return Boolean(role && role !== 'guest' && role !== 'observer');
+    }),
+  };
+
   beforeEach(() => {
     storageMap.clear();
     authState.canInvite = true;
@@ -48,6 +58,7 @@ describe('LlmPolicyService', () => {
         LlmPolicyService,
         { provide: AuthService, useValue: authStub },
         { provide: StorageService, useValue: storageStub },
+        { provide: LlmModeGuardService, useValue: modeGuardStub },
       ],
     });
   });

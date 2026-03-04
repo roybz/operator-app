@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { AuthService } from '../auth.service';
 import { StorageService } from '../storage/storage.service';
 import { DEFAULT_LLM_POLICY, LlmContext, LlmPolicy } from './llm-types';
+import { LlmModeGuardService } from './llm-mode-guard.service';
 
 const POLICY_KEY_PREFIX = 'op_llm_policy_v1';
 
@@ -9,6 +10,7 @@ const POLICY_KEY_PREFIX = 'op_llm_policy_v1';
 export class LlmPolicyService {
   private readonly auth = inject(AuthService);
   private readonly storage = inject(StorageService);
+  private readonly modeGuard = inject(LlmModeGuardService);
 
   async getPolicy(context: LlmContext): Promise<LlmPolicy> {
     return this.storage.getJson(this.key(context), DEFAULT_LLM_POLICY);
@@ -33,12 +35,7 @@ export class LlmPolicyService {
   }
 
   isCloudLlmBlockedBySession(): boolean {
-    if (this.auth.guestModeOnly()) return true;
-    const user = this.auth.actualUser();
-    if (!user || user.id === 'u_guest' || user.role === 'guest' || user.role === 'observer')
-      return true;
-    if (this.auth.orgSettings().testModeEnabled) return true;
-    return false;
+    return !this.modeGuard.isCloudLlmAllowed();
   }
 
   private key(context: LlmContext): string {

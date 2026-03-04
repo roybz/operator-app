@@ -29,20 +29,22 @@ describe('LlmActionLogService', () => {
 
     await service.append(context, {
       id: 'a1',
+      requestId: 'a1',
       residentId: 'r1',
       universeOwnerId: context.universeOwnerId,
       universeId: context.universeId,
-      actionType: 'chat_message',
+      actionType: 'chat.post',
       payload: { text: 'one' },
       success: true,
       createdAt: 1,
     });
     await service.append(context, {
       id: 'a2',
+      requestId: 'a2',
       residentId: 'r1',
       universeOwnerId: context.universeOwnerId,
       universeId: context.universeId,
-      actionType: 'chat_message',
+      actionType: 'chat.post',
       payload: { text: 'two' },
       success: true,
       createdAt: 2,
@@ -58,10 +60,11 @@ describe('LlmActionLogService', () => {
     for (let index = 0; index < 510; index += 1) {
       await service.append(context, {
         id: `a${index}`,
+        requestId: `a${index}`,
         residentId: 'r1',
         universeOwnerId: context.universeOwnerId,
         universeId: context.universeId,
-        actionType: 'chat_message',
+        actionType: 'chat.post',
         payload: { text: index },
         success: true,
         createdAt: index,
