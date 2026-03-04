@@ -31,6 +31,25 @@ npm run test:release-gates
 npm run test:e2e
 ```
 
+## UI-impacting PR Command Sequence
+
+For PRs that change templates, styles, shared components, Storybook fixtures, or visual behavior:
+
+```bash
+npm run lint
+npm run test:unit -- --watch=false
+npm run build
+npm run build-storybook
+npm run test:visual
+npm run test:e2e
+```
+
+If the UI change is intentional and affects approved snapshots:
+
+```bash
+npm run test:visual -- --update-snapshots
+```
+
 ## Pre-Deploy Config Verification
 
 Check `frontend/src/assets/op-config.js`:
@@ -59,6 +78,8 @@ Run `docs/realtime-load-profile.md` and attach evidence for pass criteria before
 
 - [ ] All critical scenarios passed
 - [ ] All gates green
+- [ ] Storybook build green (`npm run build-storybook`)
+- [ ] Storybook visual baseline green (`npm run test:visual`)
 - [ ] No unresolved P0/P1 sync/auth regressions
 - [ ] Rollback commit identified
 - [ ] Release notes prepared
