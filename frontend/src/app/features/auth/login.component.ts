@@ -7,14 +7,23 @@ import { DialogService } from '../../core/dialog.service';
 import { LicenseComponent } from '../license/license.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { StorageService } from '../../core/storage/storage.service';
+import { DeviceModeToggleComponent } from '../../shared/device-mode-toggle/device-mode-toggle.component';
+import { ModalShellComponent } from '../../shared/modal-shell/modal-shell.component';
 import packageJson from '../../../../package.json';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, TranslateModule, LicenseComponent, ConfirmDialogComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    LicenseComponent,
+    ConfirmDialogComponent,
+    DeviceModeToggleComponent,
+    ModalShellComponent,
+  ],
   template: `
-    <main style="max-width: 420px; margin: 96px auto;">
+    <main class="login-page">
       <h1>
         {{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}
       </h1>
@@ -82,13 +91,12 @@ import packageJson from '../../../../package.json';
           >
             {{ 'universe.continueGuest' | translate }}
           </button>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label
-            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
-          >
+          <app-device-mode-toggle
+            class="login-mode-toggle"
+            [checked]="phoneMode()"
+            (changed)="togglePhoneMode($event)"
+          />
+          <label class="login-reset-toggle">
             <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
           </label>
@@ -127,13 +135,12 @@ import packageJson from '../../../../package.json';
           >
             {{ 'auth.guest' | translate }}
           </button>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label
-            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
-          >
+          <app-device-mode-toggle
+            class="login-mode-toggle"
+            [checked]="phoneMode()"
+            (changed)="togglePhoneMode($event)"
+          />
+          <label class="login-reset-toggle">
             <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
           </label>
@@ -187,11 +194,12 @@ import packageJson from '../../../../package.json';
         }
 
         @if (allowGuest()) {
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
+          <app-device-mode-toggle
+            class="login-mode-toggle"
+            [checked]="phoneMode()"
+            (changed)="togglePhoneMode($event)"
+          />
+          <label class="login-reset-toggle login-reset-toggle--compact">
             <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
             <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
           </label>
@@ -237,21 +245,16 @@ import packageJson from '../../../../package.json';
       }
 
       @if (licenseOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
-          (pointerdown)="licenseOpen.set(false)"
-          role="button"
-          tabindex="0"
-          (keydown.enter)="licenseOpen.set(false)"
-          (keydown.space)="licenseOpen.set(false)"
+        <app-modal-shell
+          [zIndex]="2000"
+          ariaLabel="License dialog"
+          maxWidth="min(980px, calc(100vw - 32px))"
+          (closed)="licenseOpen.set(false)"
         >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:12px;"
-            (pointerdown)="$event.stopPropagation()"
-          >
+          <div class="license-shell">
             <app-license (closed)="licenseOpen.set(false)" />
           </div>
-        </div>
+        </app-modal-shell>
       }
     </main>
   `,
@@ -260,6 +263,34 @@ import packageJson from '../../../../package.json';
       :host {
         display: block;
       }
+
+      .login-page {
+        max-width: 420px;
+        margin: 96px auto;
+      }
+
+      .login-mode-toggle {
+        margin-top: 13px;
+      }
+
+      .login-reset-toggle {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 11px;
+        margin-bottom: 28px;
+        font-size: 14px;
+      }
+
+      .login-reset-toggle--compact {
+        margin-top: 12px;
+        margin-bottom: 0;
+      }
+
+      .license-shell {
+        padding: 20px;
+      }
+
       @media (max-width: 1024px) {
         :host {
           display: block;

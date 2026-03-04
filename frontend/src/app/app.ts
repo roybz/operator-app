@@ -23,7 +23,6 @@ import {
 } from './core/auth.service';
 import { DialogInstance, DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
-import { AppGroup } from './layout/shared/app-list/app-list.component';
 import { ConfirmDialogComponent } from './shared/confirm-dialog/confirm-dialog.component';
 import { TodoPageComponent } from './features/applications/default-applications/todo/todo.component';
 import { CalculatorComponent } from './features/applications/default-applications/calculator/calculator.component';
@@ -41,8 +40,9 @@ import { PhoneShellComponent } from './layout/phone/phone-shell.component';
 import { DesktopShellComponent } from './layout/desktop/desktop-shell.component';
 import { TopBarComponent, UniverseItem } from './layout/shared/top-bar.component';
 import { LongPressDirective } from './shared/long-press/long-press.directive';
+import { ModalShellComponent } from './shared/modal-shell/modal-shell.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
-import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
+import { APP_REGISTRY } from './features/dependencies/app-registry';
 import { AppId } from './features/dependencies/app-types';
 import { cloneCalculatorState } from './features/applications/default-applications/calculator/calculator.component';
 import { cloneNavigatorState } from './features/applications/default-applications/navigator/navigator.component';
@@ -76,34 +76,15 @@ import { RemoteApplyPipeline } from './core/realtime/remote-apply-pipeline';
 import { EventOutboxService } from './core/events/event-outbox.service';
 import { ContextFieldStoreService } from './core/events/context-field-store.service';
 import { ClientObservabilityService } from './core/observability/client-observability.service';
-
-type CanvasMode = 'repeat' | 'center' | 'stretch';
-
-const RESERVED_SIDEBAR_WIDTH = 267;
-const RESERVED_TOPBAR_HEIGHT = 48;
-const RESERVED_WORKSPACE_HEIGHT = 72;
-const PHONE_MODE_BOOT_KEY = 'op_phone_mode_boot';
-
-const createFallbackRect = (width: number, height: number): DOMRect => {
-  if (typeof DOMRect !== 'undefined') return new DOMRect(0, 0, width, height);
-  return {
-    x: 0,
-    y: 0,
-    width,
-    height,
-    top: 0,
-    left: 0,
-    right: width,
-    bottom: height,
-    toJSON: () => ({}),
-  } as DOMRect;
-};
-
-const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
-  id,
-  labelKey,
-  icon,
-}));
+import {
+  APP_GROUPS,
+  PHONE_MODE_BOOT_KEY,
+  RESERVED_SIDEBAR_WIDTH,
+  RESERVED_TOPBAR_HEIGHT,
+  RESERVED_WORKSPACE_HEIGHT,
+  CanvasMode,
+  createFallbackRect,
+} from './app-shell.constants';
 
 @Component({
   selector: 'app-root',
@@ -130,6 +111,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     SettingsComponent,
     LicenseComponent,
     LongPressDirective,
+    ModalShellComponent,
   ],
   styles: [
     `
@@ -807,25 +789,22 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
             </div>
           }
           @if (licenseOpen()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
-              (pointerdown)="licenseOpen.set(false)"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="licenseOpen.set(false)"
-              (keydown.space)="licenseOpen.set(false)"
+            <app-modal-shell
+              [zIndex]="2400"
+              ariaLabel="License dialog"
+              [maxWidth]="phoneMode() ? '100%' : 'min(920px, 92vw)'"
+              (closed)="licenseOpen.set(false)"
             >
               <div
-                style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
+                style="padding:20px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
                 [style.width]="phoneMode() ? '100%' : null"
                 [style.height]="phoneMode() ? '100%' : null"
                 [style.maxHeight]="phoneMode() ? '100%' : '85vh'"
                 [style.borderRadius]="phoneMode() ? '0' : '12px'"
-                (pointerdown)="$event.stopPropagation()"
               >
                 <app-license (closed)="licenseOpen.set(false)" />
               </div>
-            </div>
+            </app-modal-shell>
           }
           @if (moveWorkspaceTargetId()) {
             <div

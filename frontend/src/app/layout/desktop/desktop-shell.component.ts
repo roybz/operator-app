@@ -5,11 +5,12 @@ import { AppListComponent, AppGroup } from '../shared/app-list/app-list.componen
 import { DialogInstance } from '../../core/dialog.service';
 import { AppId } from '../../features/dependencies/app-types';
 import { StorageService } from '../../core/storage/storage.service';
+import { DeviceModeToggleComponent } from '../../shared/device-mode-toggle/device-mode-toggle.component';
 
 @Component({
   selector: 'app-desktop-shell',
   standalone: true,
-  imports: [CommonModule, TranslateModule, AppListComponent],
+  imports: [CommonModule, TranslateModule, AppListComponent, DeviceModeToggleComponent],
   template: `
     <aside
       [style.width]="navOpen ? '267px' : '0'"
@@ -100,16 +101,10 @@ import { StorageService } from '../../core/storage/storage.service';
               </button>
             </div>
             @if (displayOptionsOpen) {
-              <label style="display:flex; align-items:center; gap:6px;">
-                <span style="font-size:14px; margin-left:4px;">
-                  {{ 'phone.modeLabel' | translate }}
-                </span>
-                <input
-                  type="checkbox"
-                  [checked]="phoneMode"
-                  (change)="phoneModeToggle.emit($event)"
-                />
-              </label>
+              <app-device-mode-toggle
+                [checked]="phoneMode"
+                (changed)="phoneModeToggle.emit($event)"
+              />
               @if (!phoneMode && showViewportSizingControls) {
                 <label style="display:flex; flex-direction:column; gap:6px;">
                   <span style="margin-left:4px; font-size:14px;">

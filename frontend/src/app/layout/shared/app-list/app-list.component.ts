@@ -28,19 +28,15 @@ export interface AppGroup {
     <div class="app-list" (pointerdown)="closeActions()">
       <div
         class="app-list__scroll"
-        [style.flex]="phoneMode ? '1 1 auto' : null"
-        [style.minHeight]="phoneMode ? '0' : null"
       >
         @for (app of apps; track app.id) {
           <div class="app-row" [attr.data-app-id]="app.id">
             <button
               class="app-list__toggle"
+              [class.app-list__control--phone]="phoneMode"
+              [class.app-list__control--compact]="phoneMode"
               (click)="toggleCollapsed(app.id); $event.stopPropagation()"
               [disabled]="actionsDisabled"
-              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-              [style.opacity]="phoneMode ? 1 : null"
-              [style.background]="phoneMode ? 'transparent' : null"
-              [style.borderRadius]="phoneMode ? '999px' : null"
               [title]="
                 isCollapsed(app.id)
                   ? ('dialogs.expandList' | translate)
@@ -53,12 +49,9 @@ export interface AppGroup {
             <span class="app-list__name">{{ app.labelKey | translate }}</span>
             <button
               class="app-list__icon app-list__icon--add"
+              [class.app-list__control--phone]="phoneMode"
               (click)="openApp.emit(app.id); $event.stopPropagation()"
               [disabled]="actionsDisabled"
-              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-              [style.opacity]="phoneMode ? 1 : null"
-              [style.background]="phoneMode ? 'transparent' : null"
-              [style.borderRadius]="phoneMode ? '999px' : null"
               title="{{ 'dialogs.add' | translate }}"
             >
               +
@@ -70,10 +63,10 @@ export interface AppGroup {
                 <div class="app-instance">
                   <button
                     class="app-instance__name"
+                    [class.app-instance__name--active]="isInstanceActive(instance)"
+                    [class.app-instance__name--archived]="instance.archived"
                     (click)="restore.emit(instance.id); $event.stopPropagation()"
-                    [style.fontStyle]="isInstanceActive(instance) ? 'italic' : 'normal'"
                     [disabled]="actionsDisabled"
-                    [style.opacity]="instance.archived ? 0.6 : 1"
                   >
                     {{ instanceLabel(instance) }}
                   </button>
@@ -81,12 +74,9 @@ export interface AppGroup {
                     @if (showArchived()) {
                       <button
                         class="app-instance__unarchive"
+                        [class.app-list__control--phone]="phoneMode"
                         (click)="onUnarchive(instance.id); $event.stopPropagation()"
                         [disabled]="actionsDisabled"
-                        [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-                        [style.opacity]="phoneMode ? 1 : null"
-                        [style.background]="phoneMode ? 'transparent' : null"
-                        [style.borderRadius]="phoneMode ? '999px' : null"
                         title="{{ 'dialogs.unarchive' | translate }}"
                       >
                         <span class="app-list__action-icon app-list__action-icon--unarchive"
@@ -97,13 +87,10 @@ export interface AppGroup {
                   } @else {
                     <button
                       class="app-instance__kebab"
+                      [class.app-list__control--phone]="phoneMode"
                       (pointerdown)="$event.stopPropagation()"
                       (click)="toggleActions(instance.id, $event)"
                       [disabled]="actionsDisabled"
-                      [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-                      [style.opacity]="phoneMode ? 1 : null"
-                      [style.background]="phoneMode ? 'transparent' : null"
-                      [style.borderRadius]="phoneMode ? '999px' : null"
                       title="{{ 'dialogs.actions' | translate }}"
                     >
                       ⋯
@@ -265,6 +252,22 @@ export interface AppGroup {
         cursor: not-allowed;
       }
 
+      .app-list__control--phone {
+        border: 1px solid rgba(148, 163, 184, 0.55) !important;
+        border-radius: 999px !important;
+        background: transparent !important;
+        opacity: 1 !important;
+        width: 36px;
+        height: 36px;
+        font-size: 20px;
+      }
+
+      .app-list__control--compact {
+        width: 22px;
+        height: 22px;
+        font-size: 14px;
+      }
+
       .app-list__icon--add:hover {
         border: 1px solid var(--color-border);
         border-radius: 6px;
@@ -306,6 +309,14 @@ export interface AppGroup {
       .app-instance__name {
         text-align: left;
         width: 100%;
+      }
+
+      .app-instance__name--active {
+        font-style: italic;
+      }
+
+      .app-instance__name--archived {
+        opacity: 0.6;
       }
 
       .app-instance__kebab {
@@ -350,54 +361,16 @@ export interface AppGroup {
         padding: 8px 0;
       }
 
-      :host-context(.phone-mode) .app-list__toggle {
-        width: 22px;
-        height: 22px;
-        font-size: 14px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
       :host-context(.phone-mode) .app-list__app-icon {
         width: 20px;
         height: 20px;
         font-size: 16px;
       }
 
-      :host-context(.phone-mode) .app-list__icon {
-        width: 36px;
-        height: 36px;
-        font-size: 20px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
       :host-context(.phone-mode) .app-instance {
         grid-template-columns: 1fr 32px;
         column-gap: 8px;
         padding: 6px 0;
-      }
-
-      :host-context(.phone-mode) .app-instance__kebab,
-      :host-context(.phone-mode) .app-instance__unarchive {
-        width: 36px;
-        height: 36px;
-        font-size: 20px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
-      :host-context(.phone-mode) .app-list__toggle,
-      :host-context(.phone-mode) .app-list__icon,
-      :host-context(.phone-mode) .app-instance__kebab,
-      :host-context(.phone-mode) .app-instance__unarchive {
-        opacity: 1 !important;
       }
 
       :host-context(.phone-mode) .app-instance__actions {
