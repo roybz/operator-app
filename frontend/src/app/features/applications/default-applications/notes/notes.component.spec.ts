@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NotesComponent } from './notes.component';
+import { mergeNotesStatesForSync, NotesComponent } from './notes.component';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { ImportGuardService } from '../../../../core/import-guard.service';
@@ -254,5 +254,77 @@ describe('NotesComponent (vault mode)', () => {
     await component.toggleCurrentVaultCloudAttachmentsBetaRequested(true);
 
     expect(setSpy).toHaveBeenCalledWith('v1', true);
+  });
+
+  it('merges notes tree conflict by preserving local note edits and remote additions', () => {
+    const merged = mergeNotesStatesForSync(
+      {
+        root: {
+          id: 'root',
+          type: 'folder',
+          name: 'Root',
+          children: [
+            {
+              id: 'n1',
+              type: 'note',
+              name: 'Shared note',
+              parentId: 'root',
+              content: 'Remote text',
+            },
+            {
+              id: 'n2',
+              type: 'note',
+              name: 'Remote only',
+              parentId: 'root',
+              content: 'Remote only content',
+            },
+          ],
+        },
+        archiveRoot: { id: 'archive', type: 'folder', name: 'Archive', children: [] },
+        selectedId: 'n1',
+        selectedIds: ['n1'],
+        view: 'notes',
+        listCollapsed: false,
+        sidebarOpenDesktop: true,
+        sidebarOpenPhone: false,
+      },
+      {
+        root: {
+          id: 'root',
+          type: 'folder',
+          name: 'Root',
+          children: [
+            {
+              id: 'n1',
+              type: 'note',
+              name: 'Shared note',
+              parentId: 'root',
+              content: 'Local text',
+            },
+            {
+              id: 'n3',
+              type: 'note',
+              name: 'Local only',
+              parentId: 'root',
+              content: 'Local only content',
+            },
+          ],
+        },
+        archiveRoot: { id: 'archive', type: 'folder', name: 'Archive', children: [] },
+        selectedId: 'n3',
+        selectedIds: ['n3'],
+        view: 'notes',
+        listCollapsed: false,
+        sidebarOpenDesktop: true,
+        sidebarOpenPhone: false,
+      },
+    );
+
+    const rootChildren = (merged.root.children ?? []).map((node) => node.id);
+    expect(rootChildren).toContain('n1');
+    expect(rootChildren).toContain('n2');
+    expect(rootChildren).toContain('n3');
+    expect((merged.root.children ?? []).find((node) => node.id === 'n1')?.content).toBe('Local text');
+    expect(merged.selectedId).toBe('n3');
   });
 });

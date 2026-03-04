@@ -85,6 +85,59 @@ interface VaultTreeFlatRow {
 const stateStore = new Map<string, NotesState>();
 const STORAGE_PREFIX = 'op_app_state:notes';
 
+const cloneNoteTree = (node: NoteNode, parentId?: string): NoteNode => {
+  const copy: NoteNode = { ...node, parentId };
+  if (node.type === 'folder') {
+    copy.children = (node.children ?? []).map((child) => cloneNoteTree(child, copy.id));
+  }
+  return copy;
+};
+
+const mergeNoteTreesForSync = (remoteNode: NoteNode, localNode: NoteNode, parentId?: string): NoteNode => {
+  const remote = cloneNoteTree(remoteNode, parentId);
+  const local = cloneNoteTree(localNode, parentId);
+  if (remote.type !== 'folder' || local.type !== 'folder') {
+    return {
+      ...remote,
+      ...local,
+      parentId,
+      type: local.type,
+    };
+  }
+  const mergedChildren = new Map<string, NoteNode>();
+  for (const child of remote.children ?? []) {
+    mergedChildren.set(child.id, cloneNoteTree(child, remote.id));
+  }
+  for (const child of local.children ?? []) {
+    const existing = mergedChildren.get(child.id);
+    if (!existing) {
+      mergedChildren.set(child.id, cloneNoteTree(child, local.id));
+      continue;
+    }
+    mergedChildren.set(child.id, mergeNoteTreesForSync(existing, child, local.id));
+  }
+  return {
+    ...remote,
+    ...local,
+    parentId,
+    type: 'folder',
+    children: Array.from(mergedChildren.values()),
+  };
+};
+
+export const mergeNotesStatesForSync = (remoteState: NotesState, localState: NotesState): NotesState => ({
+  ...remoteState,
+  ...localState,
+  root: mergeNoteTreesForSync(remoteState.root, localState.root),
+  archiveRoot: mergeNoteTreesForSync(remoteState.archiveRoot, localState.archiveRoot),
+  selectedId: localState.selectedId ?? remoteState.selectedId,
+  selectedIds: Array.from(new Set([...(remoteState.selectedIds ?? []), ...(localState.selectedIds ?? [])])),
+  view: localState.view,
+  listCollapsed: localState.listCollapsed,
+  sidebarOpenDesktop: localState.sidebarOpenDesktop,
+  sidebarOpenPhone: localState.sidebarOpenPhone,
+});
+
 export function clearNotesState(instanceId: string, storage: StorageService) {
   clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 }
@@ -1938,10 +1991,21 @@ export class NotesComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: NotesState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = JSON.parse(raw) as NotesState;
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState && !this.isLocallyEditing()) {
+        const merged = mergeNotesStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState();
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage({ persistNormalized: false });
