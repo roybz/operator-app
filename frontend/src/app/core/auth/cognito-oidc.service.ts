@@ -113,6 +113,7 @@ export class CognitoOidcService {
   }
 
   async startSignup() {
+    if (!getOpCapabilities().publicSignupEnabled) return;
     await this.startAuthorizeFlow({ screenHint: 'signup' });
   }
 
