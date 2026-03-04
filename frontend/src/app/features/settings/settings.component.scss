@@ -1,0 +1,62 @@
+:host {
+  display: block;
+  margin-top: 20px;
+}
+
+:host-context(.phone-mode) .settings-about {
+  margin-bottom: 22px;
+}
+
+.settings-controls {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 48px 8px 0;
+  background: var(--color-surface);
+  z-index: 2;
+}
+
+.settings-title {
+  margin: 0 0 8px;
+}
+
+.settings-nav {
+  margin: 16px 0;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-nav__divider {
+  align-self: center;
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+}
+
+.dimmed {
+  opacity: 0.5;
+}
+
+.settings-about {
+  margin-top: 24px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.settings-about__content {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 180ms ease,
+    opacity 180ms ease;
+  margin-top: 8px;
+}
+
+.settings-about__content--open {
+  max-height: 240px;
+  opacity: 1;
+}
