@@ -74,6 +74,165 @@ export interface KanbanState {
   selectedColumnId: string | null;
 }
 
+const dedupeIds = (ids: string[]) => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+};
+
+const mergeOrderedIds = (remoteIds: string[], localIds: string[]) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of localIds) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  for (const id of remoteIds) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+};
+
+export function normalizeKanbanStateForSync(
+  state: KanbanState,
+  createDefaultBoard: () => KanbanBoard,
+): KanbanState {
+  const nextBoards = Array.isArray(state.boards) ? [...state.boards] : [];
+  if (!nextBoards.length) {
+    const fallback = createDefaultBoard();
+    return {
+      boards: [fallback],
+      activeBoardId: fallback.id,
+      selectedCardId: null,
+      selectedColumnId: null,
+    };
+  }
+
+  const normalizedBoards = nextBoards.map((board) => {
+    const cards = { ...(board.cards ?? {}) };
+    const normalizedColumns = (board.columns ?? []).map((column) => ({
+      ...column,
+      cardIds: dedupeIds((column.cardIds ?? []).filter((cardId) => Boolean(cards[cardId]))),
+    }));
+
+    const assigned = new Set<string>();
+    for (const column of normalizedColumns) {
+      column.cardIds = column.cardIds.filter((cardId) => {
+        if (assigned.has(cardId)) return false;
+        assigned.add(cardId);
+        return true;
+      });
+    }
+
+    const unassigned = Object.keys(cards).filter((cardId) => !assigned.has(cardId));
+    if (unassigned.length) {
+      if (normalizedColumns.length) {
+        normalizedColumns[0] = {
+          ...normalizedColumns[0],
+          cardIds: [...normalizedColumns[0].cardIds, ...unassigned],
+        };
+      } else {
+        normalizedColumns.push({
+          id: uid('col'),
+          title: 'Todo',
+          cardIds: unassigned,
+        });
+      }
+    }
+
+    return {
+      ...board,
+      columns: normalizedColumns,
+      cards,
+    };
+  });
+
+  const activeBoardId = normalizedBoards.some((board) => board.id === state.activeBoardId)
+    ? state.activeBoardId
+    : normalizedBoards[0].id;
+  const selectedCardId =
+    state.selectedCardId && normalizedBoards.some((board) => Boolean(board.cards[state.selectedCardId!]))
+      ? state.selectedCardId
+      : null;
+  const selectedColumnId =
+    state.selectedColumnId &&
+    normalizedBoards.some((board) => board.columns.some((column) => column.id === state.selectedColumnId))
+      ? state.selectedColumnId
+      : null;
+
+  return {
+    boards: normalizedBoards,
+    activeBoardId,
+    selectedCardId,
+    selectedColumnId,
+  };
+}
+
+export function mergeKanbanStatesForSync(
+  remoteState: KanbanState,
+  localState: KanbanState,
+  createDefaultBoard: () => KanbanBoard,
+): KanbanState {
+  const remote = normalizeKanbanStateForSync(remoteState, createDefaultBoard);
+  const local = normalizeKanbanStateForSync(localState, createDefaultBoard);
+  const localBoardsById = new Map(local.boards.map((board) => [board.id, board] as const));
+  const remoteBoardsById = new Map(remote.boards.map((board) => [board.id, board] as const));
+  const mergedBoards: KanbanBoard[] = [];
+
+  for (const remoteBoard of remote.boards) {
+    const localBoard = localBoardsById.get(remoteBoard.id);
+    if (!localBoard) {
+      mergedBoards.push(remoteBoard);
+      continue;
+    }
+    const cards = { ...remoteBoard.cards, ...localBoard.cards };
+    const remoteColumnsById = new Map(remoteBoard.columns.map((column) => [column.id, column] as const));
+    const localColumnsById = new Map(localBoard.columns.map((column) => [column.id, column] as const));
+    const columns: KanbanColumn[] = [];
+    for (const remoteColumn of remoteBoard.columns) {
+      const localColumn = localColumnsById.get(remoteColumn.id);
+      if (!localColumn) {
+        columns.push(remoteColumn);
+        continue;
+      }
+      columns.push({
+        ...remoteColumn,
+        ...localColumn,
+        cardIds: mergeOrderedIds(remoteColumn.cardIds ?? [], localColumn.cardIds ?? []),
+      });
+    }
+    for (const localColumn of localBoard.columns) {
+      if (!remoteColumnsById.has(localColumn.id)) columns.push(localColumn);
+    }
+    mergedBoards.push({
+      ...remoteBoard,
+      ...localBoard,
+      cards,
+      columns,
+    });
+  }
+
+  for (const localBoard of local.boards) {
+    if (!remoteBoardsById.has(localBoard.id)) mergedBoards.push(localBoard);
+  }
+
+  const merged = {
+    boards: mergedBoards,
+    activeBoardId: local.activeBoardId || remote.activeBoardId,
+    selectedCardId: local.selectedCardId ?? remote.selectedCardId,
+    selectedColumnId: local.selectedColumnId ?? remote.selectedColumnId,
+  };
+  return normalizeKanbanStateForSync(merged, createDefaultBoard);
+}
+
 const stateStore = new Map<string, KanbanState>();
 const STORAGE_PREFIX = 'op_app_state:kanban';
 
@@ -1383,8 +1542,9 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as KanbanState;
-      this.state.set(parsed);
-      stateStore.set(this.instanceId, parsed);
+      const normalized = normalizeKanbanStateForSync(parsed, () => this.createDefaultBoard());
+      this.state.set(normalized);
+      stateStore.set(this.instanceId, normalized);
       return true;
     } catch {
       return false;
@@ -1424,10 +1584,30 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: KanbanState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeKanbanStateForSync(
+            JSON.parse(raw) as KanbanState,
+            () => this.createDefaultBoard(),
+          );
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const mergedState = mergeKanbanStatesForSync(
+          remoteState,
+          this.state(),
+          () => this.createDefaultBoard(),
+        );
+        this.state.set(mergedState);
+        stateStore.set(this.instanceId, mergedState);
+        if (!this.isLocallyEditing()) {
+          this.persistQueue.schedule({ immediate: true });
+        }
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage();

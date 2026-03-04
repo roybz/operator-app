@@ -6,7 +6,13 @@ import {
   TranslateService,
 } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
-import { KanbanComponent } from './kanban.component';
+import {
+  KanbanBoard,
+  KanbanComponent,
+  KanbanState,
+  mergeKanbanStatesForSync,
+  normalizeKanbanStateForSync,
+} from './kanban.component';
 import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
 import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
 import { StorageService } from '../../../../core/storage/storage.service';
@@ -38,6 +44,13 @@ interface TestKanbanComponent {
 }
 
 describe('KanbanComponent', () => {
+  const defaultBoardFactory = (): KanbanBoard => ({
+    id: 'board_default',
+    name: 'Default',
+    columns: [{ id: 'col_default', title: 'Todo', cardIds: [] }],
+    cards: {},
+  });
+
   const create = async () => {
     await TestBed.configureTestingModule({
       imports: [
@@ -174,5 +187,131 @@ describe('KanbanComponent', () => {
     component.dragState = { cardId, fromColumnId: c2 };
     component.onDrop(c3, new Event('drop') as DragEvent);
     expect(component.activeBoard().columns.find((col) => col.id === c3)?.cardIds).toContain(cardId);
+  });
+
+  it('normalizes duplicate/phantom card references in columns', () => {
+    const state: KanbanState = {
+      boards: [
+        {
+          id: 'b1',
+          name: 'Board',
+          columns: [
+            { id: 'c1', title: 'Todo', cardIds: ['card1', 'card1', 'ghost'] },
+            { id: 'c2', title: 'Done', cardIds: ['card1'] },
+          ],
+          cards: {
+            card1: {
+              id: 'card1',
+              title: 'Card 1',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+            card2: {
+              id: 'card2',
+              title: 'Card 2',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+          },
+        },
+      ],
+      activeBoardId: 'b1',
+      selectedCardId: 'ghost',
+      selectedColumnId: 'missing',
+    };
+
+    const normalized = normalizeKanbanStateForSync(state, defaultBoardFactory);
+    const board = normalized.boards[0];
+    expect(board.columns[0].cardIds).toContain('card1');
+    expect(board.columns[0].cardIds).toContain('card2');
+    expect(board.columns[0].cardIds).not.toContain('ghost');
+    expect(board.columns[1].cardIds).not.toContain('card1');
+    expect(normalized.selectedCardId).toBeNull();
+    expect(normalized.selectedColumnId).toBeNull();
+  });
+
+  it('merges local and remote board state without dropping cards during conflicts', () => {
+    const remote: KanbanState = {
+      boards: [
+        {
+          id: 'b1',
+          name: 'Remote Board',
+          columns: [
+            { id: 'c1', title: 'Todo', cardIds: ['card_shared'] },
+            { id: 'c2', title: 'Done', cardIds: ['card_remote'] },
+          ],
+          cards: {
+            card_shared: {
+              id: 'card_shared',
+              title: 'Remote Shared',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+            card_remote: {
+              id: 'card_remote',
+              title: 'Remote only',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+          },
+        },
+      ],
+      activeBoardId: 'b1',
+      selectedCardId: null,
+      selectedColumnId: null,
+    };
+    const local: KanbanState = {
+      boards: [
+        {
+          id: 'b1',
+          name: 'Local Rename',
+          columns: [
+            { id: 'c1', title: 'Todo', cardIds: ['card_local', 'card_shared'] },
+            { id: 'c2', title: 'Done', cardIds: [] },
+          ],
+          cards: {
+            card_shared: {
+              id: 'card_shared',
+              title: 'Local Shared',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+            card_local: {
+              id: 'card_local',
+              title: 'Local only',
+              description: '',
+              dueDate: '',
+              labels: [],
+              checklist: [],
+            },
+          },
+        },
+      ],
+      activeBoardId: 'b1',
+      selectedCardId: 'card_local',
+      selectedColumnId: 'c1',
+    };
+
+    const merged = mergeKanbanStatesForSync(remote, local, defaultBoardFactory);
+    const board = merged.boards[0];
+    expect(board.name).toBe('Local Rename');
+    expect(board.cards['card_remote']).toBeTruthy();
+    expect(board.cards['card_local']).toBeTruthy();
+    expect(board.cards['card_shared']?.title).toBe('Local Shared');
+    const c1 = board.columns.find((column) => column.id === 'c1');
+    const c2 = board.columns.find((column) => column.id === 'c2');
+    expect(c1?.cardIds).toContain('card_shared');
+    expect(c1?.cardIds).toContain('card_local');
+    expect(c2?.cardIds).toContain('card_remote');
   });
 });
