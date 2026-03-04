@@ -256,7 +256,7 @@ describe('NotesComponent (vault mode)', () => {
     expect(setSpy).toHaveBeenCalledWith('v1', true);
   });
 
-  it('merges notes tree conflict by preserving local note edits and remote additions', () => {
+  it('merges notes tree conflict by preserving local edits and appending remote text additions', () => {
     const merged = mergeNotesStatesForSync(
       {
         root: {
@@ -324,7 +324,64 @@ describe('NotesComponent (vault mode)', () => {
     expect(rootChildren).toContain('n1');
     expect(rootChildren).toContain('n2');
     expect(rootChildren).toContain('n3');
-    expect((merged.root.children ?? []).find((node) => node.id === 'n1')?.content).toBe('Local text');
+    expect((merged.root.children ?? []).find((node) => node.id === 'n1')?.content).toBe(
+      'Local text\n\nRemote text',
+    );
     expect(merged.selectedId).toBe('n3');
+  });
+
+  it('merges concurrent note body paragraph additions from local and remote', () => {
+    const merged = mergeNotesStatesForSync(
+      {
+        root: {
+          id: 'root',
+          type: 'folder',
+          name: 'Root',
+          children: [
+            {
+              id: 'n1',
+              type: 'note',
+              name: 'Shared note',
+              parentId: 'root',
+              content: 'Remote paragraph\n\nShared paragraph',
+            },
+          ],
+        },
+        archiveRoot: { id: 'archive', type: 'folder', name: 'Archive', children: [] },
+        selectedId: 'n1',
+        selectedIds: ['n1'],
+        view: 'notes',
+        listCollapsed: false,
+        sidebarOpenDesktop: true,
+        sidebarOpenPhone: false,
+      },
+      {
+        root: {
+          id: 'root',
+          type: 'folder',
+          name: 'Root',
+          children: [
+            {
+              id: 'n1',
+              type: 'note',
+              name: 'Shared note',
+              parentId: 'root',
+              content: 'Local paragraph\n\nShared paragraph',
+            },
+          ],
+        },
+        archiveRoot: { id: 'archive', type: 'folder', name: 'Archive', children: [] },
+        selectedId: 'n1',
+        selectedIds: ['n1'],
+        view: 'notes',
+        listCollapsed: false,
+        sidebarOpenDesktop: true,
+        sidebarOpenPhone: false,
+      },
+    );
+
+    expect((merged.root.children ?? []).find((node) => node.id === 'n1')?.content).toBe(
+      'Local paragraph\n\nShared paragraph\n\nRemote paragraph',
+    );
   });
 });

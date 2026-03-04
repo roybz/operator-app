@@ -27,6 +27,7 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { notesTextCollabAdapter } from '../../../../core/realtime/notes-text-collab';
 import { ObsidianImportService } from '../../../../core/obsidian/obsidian-import.service';
 import { VaultDbService } from '../../../../core/obsidian/vault-db';
 import {
@@ -96,6 +97,19 @@ const cloneNoteTree = (node: NoteNode, parentId?: string): NoteNode => {
 const mergeNoteTreesForSync = (remoteNode: NoteNode, localNode: NoteNode, parentId?: string): NoteNode => {
   const remote = cloneNoteTree(remoteNode, parentId);
   const local = cloneNoteTree(localNode, parentId);
+  if (remote.type === 'note' && local.type === 'note') {
+    const textMerge = notesTextCollabAdapter.merge({
+      localText: local.content ?? '',
+      remoteText: remote.content ?? '',
+    });
+    return {
+      ...remote,
+      ...local,
+      parentId,
+      type: 'note',
+      content: textMerge.text,
+    };
+  }
   if (remote.type !== 'folder' || local.type !== 'folder') {
     return {
       ...remote,
