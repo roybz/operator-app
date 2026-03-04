@@ -233,18 +233,30 @@ const formatTitle = (url: string) => {
   template: `
     <div class="navigator-shell">
       <div class="navigator-toolbar" style="display:flex; gap:8px; align-items:center;">
-        <button (click)="goBack()" [disabled]="navigationDisabled">←</button>
-        <button (click)="goForward()" [disabled]="navigationDisabled">→</button>
-        <button (click)="refresh()" [disabled]="navigationDisabled">⟳</button>
+        <button type="button" (click)="goBack()" [disabled]="navigationDisabled" aria-label="Go back">
+          &larr;
+        </button>
+        <button
+          type="button"
+          (click)="goForward()"
+          [disabled]="navigationDisabled"
+          aria-label="Go forward"
+        >
+          &rarr;
+        </button>
+        <button type="button" (click)="refresh()" [disabled]="navigationDisabled" aria-label="Refresh tab">
+          &#x27f3;
+        </button>
         <input
           type="text"
           [value]="activeTab()?.url"
           (change)="navigate($event)"
           [disabled]="navigationDisabled"
+          aria-label="Navigator URL input"
           style="flex:1; padding:6px;"
         />
-        <button (click)="addTab()" [disabled]="navigationDisabled">+</button>
-        <button (click)="toggleBookmarks()" [disabled]="navigationDisabled">
+        <button type="button" (click)="addTab()" [disabled]="navigationDisabled" aria-label="Add tab">+</button>
+        <button type="button" (click)="toggleBookmarks()" [disabled]="navigationDisabled">
           {{ 'navigator.bookmarks' | translate }}
         </button>
       </div>
@@ -265,12 +277,16 @@ const formatTitle = (url: string) => {
         @for (tab of state().tabs; track tab.id) {
           <div style="display:flex; align-items:center; gap:4px;">
             <button
+              type="button"
               (click)="activateTab(tab.id)"
               [style.fontWeight]="tab.id === state().activeTabId ? '600' : '400'"
+              [attr.aria-label]="'Activate tab: ' + tab.title"
             >
               {{ tab.title }}
             </button>
-            <button (click)="closeTab(tab.id)">✕</button>
+            <button type="button" (click)="closeTab(tab.id)" [attr.aria-label]="'Close tab: ' + tab.title">
+              &times;
+            </button>
           </div>
         }
       </div>
@@ -294,6 +310,7 @@ const formatTitle = (url: string) => {
         } @else if (activeTab()) {
           <iframe
             [attr.lang]="language()"
+            [attr.title]="activeTab()?.title || 'Navigator content'"
             [src]="safeUrl(activeTab()?.url)"
             style="width:100%; height:100%; border:0;"
           ></iframe>

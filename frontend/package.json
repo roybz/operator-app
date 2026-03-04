@@ -15,6 +15,7 @@
     "test:security": "npm audit --audit-level=moderate",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
+    "audit:conventions": "node scripts/conventions-audit.mjs",
     "test:smoke": "npm run test:unit && npm run test:e2e",
     "test:regression": "npm run test:smoke",
     "test:release-gates": "npm run lint && npm run test:unit -- --watch=false && npm run build && npm run build-storybook",
