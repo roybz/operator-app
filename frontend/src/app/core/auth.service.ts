@@ -5,6 +5,7 @@ import { AppId, DialogRect } from '../features/dependencies/app-types';
 import packageJson from '../../../package.json';
 import { StorageService } from './storage/storage.service';
 import { CognitoOidcService } from './auth/cognito-oidc.service';
+import { writeWithConflictRetry } from './storage/remote-write-utils';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -134,6 +135,49 @@ interface DialogStateSnapshot {
   hiddenWorkspaces: Record<string, boolean>;
   zCounter: number;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean';
+const isString = (value: unknown): value is string => typeof value === 'string';
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === 'string';
+const isNullableUserRole = (value: unknown): value is UserRole | null =>
+  value === null ||
+  value === 'admin' ||
+  value === 'user' ||
+  value === 'guest' ||
+  value === 'observer' ||
+  value === 'invitee';
+
+const isSessionStateContract = (value: unknown): value is SessionState => {
+  if (!isRecord(value)) return false;
+  return (
+    isNullableString(value['userId']) &&
+    isNullableString(value['previewUserId']) &&
+    isBoolean(value['previewPersist']) &&
+    isNullableUserRole(value['sessionRole']) &&
+    isNullableString(value['sessionUsername']) &&
+    isNullableString(value['universeOwnerId']) &&
+    isNullableString(value['universeId'])
+  );
+};
+
+const isOrgSettingsContract = (value: unknown): value is OrgSettings => {
+  if (!isRecord(value)) return false;
+  return (
+    isString(value['siteTitle']) &&
+    isString(value['siteLogoEmoji']) &&
+    isBoolean(value['testModeEnabled']) &&
+    isBoolean(value['allowGuestLogin']) &&
+    typeof value['defaultViewportWidth'] === 'number' &&
+    typeof value['defaultViewportHeight'] === 'number' &&
+    isBoolean(value['disableViewportSizing']) &&
+    isBoolean(value['disableZoomControls']) &&
+    isBoolean(value['allowServerBackground'])
+  );
+};
 
 const USERS_KEY = 'op_users';
 const SESSION_KEY = 'op_session';
@@ -1468,24 +1512,18 @@ export class AuthService {
     void this.persistSerialized(key, serialized);
   }
 
-  private async persistSerialized(key: string, serialized: string, attempt = 0) {
+  private async persistSerialized(key: string, serialized: string) {
     try {
-      await this.storage.setItem(key, serialized);
-      return;
+      await writeWithConflictRetry({
+        key,
+        serialized,
+        write: (payload) => this.storage.setItem(key, payload),
+        getCurrentSerialized: () => this.getRaw(key),
+        refresh: () => this.storage.getItem(key).then(() => undefined),
+        maxRetries: 1,
+        retryDelayMs: 120,
+      });
     } catch (error) {
-      if (this.shouldIgnorePersistConflict(key, error)) return;
-      if (this.isVersionConflict(error) && attempt < 1) {
-        try {
-          await this.storage.getItem(key);
-        } catch {
-          // Ignore cache refresh failures; retry once anyway.
-        }
-        if (this.getRaw(key) === serialized) return;
-        setTimeout(() => {
-          void this.persistSerialized(key, serialized, attempt + 1);
-        }, 120);
-        return;
-      }
       console.error(error);
     }
   }
@@ -1511,6 +1549,12 @@ export class AuthService {
   }
 
   private safeJson<T>(key: string, fallback: T): T {
+    if (key === SESSION_KEY) {
+      return this.storage.getJsonSyncValidated(key, fallback, isSessionStateContract as (value: unknown) => value is T);
+    }
+    if (key === ORG_SETTINGS_KEY) {
+      return this.storage.getJsonSyncValidated(key, fallback, isOrgSettingsContract as (value: unknown) => value is T);
+    }
     return this.storage.getJsonSync(key, fallback);
   }
 
@@ -2097,30 +2141,6 @@ export class AuthService {
 
   private universeGuestCounterKey(universeId: string) {
     return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
-  }
-
-  private shouldIgnorePersistConflict(key: string, error: unknown) {
-    if (!this.isUniverseEphemeralKey(key)) return false;
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const message = String(error.message || '');
-    return code === 'version_conflict' || message.includes('version_conflict');
-  }
-
-  private isUniverseEphemeralKey(key: string) {
-    return (
-      key.startsWith(`${UNIVERSE_PRESENCE_KEY}:`) ||
-      key.startsWith(`${UNIVERSE_GUEST_COUNTER_KEY}:`)
-    );
-  }
-
-  private isVersionConflict(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const message = String(error.message || '');
-    return code === 'version_conflict' || message.includes('version_conflict');
   }
 
   private mirrorOrgSettingsForRuntimeGuards(value: OrgSettings) {

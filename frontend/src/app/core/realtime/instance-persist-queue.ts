@@ -1,3 +1,5 @@
+import { isRemoteStorageTooManyRequests, isRemoteStorageVersionConflict } from '../storage/remote-write-utils';
+
 export type PersistQueueErrorAction = 'handled' | 'retry';
 
 export interface InstancePersistQueueOptions {
@@ -112,22 +114,4 @@ export class InstancePersistQueue {
   }
 }
 
-export function isRemoteStorageVersionConflict(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const maybeCode = (error as Error & { code?: unknown }).code;
-  const maybeStatus = (error as Error & { status?: unknown }).status;
-  const code = typeof maybeCode === 'string' ? maybeCode : '';
-  const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-  const message = String(error.message || '');
-  return status === 409 || code === 'version_conflict' || message.includes('version_conflict');
-}
-
-export function isRemoteStorageTooManyRequests(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const maybeCode = (error as Error & { code?: unknown }).code;
-  const maybeStatus = (error as Error & { status?: unknown }).status;
-  const code = typeof maybeCode === 'string' ? maybeCode : '';
-  const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-  const message = String(error.message || '');
-  return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
-}
+export { isRemoteStorageTooManyRequests, isRemoteStorageVersionConflict };

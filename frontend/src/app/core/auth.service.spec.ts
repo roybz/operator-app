@@ -69,6 +69,17 @@ describe('AuthService phone-mode sync', () => {
 
     expect(auth.consumeLoginPhoneModeApplyFlag()).toBe(false);
   });
+
+  it('falls back safely when persisted session contract is malformed', async () => {
+    const auth = TestBed.inject(AuthService);
+    const storage = TestBed.inject(StorageService);
+
+    await storage.setItem('op_session', JSON.stringify({ userId: 123, previewPersist: 'yes' }));
+    await auth.hydrate();
+
+    expect(auth.isLoggedIn()).toBe(false);
+    expect(auth.session().userId).toBeNull();
+  });
 });
 
 class MockExternalCognitoOidcService {

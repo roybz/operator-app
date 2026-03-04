@@ -4,6 +4,10 @@ import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
 import { StorageService } from './storage/storage.service';
 import { UniverseEventHubService } from './events/universe-event-hub.service';
+import {
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from './storage/remote-write-utils';
 
 export interface DialogInstance {
   id: string;
@@ -718,7 +722,7 @@ export class DialogService {
           this.emitSystemEvent('PersistFlushCompleted', { key: userKey });
           this.persistBackoffMs = 0;
         } catch (error) {
-          if (this.isTooManyRequests(error)) {
+          if (isRemoteStorageTooManyRequests(error)) {
             // API Gateway throttling during long drags: back off and coalesce the latest state.
             this.persistBackoffMs = Math.min(Math.max(this.persistBackoffMs || 200, 200) * 2, 2000);
             this.emitSystemEvent('PersistFlushThrottled', {
@@ -729,7 +733,7 @@ export class DialogService {
             this.schedulePersistFlush(this.persistBackoffMs);
             break;
           }
-          if (this.isVersionConflict(error)) {
+          if (isRemoteStorageVersionConflict(error)) {
             // Refresh adapter version cache and retry a little later with latest local state.
             this.emitSystemEvent('ConflictResolved', {
               key: userKey,
@@ -796,23 +800,6 @@ export class DialogService {
 
   private removeKey(key: string) {
     void this.storage.removeItem(key);
-  }
-
-  private isVersionConflict(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    return code === 'version_conflict' || String(error.message || '').includes('version_conflict');
-  }
-
-  private isTooManyRequests(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const maybeStatus = (error as Error & { status?: unknown }).status;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-    const message = String(error.message || '');
-    return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
   }
 
   private keys() {
