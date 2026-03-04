@@ -20,6 +20,7 @@ interface RemoteStorageAdapterOptions {
   requestIdProvider?: () => string;
   sessionIdProvider?: () => string;
   requestRateLimitPerMinute?: number;
+  onRequestWindowUsage?: (usage: { count: number; limit: number }) => void;
 }
 
 export class RemoteStorageError extends Error {
@@ -195,10 +196,12 @@ export class RemoteStorageAdapter implements StorageAdapter {
     const now = Date.now();
     const windowStart = now - 60_000;
     this.requestWindow = this.requestWindow.filter((ts) => ts >= windowStart);
+    this.options.onRequestWindowUsage?.({ count: this.requestWindow.length, limit });
     if (this.requestWindow.length >= limit) {
       throw new RemoteStorageError('Request quota exceeded', 429, 'quota_request_rate_exceeded');
     }
     this.requestWindow.push(now);
+    this.options.onRequestWindowUsage?.({ count: this.requestWindow.length, limit });
   }
 
   private isTestModeEnabled() {

@@ -3,6 +3,7 @@ import { CognitoOidcService } from '../auth/cognito-oidc.service';
 import { getOpCapabilities, getOpConfig } from '../op-config';
 import { UniverseEventHubService } from '../events/universe-event-hub.service';
 import { ClientObservabilityService } from '../observability/client-observability.service';
+import { UsageQuotaService } from '../quotas/usage-quota.service';
 
 type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 export type RealtimeConnectivityState =
@@ -27,6 +28,7 @@ export class RealtimeSyncService {
   private cognitoOidc = inject(CognitoOidcService);
   private eventHub = inject(UniverseEventHubService);
   private observability = inject(ClientObservabilityService);
+  private quotaUsage = inject(UsageQuotaService);
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private shouldBeConnected = false;
@@ -53,6 +55,7 @@ export class RealtimeSyncService {
     if (!this.isConfigured()) {
       this.status.set('idle');
       this.connectivity.set('idle');
+      this.quotaUsage.setRealtimeChannelsInUse(0);
       return;
     }
     if (
@@ -81,6 +84,7 @@ export class RealtimeSyncService {
     }
     this.status.set('idle');
     this.connectivity.set('idle');
+    this.quotaUsage.setRealtimeChannelsInUse(0);
   }
 
   async enqueueBufferedWrite(key: string, run: () => Promise<void>) {
@@ -113,6 +117,7 @@ export class RealtimeSyncService {
       if (this.socket !== socket) return;
       this.status.set('connected');
       this.connectivity.set(this.bufferedWrites.length ? 'reconciling' : 'connected');
+      this.quotaUsage.setRealtimeChannelsInUse(1);
       this.observability.logInfo('realtime.connected', { reconnectAttempt: this.reconnectAttempt });
       this.reconnectAttempt = 0;
       this.reconnectWindowStart = 0;
@@ -154,6 +159,7 @@ export class RealtimeSyncService {
       this.socket = null;
       this.status.set(this.shouldBeConnected ? 'disconnected' : 'idle');
       this.connectivity.set(this.shouldBeConnected ? 'degraded-polling' : 'idle');
+      this.quotaUsage.setRealtimeChannelsInUse(0);
       this.observability.logWarn('realtime.closed', { shouldReconnect: this.shouldBeConnected });
       if (this.shouldBeConnected) this.scheduleReconnect();
     };

@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { getOpConfig } from '../op-config';
 
 export interface QuotaLimits {
@@ -8,6 +8,13 @@ export interface QuotaLimits {
   vaultTotalBytes: number;
   vaultAttachmentTotalBytes: number;
   vaultAttachmentAssetBytes: number;
+}
+
+export interface QuotaUsageSnapshot {
+  requestRateCount: number;
+  requestRateLimit: number;
+  realtimeChannelsInUse: number;
+  updatedAt: number;
 }
 
 const DEFAULT_LIMITS: QuotaLimits = {
@@ -21,6 +28,13 @@ const DEFAULT_LIMITS: QuotaLimits = {
 
 @Injectable({ providedIn: 'root' })
 export class UsageQuotaService {
+  readonly usage = signal<QuotaUsageSnapshot>({
+    requestRateCount: 0,
+    requestRateLimit: 0,
+    realtimeChannelsInUse: 0,
+    updatedAt: Date.now(),
+  });
+
   getLimits(): QuotaLimits {
     const cfg = getOpConfig();
     return {
@@ -53,10 +67,35 @@ export class UsageQuotaService {
     };
   }
 
+  updateRequestRateUsage(count: number, limit: number) {
+    const nextCount = this.asNonNegativeInt(count);
+    const nextLimit = this.asNonNegativeInt(limit);
+    this.usage.update((prev) => ({
+      ...prev,
+      requestRateCount: nextCount,
+      requestRateLimit: nextLimit,
+      updatedAt: Date.now(),
+    }));
+  }
+
+  setRealtimeChannelsInUse(count: number) {
+    const nextCount = this.asNonNegativeInt(count);
+    this.usage.update((prev) => ({
+      ...prev,
+      realtimeChannelsInUse: nextCount,
+      updatedAt: Date.now(),
+    }));
+  }
+
   private clampQuota(value: unknown, fallback: number, min: number) {
     const numeric = Number(value ?? fallback);
     if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
     return Math.max(min, Math.floor(numeric));
   }
-}
 
+  private asNonNegativeInt(value: unknown) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) return 0;
+    return Math.floor(numeric);
+  }
+}

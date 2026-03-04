@@ -24,5 +24,13 @@ describe('UsageQuotaService', () => {
     expect(limits.requestsPerMinute).toBe(321);
     expect(limits.vaultAttachmentAssetBytes).toBe(654321);
   });
-});
 
+  it('tracks runtime request and realtime usage counters', () => {
+    const service = new UsageQuotaService();
+    service.updateRequestRateUsage(12, 240);
+    service.setRealtimeChannelsInUse(2);
+    expect(service.usage().requestRateCount).toBe(12);
+    expect(service.usage().requestRateLimit).toBe(240);
+    expect(service.usage().realtimeChannelsInUse).toBe(2);
+  });
+});

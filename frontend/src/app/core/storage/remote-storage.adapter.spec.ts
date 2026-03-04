@@ -128,4 +128,22 @@ describe('RemoteStorageAdapter', () => {
     await adapter.keys();
     await expect(adapter.keys()).rejects.toBeInstanceOf(RemoteStorageError);
   });
+
+  it('reports request-window usage through callback', async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    const usageSpy = vi.fn();
+
+    const adapter = new RemoteStorageAdapter('https://api.example.com', {
+      accessTokenProvider: async () => 'token-123',
+      requestRateLimitPerMinute: 5,
+      onRequestWindowUsage: usageSpy,
+    });
+
+    await adapter.keys();
+    expect(usageSpy).toHaveBeenCalled();
+    const latest = usageSpy.mock.calls.at(-1)?.[0] as { count: number; limit: number };
+    expect(latest.limit).toBe(5);
+    expect(latest.count).toBeGreaterThanOrEqual(1);
+  });
 });
