@@ -1,6 +1,7 @@
 import { Component, Input, OnDestroy, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { TranslateModule } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import {
   buildInstanceStorageKey,
@@ -29,9 +30,34 @@ interface NavigatorState {
   activeTabId: string;
 }
 
+interface NavigatorBookmark {
+  id: string;
+  labelKey: string;
+  url: string;
+}
+
 const stateStore = new Map<string, NavigatorState>();
 const STORAGE_PREFIX = 'op_app_state:navigator';
 const ABOUT_BLANK = 'about:blank';
+const DEFAULT_BOOKMARKS: NavigatorBookmark[] = [
+  { id: 'example', labelKey: 'navigator.bookmarkExample', url: 'https://example.com' },
+  { id: 'httpbin', labelKey: 'navigator.bookmarkHttpbin', url: 'https://httpbin.org' },
+  {
+    id: 'openstreetmap',
+    labelKey: 'navigator.bookmarkOpenStreetMap',
+    url: 'https://www.openstreetmap.org/export/embed.html?bbox=-0.15%2C51.5%2C-0.1%2C51.52&layer=mapnik',
+  },
+  {
+    id: 'youtubeEmbed',
+    labelKey: 'navigator.bookmarkYouTubeEmbed',
+    url: 'https://www.youtube-nocookie.com/embed/M7lc1UVf-VE',
+  },
+  {
+    id: 'vimeoEmbed',
+    labelKey: 'navigator.bookmarkVimeoEmbed',
+    url: 'https://player.vimeo.com/video/76979871',
+  },
+];
 
 const getNavigatorPolicy = () => {
   const config = getOpConfig();
@@ -54,6 +80,11 @@ const isAllowedNavigatorUrl = (value: string, allowedOrigins: string[]) => {
   } catch {
     return false;
   }
+};
+
+const isTrustedBookmarkUrl = (value: string) => {
+  if (value === ABOUT_BLANK) return true;
+  return DEFAULT_BOOKMARKS.some((bookmark) => bookmark.url === value);
 };
 
 export function clearNavigatorState(instanceId: string, storage: StorageService) {
@@ -87,7 +118,7 @@ const formatTitle = (url: string) => {
 @Component({
   selector: 'app-navigator',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   styles: [
     `
       :host {
@@ -125,7 +156,22 @@ const formatTitle = (url: string) => {
           style="flex:1; padding:6px;"
         />
         <button (click)="addTab()" [disabled]="navigationDisabled">+</button>
+        <button (click)="toggleBookmarks()" [disabled]="navigationDisabled">
+          {{ 'navigator.bookmarks' | translate }}
+        </button>
       </div>
+
+      @if (showBookmarks() && !navigationDisabled) {
+        <div
+          style="display:flex; gap:8px; flex-wrap:wrap; border:1px solid var(--color-border); border-radius:6px; padding:8px;"
+        >
+          @for (bookmark of bookmarks; track bookmark.id) {
+            <button type="button" (click)="openBookmark(bookmark.url)">
+              {{ bookmark.labelKey | translate }}
+            </button>
+          }
+        </div>
+      }
 
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
         @for (tab of state().tabs; track tab.id) {
@@ -142,7 +188,22 @@ const formatTitle = (url: string) => {
       </div>
 
       <div style="flex:1; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
-        @if (activeTab()) {
+        @if (activeTab() && activeTabBlocked()) {
+          <div
+            style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:8px; padding:16px;"
+          >
+            <strong>{{ 'navigator.blockedTitle' | translate }}</strong>
+            <p style="margin:0;">
+              {{ 'navigator.blockedMessage' | translate }}
+            </p>
+            <p style="margin:0; opacity:0.8; word-break:break-all;">
+              {{ activeTab()?.url }}
+            </p>
+            <button type="button" (click)="openActiveInNewTab()">
+              {{ 'navigator.openExternal' | translate }}
+            </button>
+          </div>
+        } @else if (activeTab()) {
           <iframe
             [attr.lang]="language()"
             [src]="safeUrl(activeTab()?.url)"
@@ -162,6 +223,8 @@ export class NavigatorComponent implements OnInit, OnDestroy {
   private remoteConflict = inject(RemoteConflictService);
   state = signal<NavigatorState>({ tabs: [], activeTabId: '' });
   language = signal('en');
+  showBookmarks = signal(true);
+  bookmarks = DEFAULT_BOOKMARKS;
   private readonly navigatorPolicy = getNavigatorPolicy();
   navigationDisabled = !this.navigatorPolicy.enabled;
   private readonly persistQueue = new InstancePersistQueue({
@@ -267,6 +330,26 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     this.updateTab(nextTab);
   }
 
+  toggleBookmarks() {
+    this.showBookmarks.set(!this.showBookmarks());
+  }
+
+  openBookmark(url: string) {
+    if (this.navigationDisabled) return;
+    const active = this.activeTab();
+    if (!active) return;
+    const history = active.history.slice(0, active.historyIndex + 1);
+    history.push(url);
+    const nextTab = {
+      ...active,
+      url,
+      title: formatTitle(url),
+      history,
+      historyIndex: history.length - 1,
+    };
+    this.updateTab(nextTab);
+  }
+
   goBack() {
     if (this.navigationDisabled) return;
     const active = this.activeTab();
@@ -337,11 +420,27 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     return undefined;
   }
 
+  activeTabBlocked() {
+    const tab = this.activeTab();
+    if (!tab || this.navigationDisabled) return false;
+    return this.resolveNavigableUrl(tab.url) === ABOUT_BLANK && tab.url !== ABOUT_BLANK;
+  }
+
+  openActiveInNewTab() {
+    const tab = this.activeTab();
+    if (!tab || !tab.url || tab.url === ABOUT_BLANK || typeof window === 'undefined') return;
+    window.open(tab.url, '_blank', 'noopener,noreferrer');
+  }
+
+  private resolveNavigableUrl(value: string) {
+    if (isTrustedBookmarkUrl(value)) return value;
+    if (isAllowedNavigatorUrl(value, this.navigatorPolicy.allowedOrigins)) return value;
+    return ABOUT_BLANK;
+  }
+
   safeUrl(url?: string): SafeResourceUrl {
     const candidate = this.navigationDisabled ? ABOUT_BLANK : (url ?? ABOUT_BLANK);
-    const next = isAllowedNavigatorUrl(candidate, this.navigatorPolicy.allowedOrigins)
-      ? candidate
-      : ABOUT_BLANK;
+    const next = this.resolveNavigableUrl(candidate);
     return this.sanitizer.bypassSecurityTrustResourceUrl(next);
   }
 }
