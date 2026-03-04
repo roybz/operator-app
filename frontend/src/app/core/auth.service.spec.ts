@@ -123,6 +123,48 @@ describe('AuthService phone-mode sync', () => {
     expect(result.ok).toBe(false);
     expect(result.message).toBe('users.error.adminOnly');
   });
+
+  it('stores active editor scope metadata in universe presence entries', () => {
+    const auth = TestBed.inject(AuthService);
+    const now = Date.now();
+    const updated = auth.touchUniversePresence('universe_1', {
+      id: 'user_1',
+      username: 'alice',
+      role: 'invitee',
+      ownerId: 'owner_1',
+      lastSeen: now,
+      activeInstanceId: 'inst_1',
+      activeObjectId: 'todo_4',
+      activeMode: 'edit',
+    });
+
+    expect(updated.length).toBe(1);
+    expect(updated[0].activeInstanceId).toBe('inst_1');
+    expect(updated[0].activeObjectId).toBe('todo_4');
+    expect(updated[0].activeMode).toBe('edit');
+    expect(typeof updated[0].activeUpdatedAt).toBe('number');
+  });
+
+  it('expires stale presence entries after timeout window', async () => {
+    const auth = TestBed.inject(AuthService);
+    const storage = TestBed.inject(StorageService);
+    await storage.setItem(
+      'op_universe_presence:universe_stale',
+      JSON.stringify([
+        {
+          id: 'user_old',
+          username: 'old',
+          role: 'invitee',
+          ownerId: 'owner_1',
+          lastSeen: Date.now() - 60_000,
+        },
+      ]),
+    );
+
+    const list = auth.getUniversePresence('universe_stale');
+
+    expect(list).toEqual([]);
+  });
 });
 
 class MockExternalCognitoOidcService {

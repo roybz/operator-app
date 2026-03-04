@@ -2345,6 +2345,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!universeId) return;
     const session = this.auth.session();
     if (!session.userId) return;
+    const focus = this.contextFields.focus(universeId);
     const username =
       this.auth.actualUser()?.username ??
       session.sessionUsername ??
@@ -2355,6 +2356,9 @@ export class AppComponent implements OnInit, OnDestroy {
       role: this.sessionRole(),
       ownerId: this.universeOwnerId() ?? '',
       lastSeen: Date.now(),
+      activeInstanceId: focus?.activeInstanceId ?? null,
+      activeObjectId: focus?.activeObjectRef?.id ?? null,
+      activeMode: focus?.focusMode ?? 'inspect',
     };
     this.auth.touchUniversePresence(universeId, entry);
     this.universePresence.set(this.auth.getUniversePresence(universeId));

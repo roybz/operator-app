@@ -39,6 +39,10 @@ export interface UniversePresenceEntry {
   role: UserRole;
   ownerId: string;
   lastSeen: number;
+  activeInstanceId?: string | null;
+  activeObjectId?: string | null;
+  activeMode?: 'edit' | 'inspect' | 'search' | 'present';
+  activeUpdatedAt?: number;
 }
 
 export interface UniverseChatMessage {
@@ -2164,7 +2168,13 @@ export class AuthService {
     const list = this.cleanupUniversePresence(universeId);
     const now = Date.now();
     const next = list.filter((item) => item.id !== entry.id);
-    next.push({ ...entry, lastSeen: now });
+    const hasActiveScope =
+      Boolean(entry.activeInstanceId) || Boolean(entry.activeObjectId) || Boolean(entry.activeMode);
+    next.push({
+      ...entry,
+      lastSeen: now,
+      activeUpdatedAt: hasActiveScope ? now : (entry.activeUpdatedAt ?? now),
+    });
     this.persist(this.universePresenceKey(universeId), next);
     return next;
   }
