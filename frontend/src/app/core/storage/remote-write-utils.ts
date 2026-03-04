@@ -1,14 +1,12 @@
+import {
+  getKeySpaceConflictPolicy,
+  getKeySpaceConflictStrategy,
+} from '../realtime/key-space-conflict-strategy';
+
 export type StorageKeyClass = 'durable' | 'ephemeral';
 
-const EPHEMERAL_KEY_PREFIXES = [
-  'op_universe_presence:',
-  'op_universe_guest_counter:',
-  'op_universe_edit_holder:',
-  'op_universe_kick:',
-] as const;
-
 export function classifyStorageKey(key: string): StorageKeyClass {
-  return EPHEMERAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) ? 'ephemeral' : 'durable';
+  return getKeySpaceConflictStrategy(key) === 'ephemeral-ignore-conflict' ? 'ephemeral' : 'durable';
 }
 
 export function isRemoteStorageVersionConflict(error: unknown) {
@@ -32,7 +30,9 @@ export function isRemoteStorageTooManyRequests(error: unknown) {
 }
 
 export function shouldIgnoreConflictForKey(key: string, error: unknown) {
-  return classifyStorageKey(key) === 'ephemeral' && isRemoteStorageVersionConflict(error);
+  return (
+    getKeySpaceConflictPolicy(key).ignoreVersionConflict && isRemoteStorageVersionConflict(error)
+  );
 }
 
 export interface WriteWithRetryOptions {
@@ -49,15 +49,10 @@ const sleep = (delayMs: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, delayMs)));
 
 export async function writeWithConflictRetry(options: WriteWithRetryOptions) {
-  const {
-    key,
-    serialized,
-    write,
-    getCurrentSerialized,
-    refresh,
-    maxRetries = 1,
-    retryDelayMs = 120,
-  } = options;
+  const { key, serialized, write, getCurrentSerialized, refresh } = options;
+  const keyPolicy = getKeySpaceConflictPolicy(key);
+  const maxRetries = options.maxRetries ?? keyPolicy.maxRetries;
+  const retryDelayMs = options.retryDelayMs ?? keyPolicy.baseRetryDelayMs;
   if (getCurrentSerialized() === serialized) return 'skipped' as const;
 
   let attempt = 0;

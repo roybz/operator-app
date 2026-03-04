@@ -8,6 +8,7 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from './storage/remote-write-utils';
+import { getKeySpaceConflictPolicy } from './realtime/key-space-conflict-strategy';
 
 export interface DialogInstance {
   id: string;
@@ -66,6 +67,7 @@ export class DialogService {
   private persistInFlight = false;
   private persistQueued = false;
   private persistBackoffMs = 0;
+  private persistConflictStreak = 0;
 
   constructor() {
     effect(() => {
@@ -721,6 +723,7 @@ export class DialogService {
           await this.storage.setItem(userKey, payload);
           this.emitSystemEvent('PersistFlushCompleted', { key: userKey });
           this.persistBackoffMs = 0;
+          this.persistConflictStreak = 0;
         } catch (error) {
           if (isRemoteStorageTooManyRequests(error)) {
             // API Gateway throttling during long drags: back off and coalesce the latest state.
@@ -734,10 +737,28 @@ export class DialogService {
             break;
           }
           if (isRemoteStorageVersionConflict(error)) {
-            // Refresh adapter version cache and retry a little later with latest local state.
+            const conflictPolicy = getKeySpaceConflictPolicy(userKey);
+            if (conflictPolicy.ignoreVersionConflict) {
+              this.emitSystemEvent('ConflictIgnored', {
+                key: userKey,
+                strategy: conflictPolicy.strategy,
+              });
+              break;
+            }
+            this.persistConflictStreak += 1;
+            if (this.persistConflictStreak > conflictPolicy.maxRetries) {
+              this.emitSystemEvent('ConflictDeferred', {
+                key: userKey,
+                strategy: conflictPolicy.strategy,
+                attempts: this.persistConflictStreak,
+              });
+              this.persistConflictStreak = 0;
+              break;
+            }
+            // Refresh adapter version cache and retry with bounded backoff.
             this.emitSystemEvent('ConflictResolved', {
               key: userKey,
-              strategy: 'refresh-and-retry',
+              strategy: conflictPolicy.strategy,
             });
             try {
               await this.storage.getItem(userKey);
@@ -745,7 +766,11 @@ export class DialogService {
               // Ignore refresh failures; polling/realtime may catch up.
             }
             this.persistQueued = true;
-            this.schedulePersistFlush(120);
+            const delay = Math.max(
+              conflictPolicy.baseRetryDelayMs,
+              conflictPolicy.baseRetryDelayMs * this.persistConflictStreak,
+            );
+            this.schedulePersistFlush(delay);
             break;
           }
           // Avoid unhandled rejections from async persistence; keep app usable.
