@@ -1,0 +1,37 @@
+:host {
+  display: block;
+}
+
+.login-page {
+  max-width: 420px;
+  margin: 96px auto;
+}
+
+.login-mode-toggle {
+  margin-top: 13px;
+}
+
+.login-reset-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 11px;
+  margin-bottom: 28px;
+  font-size: 14px;
+}
+
+.login-reset-toggle--compact {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.license-shell {
+  padding: 20px;
+}
+
+@media (max-width: 1024px) {
+  :host {
+    display: block;
+    padding-left: 44px;
+  }
+}

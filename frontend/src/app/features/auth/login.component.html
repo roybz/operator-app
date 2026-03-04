@@ -1,0 +1,243 @@
+<main class="login-page">
+  <h1>{{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}</h1>
+  <div style="font-size: 14px; margin-top: -14px">{{ 'auth.tagline' | translate }}</div>
+  <div style="font-size: 12px; opacity: 0.7; margin-top: 10px">v{{ appVersion }}</div>
+
+  @if (universeLogin()) {
+    <p style="margin: 8px 0; opacity: 0.8">
+      {{
+        'universe.loginSubtitle' | translate: { name: universeName(), owner: universeOwnerName() }
+      }}
+    </p>
+    <form (submit)="onInviteeSubmit($event)">
+      <label for="invitee-username" style="display: block; margin: 12px 0 6px">
+        {{ 'universe.inviteeUsername' | translate }}
+      </label>
+      <input
+        id="invitee-username"
+        #inviteeUsernameInput
+        type="text"
+        [value]="username()"
+        (input)="username.set(inviteeUsernameInput.value)"
+        style="width: 100%; padding: 10px"
+      />
+
+      <label for="invitee-password" style="display: block; margin: 12px 0 6px">
+        {{ 'universe.inviteePassword' | translate }}
+      </label>
+      <input
+        id="invitee-password"
+        #inviteePasswordInput
+        type="password"
+        [value]="password()"
+        (input)="password.set(inviteePasswordInput.value)"
+        style="width: 100%; padding: 10px"
+      />
+
+      @if (error()) {
+        <p style="color: #b00020; margin-top: 8px">{{ error() }}</p>
+      }
+
+      <button type="submit" style="margin-top: 16px; padding: 10px 14px">
+        {{ 'auth.signIn' | translate }}
+      </button>
+      <p style="margin-top: 10px; font-size: 12px; opacity: 0.7">
+        {{ 'auth.lockoutWarning' | translate }}
+      </p>
+    </form>
+
+    @if (allowUniverseGuest()) {
+      <input
+        type="password"
+        [value]="guestPassword()"
+        (input)="guestPassword.set($any($event.target).value)"
+        style="width: 100%; padding: 10px; margin-top: 8px"
+        [placeholder]="'universe.guestPassword' | translate"
+      />
+      <button
+        type="button"
+        style="margin-top: 12px; padding: 8px 12px; font-size: 16px"
+        (click)="continueAsUniverseGuest()"
+      >
+        {{ 'universe.continueGuest' | translate }}
+      </button>
+      <app-device-mode-toggle
+        class="login-mode-toggle"
+        [checked]="phoneMode()"
+        (changed)="togglePhoneMode($event)"
+      />
+      <label class="login-reset-toggle">
+        <span style="padding-left: 5px">{{ 'auth.resetGuest' | translate }}</span>
+        <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
+      </label>
+    }
+
+    @if (allowUniverseObserver()) {
+      <input
+        type="password"
+        [value]="observerPassword()"
+        (input)="observerPassword.set($any($event.target).value)"
+        style="width: 100%; padding: 10px; margin-top: 12px"
+        [placeholder]="'universe.observerPassword' | translate"
+      />
+      <button
+        type="button"
+        style="margin-top: 12px; padding: 8px 12px"
+        (click)="continueAsUniverseObserver()"
+      >
+        {{ 'universe.continueObserver' | translate }}
+      </button>
+    }
+
+    <button type="button" style="margin-top: 16px; padding: 8px 12px" (click)="returnToMainLogin()">
+      {{ 'universe.returnToMainLogin' | translate }}
+    </button>
+  } @else if (guestModeOnlyFlag()) {
+    @if (allowGuest()) {
+      <button
+        type="button"
+        style="margin-top: 58px; padding: 8px 12px; font-size: 16px"
+        (click)="continueAsGuest()"
+      >
+        {{ 'auth.guest' | translate }}
+      </button>
+      <app-device-mode-toggle
+        class="login-mode-toggle"
+        [checked]="phoneMode()"
+        (changed)="togglePhoneMode($event)"
+      />
+      <label class="login-reset-toggle">
+        <span style="padding-left: 5px">{{ 'auth.resetGuest' | translate }}</span>
+        <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
+      </label>
+    }
+  } @else {
+    @if (externalAuthEnabled()) {
+      <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap">
+        <button type="button" style="padding: 10px 14px" (click)="startSecureSignIn()">
+          {{ 'auth.signIn' | translate }}
+        </button>
+        @if (publicSignupPrepared()) {
+          <button
+            type="button"
+            style="padding: 10px 14px"
+            [disabled]="!publicSignupEnabled()"
+            [style.opacity]="publicSignupEnabled() ? 1 : 0.6"
+            (click)="startSecureSignup()"
+          >
+            Create account
+          </button>
+        }
+      </div>
+      @if (publicSignupPrepared() && !publicSignupEnabled()) {
+        <div style="margin-top: 8px; opacity: 0.72; font-size: 13px">
+          Public sign-up is not enabled yet.
+        </div>
+      }
+    } @else {
+      <form (submit)="onSubmit($event)">
+        <label for="login-username" style="display: block; margin: 12px 0 6px">
+          {{ 'auth.username' | translate }}
+        </label>
+        <input
+          id="login-username"
+          #usernameInput
+          type="text"
+          [value]="username()"
+          (input)="username.set(usernameInput.value)"
+          style="width: 100%; padding: 10px"
+        />
+
+        <label for="login-password" style="display: block; margin: 12px 0 6px">
+          {{ 'auth.password' | translate }}
+        </label>
+        <input
+          id="login-password"
+          #passwordInput
+          type="password"
+          [value]="password()"
+          (input)="password.set(passwordInput.value)"
+          style="width: 100%; padding: 10px"
+        />
+
+        @if (error()) {
+          <p style="color: #b00020; margin-top: 8px">{{ error() }}</p>
+        }
+
+        <button type="submit" style="margin-top: 16px; padding: 10px 14px">
+          {{ 'auth.signIn' | translate }}
+        </button>
+        <p style="margin-top: 10px; font-size: 12px; opacity: 0.7">
+          {{ 'auth.lockoutWarning' | translate }}
+        </p>
+      </form>
+    }
+
+    @if (allowGuest()) {
+      <app-device-mode-toggle
+        class="login-mode-toggle"
+        [checked]="phoneMode()"
+        (changed)="togglePhoneMode($event)"
+      />
+      <label class="login-reset-toggle login-reset-toggle--compact">
+        <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
+        <span style="padding-left: 5px">{{ 'auth.resetGuest' | translate }}</span>
+      </label>
+      <button type="button" style="margin-top: 12px; padding: 8px 12px" (click)="continueAsGuest()">
+        {{ 'auth.guest' | translate }}
+      </button>
+    }
+  }
+
+  @if (loggedOutMessage()) {
+    <div style="margin-top: 8px; color: var(--color-accent); font-size: 13px">
+      {{ loggedOutMessage() }}
+    </div>
+  }
+
+  <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap">
+    <button type="button" (click)="licenseOpen.set(true)">
+      {{ 'nav.license' | translate }}
+    </button>
+    <a
+      href="https://github.com/roybz/operator-app"
+      target="_blank"
+      rel="noreferrer"
+      style="
+        padding: 8px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        font-size: 15px;
+      "
+      (click)="openGithub($event)"
+    >
+      {{ 'auth.github' | translate }}
+    </a>
+  </div>
+
+  @if (confirmResetOpen()) {
+    <app-confirm-dialog
+      [message]="'auth.resetGuestConfirm' | translate"
+      [confirmLabel]="'auth.resetGuestConfirmButton' | translate"
+      [cancelLabel]="'dialogs.cancel' | translate"
+      (confirmed)="confirmGuestReset()"
+      (canceled)="confirmResetOpen.set(false)"
+    />
+  }
+
+  @if (licenseOpen()) {
+    <app-modal-shell
+      [zIndex]="2000"
+      ariaLabel="License dialog"
+      maxWidth="min(980px, calc(100vw - 32px))"
+      (closed)="licenseOpen.set(false)"
+    >
+      <div class="license-shell">
+        <app-license (closed)="licenseOpen.set(false)" />
+      </div>
+    </app-modal-shell>
+  }
+</main>
