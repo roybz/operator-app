@@ -24,6 +24,8 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { ContextFieldStoreService } from '../../../../core/events/context-field-store.service';
+import { ObjectRef } from '../../../../core/events/context-fields.types';
 
 type StickyMode = 'rich' | 'markdown';
 
@@ -196,6 +198,16 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
           [style.color]="state().colorEnabled ? state().textColor : 'inherit'"
           style="flex:1; display:flex; flex-direction:column; gap:8px;"
         >
+          @if (externalContextRef()) {
+            <div
+              style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
+            >
+              <span style="font-size:12px; opacity:0.8;">
+                Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+              </span>
+              <button type="button" (click)="appendExternalContext()">+</button>
+            </div>
+          }
           @if (!state().visualMode) {
             @if (state().mode === 'rich') {
               <div
@@ -239,6 +251,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private contextFields = inject(ContextFieldStoreService);
 
   state = signal<StickyNoteState>(defaultState('rich'));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
@@ -247,6 +260,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   markdownFocused = signal(false);
   richSnapshot = signal('');
   richHtml = computed(() => (this.richFocused() ? this.richSnapshot() : this.state().content));
+  externalContextRef = signal<ObjectRef | null>(null);
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -271,6 +285,24 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
         return;
       }
       this.reloadFromStorage();
+    });
+    effect(() => {
+      const universeId = this.currentUniverseId();
+      if (!universeId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      const selection = this.contextFields.selection(universeId);
+      const primary = selection?.primaryRef ?? null;
+      if (!primary || primary.instanceId === this.instanceId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      if (primary.kind === 'todo' || primary.kind === 'note' || primary.kind === 'kanbanCard') {
+        this.externalContextRef.set(primary);
+        return;
+      }
+      this.externalContextRef.set(null);
     });
   }
 
@@ -380,6 +412,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
 
   startRichEdit() {
     this.richFocused.set(true);
+    this.publishStickySelectionContext();
     this.remoteConflict.markDirty(this.instanceStorageKey());
     this.syncRichSnapshot();
   }
@@ -408,7 +441,15 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
 
   startMarkdownEdit() {
     this.markdownFocused.set(true);
+    this.publishStickySelectionContext();
     this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  appendExternalContext() {
+    const ref = this.externalContextRef();
+    if (!ref) return;
+    const next = `${this.state().content}\n[${ref.kind}] ${ref.id}`.trim();
+    this.commit({ ...this.state(), content: next });
   }
 
   finishMarkdownEdit() {
@@ -437,6 +478,28 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
 
   private instanceStorageKey() {
     return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  private publishStickySelectionContext() {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const ref: ObjectRef = {
+      universeId,
+      instanceId: this.instanceId,
+      kind: 'sticky',
+      id: this.instanceId,
+    };
+    this.contextFields.setSelection(universeId, [ref], {
+      primaryRef: ref,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
   }
 
   private reloadFromStorage() {

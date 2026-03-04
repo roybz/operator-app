@@ -73,6 +73,7 @@ import { DebugPerfService } from './core/debug-perf.service';
 import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
 import { EventOutboxService } from './core/events/event-outbox.service';
+import { ContextFieldStoreService } from './core/events/context-field-store.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -713,7 +714,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
                   (closed)="minimizeInstance(instance.id)"
                   (trash)="confirmDelete(instance.id)"
                   (titleEdited)="renameInstance(instance.id, $event)"
-                  (bringToFront)="dialogService.bringToFront(instance.id)"
+                  (bringToFront)="onDialogBringToFront(instance)"
                   (settings)="toggleInstanceSettings(instance.id)"
                   (moveWorkspace)="openMoveWorkspace(instance.id)"
                 >
@@ -1151,6 +1152,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly realtimeSync = inject(RealtimeSyncService);
   private readonly remoteConflict = inject(RemoteConflictService);
   private readonly eventOutbox = inject(EventOutboxService);
+  private readonly contextFields = inject(ContextFieldStoreService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -2527,7 +2529,13 @@ export class AppComponent implements OnInit, OnDestroy {
       if (this.phoneMode()) {
         this.setPhoneActiveInstance(result.instance.id, true);
       }
+      this.publishFocusContext(result.instance.id, 'inspect');
     }
+  }
+
+  onDialogBringToFront(instance: DialogInstance) {
+    this.dialogService.bringToFront(instance.id);
+    this.publishFocusContext(instance.id, 'inspect');
   }
 
   restoreInstance(instanceId: string) {
@@ -2542,6 +2550,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.dialogService.restoreInstance(instanceId);
     }
     this.dialogService.bringToFront(instanceId);
+    this.publishFocusContext(instanceId, 'inspect');
     if (this.phoneMode()) {
       this.setPhoneActiveInstance(instanceId);
     }
@@ -3549,5 +3558,23 @@ export class AppComponent implements OnInit, OnDestroy {
       return;
     }
     void this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
+  }
+
+  private currentUniverseId() {
+    const key = this.auth.storageUserKey();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  private publishFocusContext(instanceId: string, mode: 'edit' | 'inspect' | 'search' | 'present') {
+    const universeId = this.currentUniverseId();
+    if (!universeId) return;
+    this.contextFields.setFocus(
+      universeId,
+      {
+        activeInstanceId: instanceId,
+      },
+      { mode, sourceInstanceId: instanceId },
+    );
   }
 }

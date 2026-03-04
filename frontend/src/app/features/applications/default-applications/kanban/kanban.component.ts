@@ -36,6 +36,8 @@ import {
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
 import { computeHorizontalScrollShadowState } from '../../../../shared/horizontal-scroll-shadow';
+import { ContextFieldStoreService } from '../../../../core/events/context-field-store.service';
+import { ObjectRef } from '../../../../core/events/context-fields.types';
 
 export interface ChecklistItem {
   id: string;
@@ -285,6 +287,18 @@ export function saveKanbanState(
             </button>
           }
         </div>
+        @if (externalContextRef()) {
+          <div
+            style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
+          >
+            <span style="font-size:12px; opacity:0.8;">
+              Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+            </span>
+            <button type="button" (click)="createCardFromExternalContext()">
+              {{ 'kanban.addCard' | translate }}
+            </button>
+          </div>
+        }
 
         <div
           #boardScroll
@@ -539,6 +553,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private contextFields = inject(ContextFieldStoreService);
   state = signal<KanbanState>({
     boards: [],
     activeBoardId: '',
@@ -570,6 +585,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   importLimitOpen = signal(false);
   exportLimitOpen = signal(false);
   scrollShadows = signal({ left: false, right: false });
+  externalContextRef = signal<ObjectRef | null>(null);
   private suppressNextCardClick = false;
   private cardPanState: {
     pointerId: number;
@@ -599,6 +615,24 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
       this.reloadFromStorage();
+    });
+    effect(() => {
+      const universeId = this.currentUniverseId();
+      if (!universeId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      const selection = this.contextFields.selection(universeId);
+      const primary = selection?.primaryRef ?? null;
+      if (!primary || primary.instanceId === this.instanceId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      if (primary.kind === 'todo' || primary.kind === 'note' || primary.kind === 'sticky') {
+        this.externalContextRef.set(primary);
+        return;
+      }
+      this.externalContextRef.set(null);
     });
   }
 
@@ -793,6 +827,41 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     this.state.set({ ...this.state(), selectedCardId: cardId, selectedColumnId: columnId });
     this.persistState();
+    const universeId = this.currentUniverseId();
+    if (!universeId) return;
+    const ref: ObjectRef = {
+      universeId,
+      instanceId: this.instanceId,
+      kind: 'kanbanCard',
+      id: cardId,
+    };
+    this.contextFields.setSelection(universeId, [ref], {
+      primaryRef: ref,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
+  }
+
+  createCardFromExternalContext() {
+    const ref = this.externalContextRef();
+    if (!ref) return;
+    const firstColumnId = this.activeBoard()?.columns?.[0]?.id;
+    if (!firstColumnId) return;
+    const board = this.activeBoard();
+    const cardId = uid('card');
+    const card: KanbanCard = {
+      id: cardId,
+      title: `[${ref.kind}] ${ref.id}`,
+      description: '',
+      dueDate: '',
+      labels: [],
+      checklist: [],
+    };
+    const columns = board.columns.map((column) =>
+      column.id === firstColumnId ? { ...column, cardIds: [...column.cardIds, cardId] } : column,
+    );
+    const nextBoard = { ...board, columns, cards: { ...board.cards, [cardId]: card } };
+    this.updateBoard(nextBoard, cardId, firstColumnId);
   }
 
   updateCardTitle(event: Event) {
@@ -1324,6 +1393,12 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private instanceStorageKey() {
     return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
   }
 
   private isLocallyEditing() {
