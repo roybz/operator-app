@@ -1,6 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { CognitoOidcService } from '../auth/cognito-oidc.service';
 import { getOpConfig } from '../op-config';
+import { UniverseEventHubService } from '../events/universe-event-hub.service';
 
 type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
@@ -12,6 +13,7 @@ interface RealtimeEvent {
 @Injectable({ providedIn: 'root' })
 export class RealtimeSyncService {
   private cognitoOidc = inject(CognitoOidcService);
+  private eventHub = inject(UniverseEventHubService);
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
   private shouldBeConnected = false;
@@ -33,7 +35,10 @@ export class RealtimeSyncService {
       this.status.set('idle');
       return;
     }
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+    if (
+      this.socket &&
+      (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
     await this.connect();
@@ -81,6 +86,19 @@ export class RealtimeSyncService {
       if (!payload) return;
       this.eventSeq += 1;
       this.lastEvent.set({ seq: this.eventSeq, payload });
+      const payloadUniverseId = payload['universeId'];
+      const universeId =
+        typeof payloadUniverseId === 'string' && payloadUniverseId.trim()
+          ? payloadUniverseId
+          : 'default';
+      if (universeId) {
+        this.eventHub.publishSystem(
+          universeId,
+          'RemoteInvalidationReceived',
+          { payload, seq: this.eventSeq },
+          { agent: 'realtime-sync' },
+        );
+      }
     };
 
     socket.onerror = () => {

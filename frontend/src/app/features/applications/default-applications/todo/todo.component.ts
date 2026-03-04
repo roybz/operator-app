@@ -35,6 +35,7 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { UniverseEventHubService } from '../../../../core/events/universe-event-hub.service';
 
 const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
 
@@ -519,6 +520,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   private readonly exportGuard = inject(ExportGuardService);
   private readonly storage = inject(StorageService);
   private readonly remoteConflict = inject(RemoteConflictService);
+  private readonly eventHub = inject(UniverseEventHubService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
@@ -585,6 +587,19 @@ export class TodoPageComponent implements OnInit, OnDestroy {
         p.id === project.id ? { ...p, todos: [created, ...p.todos] } : p,
       );
       this.updateState({ ...nextState, projects: nextProjects });
+      const universeId = this.currentUniverseId();
+      if (universeId) {
+        this.eventHub.publishDomain(
+          universeId,
+          'TodoCreated',
+          {
+            instanceId: this.instanceId,
+            projectId: project.id,
+            todoId: created.id,
+          },
+          { source: { instanceId: this.instanceId, agent: 'todo-app' }, durable: true },
+        );
+      }
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     }
@@ -1259,6 +1274,12 @@ export class TodoPageComponent implements OnInit, OnDestroy {
 
   private instanceStorageKey() {
     return `${TODO_STATE_STORAGE_KEY}:${this.prefs.userId()}:${this.instanceId || ''}`;
+  }
+
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
   }
 
   private isLocallyEditing() {

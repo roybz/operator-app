@@ -72,6 +72,7 @@ import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
 import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
+import { EventOutboxService } from './core/events/event-outbox.service';
 
 type CanvasMode = 'repeat' | 'center' | 'stretch';
 
@@ -1149,6 +1150,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly debugPerf = inject(DebugPerfService);
   private readonly realtimeSync = inject(RealtimeSyncService);
   private readonly remoteConflict = inject(RemoteConflictService);
+  private readonly eventOutbox = inject(EventOutboxService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1504,6 +1506,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private viewportReflowRaf: number | null = null;
 
   constructor() {
+    this.eventOutbox.ensureStarted();
     this.translate.setDefaultLang('en');
     const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
     const currentSearch = typeof window !== 'undefined' ? window.location.search : '';

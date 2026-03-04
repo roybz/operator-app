@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
 import { StorageService } from './storage/storage.service';
+import { UniverseEventHubService } from './events/universe-event-hub.service';
 
 export interface DialogInstance {
   id: string;
@@ -56,6 +57,7 @@ export class DialogService {
 
   private auth = inject(AuthService);
   private storage = inject(StorageService);
+  private eventHub = inject(UniverseEventHubService);
   private persistFlushTimer: number | null = null;
   private persistInFlight = false;
   private persistQueued = false;
@@ -706,19 +708,33 @@ export class DialogService {
         this.persistQueued = false;
         const userKey = this.userStorageKey();
         const payload = JSON.stringify(this.serializableState(this.state()));
+        this.emitSystemEvent('PersistFlushStarted', {
+          key: userKey,
+          queued: this.persistQueued,
+          backoffMs: this.persistBackoffMs,
+        });
         try {
           await this.storage.setItem(userKey, payload);
+          this.emitSystemEvent('PersistFlushCompleted', { key: userKey });
           this.persistBackoffMs = 0;
         } catch (error) {
           if (this.isTooManyRequests(error)) {
             // API Gateway throttling during long drags: back off and coalesce the latest state.
             this.persistBackoffMs = Math.min(Math.max(this.persistBackoffMs || 200, 200) * 2, 2000);
+            this.emitSystemEvent('PersistFlushThrottled', {
+              key: userKey,
+              nextBackoffMs: this.persistBackoffMs,
+            });
             this.persistQueued = true;
             this.schedulePersistFlush(this.persistBackoffMs);
             break;
           }
           if (this.isVersionConflict(error)) {
             // Refresh adapter version cache and retry a little later with latest local state.
+            this.emitSystemEvent('ConflictResolved', {
+              key: userKey,
+              strategy: 'refresh-and-retry',
+            });
             try {
               await this.storage.getItem(userKey);
             } catch {
@@ -801,6 +817,18 @@ export class DialogService {
 
   private keys() {
     return this.storage.keysSync();
+  }
+
+  private emitSystemEvent(type: string, payload: unknown) {
+    const universeId = this.currentUniverseId();
+    if (!universeId) return;
+    this.eventHub.publishSystem(universeId, type, payload, { agent: 'dialog-service' });
+  }
+
+  private currentUniverseId() {
+    const key = this.auth.storageUserKey();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
   }
 
   private defaultState(): DialogState {
