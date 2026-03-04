@@ -25,6 +25,12 @@ export interface OpRuntimeConfig {
   storageApiBaseUrl?: string;
   realtimeEnabled?: boolean;
   realtimeWsUrl?: string;
+  realtimeReconnectBaseDelayMs?: number;
+  realtimeReconnectMaxDelayMs?: number;
+  realtimeReconnectExponentCap?: number;
+  realtimeReconnectStormWindowMs?: number;
+  realtimeReconnectStormThreshold?: number;
+  realtimeReconnectStormDelayMs?: number;
   mockMode?: boolean;
   guestModeOnly?: boolean;
   debugPerf?: boolean;

@@ -33,8 +33,6 @@ export class RealtimeSyncService {
   private sessionNonce = '';
   private eventSeq = 0;
   private reconnectAttempt = 0;
-  private readonly reconnectWindowMs = 60_000;
-  private readonly reconnectStormThreshold = 8;
   private reconnectWindowStart = 0;
   private reconnectWindowAttempts = 0;
   private readonly bufferedWrites: BufferedWrite[] = [];
@@ -180,18 +178,22 @@ export class RealtimeSyncService {
   private scheduleReconnect() {
     if (typeof window === 'undefined') return;
     if (this.reconnectTimer) return;
+    const tuning = this.getReconnectTuning();
     const now = Date.now();
-    if (!this.reconnectWindowStart || now - this.reconnectWindowStart > this.reconnectWindowMs) {
+    if (!this.reconnectWindowStart || now - this.reconnectWindowStart > tuning.windowMs) {
       this.reconnectWindowStart = now;
       this.reconnectWindowAttempts = 0;
     }
     this.reconnectWindowAttempts += 1;
     const attempt = this.reconnectAttempt++;
-    const baseDelayMs = Math.min(60_000, 2_000 * 2 ** Math.min(attempt, 4));
+    const baseDelayMs = Math.min(
+      tuning.maxDelayMs,
+      tuning.baseDelayMs * 2 ** Math.min(attempt, tuning.exponentCap),
+    );
     const jitter = Math.floor(Math.random() * Math.max(1, Math.floor(baseDelayMs * 0.25)));
     let delayMs = baseDelayMs + jitter;
-    if (this.reconnectWindowAttempts > this.reconnectStormThreshold) {
-      delayMs = Math.max(delayMs, 60_000);
+    if (this.reconnectWindowAttempts > tuning.stormThreshold) {
+      delayMs = Math.max(delayMs, tuning.stormDelayMs);
       this.connectivity.set('degraded-polling');
       this.observability.logWarn('realtime.reconnect_storm_guard', {
         attempt,
@@ -248,5 +250,23 @@ export class RealtimeSyncService {
     } finally {
       this.flushingBufferedWrites = false;
     }
+  }
+
+  private getReconnectTuning() {
+    const cfg = getOpConfig();
+    return {
+      baseDelayMs: this.sanitizePositiveInt(cfg.realtimeReconnectBaseDelayMs, 2_000),
+      maxDelayMs: this.sanitizePositiveInt(cfg.realtimeReconnectMaxDelayMs, 60_000),
+      exponentCap: this.sanitizePositiveInt(cfg.realtimeReconnectExponentCap, 4),
+      windowMs: this.sanitizePositiveInt(cfg.realtimeReconnectStormWindowMs, 60_000),
+      stormThreshold: this.sanitizePositiveInt(cfg.realtimeReconnectStormThreshold, 8),
+      stormDelayMs: this.sanitizePositiveInt(cfg.realtimeReconnectStormDelayMs, 60_000),
+    };
+  }
+
+  private sanitizePositiveInt(value: unknown, fallback: number) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+    return Math.floor(numeric);
   }
 }
