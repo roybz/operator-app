@@ -47,3 +47,6 @@ Thumbs.db
 .amplify
 amplify_outputs*
 amplifyconfiguration*
+
+*storybook.log
+storybook-static

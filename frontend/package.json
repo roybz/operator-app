@@ -16,7 +16,9 @@
     "test:regression": "npm run test:smoke",
     "test:release-gates": "npm run lint && npm run test:unit -- --watch=false && npm run build",
     "serve:ssr:operator-app": "node dist/operator-app/server/server.mjs",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "storybook": "ng run operator-app:storybook",
+    "build-storybook": "ng run operator-app:build-storybook"
   },
   "prettier": {
     "printWidth": 100,
@@ -63,6 +65,16 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "8.47.0",
-    "vitest": "^4.0.8"
+    "vitest": "^4.0.8",
+    "storybook": "^10.2.15",
+    "@storybook/angular": "^10.2.15",
+    "@storybook/addon-a11y": "^10.2.15",
+    "@storybook/addon-docs": "^10.2.15",
+    "@angular-devkit/build-angular": "^21.2.0",
+    "@angular-devkit/architect": "^0.2102.0",
+    "@angular-devkit/core": "^21.2.0",
+    "@angular/platform-browser-dynamic": "^21.2.0",
+    "@compodoc/compodoc": "^1.2.1",
+    "eslint-plugin-storybook": "^10.2.15"
   }
 }
