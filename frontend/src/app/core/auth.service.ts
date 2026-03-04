@@ -2121,7 +2121,7 @@ export class AuthService {
       previewUserId: null,
       previewPersist: false,
       sessionRole: 'observer',
-      sessionUsername: 'Observer',
+      sessionUsername: this.createViewerUsername(observerId),
       universeOwnerId: ownerId,
       universeId: prefs.universeId,
     });
@@ -2261,6 +2261,10 @@ export class AuthService {
     }
     this.clearUniverseSessionIfNeeded(universeId, next);
     return next;
+  }
+
+  private createViewerUsername(observerId: string) {
+    return `Viewer (${observerId.slice(-4)})`;
   }
 
   private universePresenceKey(universeId: string) {

@@ -165,6 +165,42 @@ describe('AuthService phone-mode sync', () => {
 
     expect(list).toEqual([]);
   });
+
+  it('issues generic viewer usernames for universe observer sessions', async () => {
+    const auth = TestBed.inject(AuthService);
+    auth.loginAsGuest();
+    const ownerId = auth.session().userId;
+    const requestedUniverseId = 'u_share_test';
+    expect(ownerId).toBeTruthy();
+
+    auth.savePreferences({
+      ...auth.preferences(),
+      universeId: requestedUniverseId,
+      universeName: 'Share Test',
+      multiUserEnabled: true,
+      allowUniverseObservers: true,
+      universeObserverPassword: '',
+    });
+    const universeId = auth.preferences().universeId;
+    expect(universeId).toBeTruthy();
+    auth.logout();
+
+    const first = await auth.loginUniverseObserver(ownerId!, universeId ?? null, '');
+    expect(first.ok).toBe(true);
+    const firstViewerName = auth.session().sessionUsername;
+    expect(firstViewerName).toMatch(/^Viewer \([a-z0-9]{4}\)$/i);
+    expect(auth.session().sessionRole).toBe('observer');
+    auth.logout();
+
+    const second = await auth.loginUniverseObserver(ownerId!, universeId ?? null, '');
+    expect(second.ok).toBe(true);
+    const secondViewerName = auth.session().sessionUsername;
+    expect(secondViewerName).toMatch(/^Viewer \([a-z0-9]{4}\)$/i);
+    expect(secondViewerName).not.toBe(firstViewerName);
+    expect(auth.canEditUniverse({ universeOwnerId: ownerId!, universeEditHolderId: null })).toBe(
+      false,
+    );
+  });
 });
 
 class MockExternalCognitoOidcService {
