@@ -13,7 +13,9 @@ import { StorageService } from './core/storage/storage.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
 import { vi } from 'vitest';
 
-type OpWindow = Window & { __OP_CONFIG__?: { mockMode?: boolean; guestModeOnly?: boolean } };
+type OpWindow = Window & {
+  __OP_CONFIG__?: { mockMode?: boolean; guestModeOnly?: boolean; apiBaseUrl?: string };
+};
 
 describe('App', () => {
   beforeEach(async () => {
@@ -156,6 +158,38 @@ describe('App', () => {
     expect(app.remoteConflictBannerVisible()).toBe(false);
     expect(app.suppressRemoteChangeSignature).toBe('a|x');
     expect(app.suppressRemoteChangeUntil).toBeGreaterThan(Date.now() - 1000);
+  });
+
+  it('forces mock/local-only mode for guest users even when backend is configured and admin test mode is off', () => {
+    const w = window as OpWindow;
+    w.__OP_CONFIG__ = {
+      mockMode: false,
+      guestModeOnly: false,
+      apiBaseUrl: 'https://api.example.com',
+    };
+    const fixture = TestBed.createComponent(AppComponent);
+    const auth = fixture.componentInstance.auth;
+
+    auth.saveOrgSettings({ ...auth.orgSettings(), testModeEnabled: false });
+    auth.loginAsGuest();
+
+    expect(auth.actualUser()?.id).toBe('u_guest');
+    expect(fixture.componentInstance.isMockMode()).toBe(true);
+  });
+
+  it('forces mock/local-only mode for authenticated admins when org test mode is enabled', () => {
+    const w = window as OpWindow;
+    w.__OP_CONFIG__ = {
+      mockMode: false,
+      guestModeOnly: false,
+      apiBaseUrl: 'https://api.example.com',
+    };
+    const fixture = TestBed.createComponent(AppComponent);
+    const auth = fixture.componentInstance.auth;
+
+    auth.saveOrgSettings({ ...auth.orgSettings(), testModeEnabled: true });
+
+    expect(fixture.componentInstance.isMockMode()).toBe(true);
   });
 
   it('keeps deferred remote conflict pending while local writes are still recent', async () => {
