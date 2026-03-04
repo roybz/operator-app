@@ -388,6 +388,19 @@ describe('AuthService external auth phone-mode behavior', () => {
     expect(signupSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('runs full external logout when requested via logoutEverywhere', () => {
+    const auth = TestBed.inject(AuthService);
+    const cognito = TestBed.inject(CognitoOidcService) as unknown as {
+      startLogout: () => void;
+    };
+    const logoutSpy = vi.spyOn(cognito, 'startLogout');
+
+    const mode = auth.logoutEverywhere();
+
+    expect(mode).toBe('external');
+    expect(logoutSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('derives universe permission helpers consistently for owner and observer contexts', () => {
     const auth = TestBed.inject(AuthService);
     const ownerPermissions = auth.getUniversePermissionSet({

@@ -457,6 +457,16 @@ export class AuthService {
     }
   }
 
+  logoutEverywhere(): 'local' | 'external' {
+    const hadExternalAuth = this.usesExternalAuth();
+    this.logout();
+    if (hadExternalAuth) {
+      this.startExternalLogout();
+      return 'external';
+    }
+    return 'local';
+  }
+
   usesExternalAuth(): boolean {
     const capabilities = getOpCapabilities();
     return capabilities.auth && this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();

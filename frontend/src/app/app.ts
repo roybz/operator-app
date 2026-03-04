@@ -2531,10 +2531,11 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   forceLogoutToMain() {
-    this.auth.logout();
     if (typeof window !== 'undefined') {
-      window.location.href = '/';
+      window.location.href = '/logout';
+      return;
     }
+    void this.router.navigateByUrl('/logout');
   }
 
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
@@ -2798,12 +2799,10 @@ export class AppComponent implements OnInit, OnDestroy {
     if (typeof window === 'undefined') return;
     if (this.logoutRedirectInProgress) return;
     this.logoutRedirectInProgress = true;
-    const externalAuth = this.auth.usesExternalAuth();
-    this.auth.logout();
+    const logoutMode = this.auth.logoutEverywhere();
     void this.storage.removeItem('op_session');
     this.forceLoggedOut.set(true);
-    if (externalAuth) {
-      this.auth.startExternalLogout();
+    if (logoutMode === 'external') {
       return;
     }
     void this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
