@@ -13,11 +13,11 @@
 
 .login-reset-toggle {
   display: flex;
-  gap: 8px;
+  gap: 3px;
   align-items: center;
   margin-top: 11px;
   margin-bottom: 28px;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .login-reset-toggle--compact {
@@ -27,6 +27,10 @@
 
 .license-shell {
   padding: 20px;
+}
+
+.login-public-signup-note {
+  margin: 9px 3px 13px;
 }
 
 @media (max-width: 1024px) {

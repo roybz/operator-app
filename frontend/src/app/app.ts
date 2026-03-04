@@ -918,7 +918,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
     effect(() => {
       if (typeof window === 'undefined') return;
-      const shouldSync = this.auth.isLoggedIn() && this.auth.usesExternalAuth();
+      const shouldSync =
+        this.auth.isLoggedIn() && this.auth.usesExternalAuth() && !this.isMockMode();
       if (!shouldSync) {
         if (this.remoteSyncInterval) {
           window.clearInterval(this.remoteSyncInterval);

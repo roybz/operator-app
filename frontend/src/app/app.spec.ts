@@ -220,6 +220,25 @@ describe('App', () => {
     expect(fixture.componentInstance.isMockMode()).toBe(true);
   });
 
+  it('does not start realtime sync when session is effectively local-only (guest/test-mode)', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      auth: { isLoggedIn: () => boolean; usesExternalAuth: () => boolean };
+      isMockMode: () => boolean;
+      realtimeSync: { start: () => Promise<void>; stop: () => void };
+    };
+    vi.spyOn(app.auth, 'isLoggedIn').mockReturnValue(true);
+    vi.spyOn(app.auth, 'usesExternalAuth').mockReturnValue(true);
+    vi.spyOn(app, 'isMockMode').mockReturnValue(true);
+    const startSpy = vi.spyOn(app.realtimeSync, 'start').mockResolvedValue();
+    const stopSpy = vi.spyOn(app.realtimeSync, 'stop');
+
+    fixture.detectChanges();
+
+    expect(startSpy).not.toHaveBeenCalled();
+    expect(stopSpy).toHaveBeenCalled();
+  });
+
   it('keeps deferred remote conflict pending while local writes are still recent', async () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance as unknown as {
