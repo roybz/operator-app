@@ -155,6 +155,35 @@ import {
         justify-content: flex-end;
       }
 
+      .accessibility-prompt {
+        box-sizing: border-box;
+        padding: 20px 22px;
+        width: min(460px, calc(100vw - 48px));
+      }
+
+      .accessibility-prompt__title {
+        margin: 0 0 12px;
+      }
+
+      .accessibility-prompt__body {
+        margin: 0;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .accessibility-prompt__toggle {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .accessibility-prompt__actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 18px;
+      }
+
       .workspace-chip {
         transition:
           transform 120ms ease,

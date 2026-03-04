@@ -878,11 +878,11 @@
   }
 
   @if (accessibilityPromptOpen()) {
-    <app-modal-shell [zIndex]="1200" ariaLabel="Accessibility prompt" maxWidth="380px">
-      <div style="padding: 20px; width: 360px">
-        <h3 style="margin-top: 0">{{ 'accessibility.title' | translate }}</h3>
-        <p>{{ 'accessibility.body' | translate }}</p>
-        <label style="display: flex; gap: 8px; align-items: center; margin-top: 12px">
+    <app-modal-shell [zIndex]="1200" ariaLabel="Accessibility prompt" maxWidth="520px">
+      <div class="accessibility-prompt">
+        <h3 class="accessibility-prompt__title">{{ 'accessibility.title' | translate }}</h3>
+        <p class="accessibility-prompt__body">{{ 'accessibility.body' | translate }}</p>
+        <label class="accessibility-prompt__toggle">
           <input
             type="checkbox"
             [checked]="accessibilityPromptEnabled()"
@@ -890,7 +890,7 @@
           />
           {{ 'accessibility.toggle' | translate }}
         </label>
-        <div style="display: flex; justify-content: flex-end; margin-top: 16px">
+        <div class="accessibility-prompt__actions">
           <button (click)="applyAccessibilityPrompt()">
             {{ 'accessibility.confirm' | translate }}
           </button>
