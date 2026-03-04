@@ -1,0 +1,257 @@
+.app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  --app-list-footer-height: 56px;
+}
+
+.app-list__scroll {
+  max-height: calc(53vh - var(--app-list-footer-height));
+  overflow: auto;
+  padding: 4px 4px var(--app-list-footer-height) 4px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
+}
+
+:host-context(.phone-mode) .app-list {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  font-size: 16px;
+}
+
+:host-context(.phone-mode) .app-list__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.app-list__footer {
+  position: sticky;
+  bottom: 0;
+  background: transparent;
+  padding: 14px 0 10px;
+  min-height: var(--app-list-footer-height);
+}
+
+.app-row {
+  display: grid;
+  grid-template-columns: 18px 18px 1fr 24px;
+  align-items: center;
+  column-gap: 6px;
+  padding: 4px 0;
+}
+
+.app-list__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-list__app-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.app-list__toggle,
+.app-list__icon--add,
+.app-instance__kebab {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.app-list__toggle:hover,
+.app-list__icon--add:hover,
+.app-instance__kebab:hover {
+  opacity: 1;
+}
+
+.app-list__icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.app-list__icon:disabled,
+.app-list__toggle:disabled,
+.app-instance__kebab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.app-list__control--phone {
+  border: 1px solid rgba(148, 163, 184, 0.55) !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  opacity: 1 !important;
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+}
+
+.app-list__icon--add:hover {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-list__toggle {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-list__instances {
+  margin: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-instance {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 24px;
+  align-items: center;
+  column-gap: 6px;
+}
+
+.app-instance__name {
+  text-align: left;
+  width: 100%;
+}
+
+.app-instance__name--active {
+  font-style: italic;
+}
+
+.app-instance__name--archived {
+  opacity: 0.6;
+}
+
+.app-instance__kebab {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-instance__actions {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  z-index: 10;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.app-instance__actions--up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+:host-context(.phone-mode) .app-row {
+  grid-template-columns: 24px 22px 1fr 32px;
+  column-gap: 8px;
+  padding: 8px 0;
+}
+
+:host-context(.phone-mode) .app-list__app-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 16px;
+}
+
+:host-context(.phone-mode) .app-instance {
+  grid-template-columns: 1fr 32px;
+  column-gap: 8px;
+  padding: 6px 0;
+}
+
+:host-context(.phone-mode) .app-instance__actions {
+  min-width: 180px;
+}
+
+:host-context(.phone-mode) .app-instance__action {
+  padding: 10px 12px;
+  font-size: 15px;
+}
+
+.app-instance__action,
+.app-instance__unarchive {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.app-instance__action:hover,
+.app-instance__unarchive:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.app-list__action-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.app-list__archived-toggle {
+  align-self: flex-start;
+  opacity: 0.6;
+}
+
+.app-list__archived-empty {
+  font-size: 11px;
+  font-style: italic;
+  opacity: 0.7;
+  margin-top: 4px;
+}

@@ -1,0 +1,138 @@
+<div class="app-list" (pointerdown)="closeActions()">
+  <div class="app-list__scroll">
+    @for (app of apps; track app.id) {
+      @let instances = visibleInstances(app.id);
+      <div class="app-row" [attr.data-app-id]="app.id">
+        <button
+          type="button"
+          class="app-list__toggle"
+          [class.app-list__control--phone]="phoneMode"
+          (click)="toggleCollapsed(app.id); $event.stopPropagation()"
+          [disabled]="actionsDisabled"
+          [title]="
+            isCollapsed(app.id)
+              ? ('dialogs.expandList' | translate)
+              : ('dialogs.collapseList' | translate)
+          "
+          [attr.aria-label]="
+            isCollapsed(app.id)
+              ? ('dialogs.expandList' | translate)
+              : ('dialogs.collapseList' | translate)
+          "
+        >
+          {{ isCollapsed(app.id) ? '?' : '?' }}
+        </button>
+        <span class="app-list__app-icon">{{ app.icon }}</span>
+        <span class="app-list__name">{{ app.labelKey | translate }}</span>
+        <button
+          type="button"
+          class="app-list__icon app-list__icon--add"
+          [class.app-list__control--phone]="phoneMode"
+          (click)="openApp.emit(app.id); $event.stopPropagation()"
+          [disabled]="actionsDisabled"
+          title="{{ 'dialogs.add' | translate }}"
+          [attr.aria-label]="'dialogs.add' | translate"
+        >
+          +
+        </button>
+      </div>
+      @if (!isCollapsed(app.id) && instances.length) {
+        <div class="app-list__instances">
+          @for (instance of instances; track instance.id) {
+            <div class="app-instance">
+              <button
+                type="button"
+                class="app-instance__name"
+                [class.app-instance__name--active]="isInstanceActive(instance)"
+                [class.app-instance__name--archived]="instance.archived"
+                (click)="restore.emit(instance.id); $event.stopPropagation()"
+                [disabled]="actionsDisabled"
+              >
+                {{ instanceLabel(instance) }}
+              </button>
+              @if (instance.archived) {
+                @if (showArchived()) {
+                  <button
+                    type="button"
+                    class="app-instance__unarchive"
+                    [class.app-list__control--phone]="phoneMode"
+                    (click)="onUnarchive(instance.id); $event.stopPropagation()"
+                    [disabled]="actionsDisabled"
+                    title="{{ 'dialogs.unarchive' | translate }}"
+                    [attr.aria-label]="'dialogs.unarchive' | translate"
+                  >
+                    <span class="app-list__action-icon">?</span>
+                  </button>
+                }
+              } @else {
+                <button
+                  type="button"
+                  class="app-instance__kebab"
+                  [class.app-list__control--phone]="phoneMode"
+                  (pointerdown)="$event.stopPropagation()"
+                  (click)="toggleActions(instance.id, $event)"
+                  [disabled]="actionsDisabled"
+                  title="{{ 'dialogs.actions' | translate }}"
+                  [attr.aria-label]="'dialogs.actions' | translate"
+                >
+                  ?
+                </button>
+                @if (openActionsId() === instance.id) {
+                  <div
+                    class="app-instance__actions"
+                    [class.app-instance__actions--up]="openActionsDirection() === 'up'"
+                    (pointerdown)="$event.stopPropagation()"
+                  >
+                    <button
+                      type="button"
+                      class="app-instance__action"
+                      (click)="onDuplicate(instance.id)"
+                      [disabled]="actionsDisabled"
+                    >
+                      <span class="app-list__action-icon">?</span>
+                      <span>{{ 'dialogs.duplicate' | translate }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="app-instance__action"
+                      (click)="onToggleLock(instance.id)"
+                      [disabled]="deleteTargetActive || actionsDisabled"
+                    >
+                      <span class="app-list__action-icon">
+                        {{ instance.deleteLocked ? '??' : '??' }}
+                      </span>
+                      <span>
+                        {{
+                          instance.deleteLocked
+                            ? ('dialogs.unlockDelete' | translate)
+                            : ('dialogs.lockDelete' | translate)
+                        }}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="app-instance__action"
+                      (click)="onArchive(instance.id)"
+                      [disabled]="actionsDisabled"
+                    >
+                      <span class="app-list__action-icon">??</span>
+                      <span>{{ 'dialogs.archive' | translate }}</span>
+                    </button>
+                  </div>
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+  <div class="app-list__footer">
+    <button type="button" class="app-list__archived-toggle" (click)="toggleArchivedList()">
+      {{ showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate) }}
+    </button>
+    @if (showArchived() && !hasArchivedInstances()) {
+      <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
+    }
+  </div>
+</div>
