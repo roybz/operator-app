@@ -1,5 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+  ViewChild,
+} from '@angular/core';
 
 @Component({
   selector: 'app-modal-shell',
@@ -8,20 +17,18 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
   template: `
     <div
       class="modal-shell__backdrop"
-      role="button"
-      tabindex="0"
-      aria-label="Close dialog"
       [style.zIndex]="zIndex"
-      (pointerdown)="onBackdropPointerDown($event)"
-      (keydown.enter)="closed.emit()"
-      (keydown.space)="closed.emit()"
+      (pointerdown)="onBackdropPointerDown()"
     >
       <div
+        #panel
         class="modal-shell__panel"
         [style.maxWidth]="maxWidth"
         role="dialog"
-        [attr.aria-modal]="true"
-        [attr.aria-label]="ariaLabel"
+        aria-modal="true"
+        [attr.aria-label]="ariaLabelledBy ? null : ariaLabel"
+        [attr.aria-labelledby]="ariaLabelledBy || null"
+        [attr.aria-describedby]="ariaDescribedBy || null"
         tabindex="-1"
         (pointerdown)="$event.stopPropagation()"
       >
@@ -49,14 +56,23 @@ import { Component, EventEmitter, HostListener, Input, Output } from '@angular/c
     `,
   ],
 })
-export class ModalShellComponent {
+export class ModalShellComponent implements AfterViewInit {
+  @ViewChild('panel') panelRef?: ElementRef<HTMLElement>;
+
   @Input() maxWidth = 'min(860px, calc(100vw - 32px))';
   @Input() zIndex = 2400;
   @Input() ariaLabel = 'Dialog';
+  @Input() ariaLabelledBy?: string;
+  @Input() ariaDescribedBy?: string;
+  @Input() closeOnBackdrop = true;
   @Output() closed = new EventEmitter<void>();
 
-  onBackdropPointerDown(event: PointerEvent) {
-    event.preventDefault();
+  ngAfterViewInit() {
+    queueMicrotask(() => this.panelRef?.nativeElement.focus());
+  }
+
+  onBackdropPointerDown() {
+    if (!this.closeOnBackdrop) return;
     this.closed.emit();
   }
 

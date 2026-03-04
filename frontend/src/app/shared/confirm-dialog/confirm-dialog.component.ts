@@ -1,11 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { ModalShellComponent } from '../modal-shell/modal-shell.component';
 
 @Component({
   selector: 'app-confirm-dialog',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ModalShellComponent],
   styles: [
     `
       .confirm-dialog__panel {
@@ -19,16 +20,6 @@ import { TranslateModule } from '@ngx-translate/core';
 
       :host-context(.phone-mode) .confirm-dialog__panel {
         width: min(420px, calc(96vw - 12px));
-      }
-
-      .confirm-dialog {
-        position: fixed;
-        inset: 0;
-        background: var(--color-overlay);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 3500;
       }
 
       .confirm-dialog__header {
@@ -70,17 +61,16 @@ import { TranslateModule } from '@ngx-translate/core';
     `,
   ],
   template: `
-    <div
-      class="confirm-dialog"
-      (pointerdown)="canceled.emit()"
-      role="button"
-      tabindex="0"
-      (keydown.enter)="canceled.emit()"
-      (keydown.space)="canceled.emit()"
+    <app-modal-shell
+      [zIndex]="3500"
+      [ariaLabel]="title || 'Confirmation dialog'"
+      maxWidth="min(420px, calc(100vw - 24px))"
+      (closed)="canceled.emit()"
     >
-      <div class="confirm-dialog__panel" (pointerdown)="$event.stopPropagation()">
+      <div class="confirm-dialog__panel">
         <div class="confirm-dialog__header">
           <button
+            type="button"
             class="confirm-dialog__close"
             (click)="canceled.emit()"
             title="{{ 'dialogs.close' | translate }}"
@@ -97,12 +87,12 @@ import { TranslateModule } from '@ngx-translate/core';
         <ng-content />
         <div class="confirm-dialog__actions">
           @if (showCancel) {
-            <button (click)="canceled.emit()">{{ cancelLabel }}</button>
+            <button type="button" (click)="canceled.emit()">{{ cancelLabel }}</button>
           }
-          <button (click)="confirmed.emit()">{{ confirmLabel }}</button>
+          <button type="button" (click)="confirmed.emit()">{{ confirmLabel }}</button>
         </div>
       </div>
-    </div>
+    </app-modal-shell>
   `,
 })
 export class ConfirmDialogComponent {

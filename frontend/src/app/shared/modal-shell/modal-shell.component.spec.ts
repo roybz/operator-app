@@ -23,9 +23,24 @@ describe('ModalShellComponent', () => {
     expect(closeSpy).toHaveBeenCalled();
   });
 
+  it('does not emit closed on backdrop when closeOnBackdrop is false', () => {
+    component.closeOnBackdrop = false;
+    fixture.detectChanges();
+    const closeSpy = vi.spyOn(component.closed, 'emit');
+    const backdrop = fixture.nativeElement.querySelector('.modal-shell__backdrop') as HTMLElement;
+    backdrop.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(closeSpy).not.toHaveBeenCalled();
+  });
+
   it('emits closed on escape key', () => {
     const closeSpy = vi.spyOn(component.closed, 'emit');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(closeSpy).toHaveBeenCalled();
+  });
+
+  it('focuses panel after initialization', async () => {
+    await fixture.whenStable();
+    const panel = fixture.nativeElement.querySelector('.modal-shell__panel') as HTMLElement;
+    expect(document.activeElement).toBe(panel);
   });
 });
