@@ -131,3 +131,38 @@ Before PR merge to main:
 npm run test:release-gates
 npm run test:e2e
 ```
+
+## 8. Storybook Conventions
+
+## 8.1 Story naming and placement
+
+- Co-locate stories with the component when practical (`*.stories.ts`).
+- Use `Title/Component` hierarchy that mirrors the app domain:
+  - `Shared/...` for reusable primitives
+  - `Layout/...` for shell/navigation
+  - `Features/...` for app feature slices
+- Story export names must describe the UI state, not implementation details (`Readonly`, `RealtimeDegraded`, `ValidationError`).
+
+## 8.2 Args and fixtures
+
+- Prefer `args` for standard variants and controls.
+- Use explicit fixture builders for complex state (auth/session/realtime/collaboration), not inline ad-hoc objects.
+- Keep stories deterministic: no live timers, random IDs, or network dependencies.
+
+## 8.3 Required edge-state coverage
+
+For new or materially changed reusable UI, include at minimum:
+
+- default/normal state
+- loading state
+- empty state (if applicable)
+- error/degraded state
+- readonly/disabled state
+- accessibility/high-contrast variant where styling or affordances differ
+
+## 8.4 Accessibility checks in story review
+
+- Ensure keyboard reachability for interactive controls.
+- Validate focus visibility and focus order in modal/overlay scenarios.
+- Ensure semantic/ARIA labels remain present for icon-only or compact controls.
+- Prefer token-based contrast-safe colors over literal values in stories and components.
