@@ -90,7 +90,7 @@ export class LlmCredentialRefService {
 
     this.runtimeSecrets.set(credentialRefId, normalized);
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem(`${SECRET_SESSION_PREFIX}${credentialRefId}`, normalized);
+      sessionStorage.setItem(`${SECRET_SESSION_PREFIX}${credentialRefId}`, '1');
     }
     return { ok: true };
   }
@@ -98,11 +98,7 @@ export class LlmCredentialRefService {
   getSecret(credentialRefId: string): string | null {
     const inMemory = this.runtimeSecrets.get(credentialRefId);
     if (inMemory) return inMemory;
-    if (typeof window === 'undefined') return null;
-    const fromSession = sessionStorage.getItem(`${SECRET_SESSION_PREFIX}${credentialRefId}`);
-    if (!fromSession) return null;
-    this.runtimeSecrets.set(credentialRefId, fromSession);
-    return fromSession;
+    return null;
   }
 
   clearSecret(credentialRefId: string): void {
@@ -113,6 +109,22 @@ export class LlmCredentialRefService {
   }
 
   private uid(prefix: string): string {
-    return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+    return `${prefix}_${this.secureRandomString(8)}`;
+  }
+
+  private secureRandomString(length: number): string {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(length);
+      cryptoObj.getRandomValues(bytes);
+      let result = '';
+      for (const byte of bytes) {
+        result += chars[byte % chars.length];
+      }
+      return result;
+    }
+    const fallback = Date.now().toString(36);
+    return fallback.padEnd(length, '0').slice(0, length);
   }
 }

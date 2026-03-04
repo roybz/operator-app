@@ -53,7 +53,7 @@ export class LlmOrchestratorService {
     credentialRefId: string,
     request: LlmProviderRequest,
   ): Promise<LlmExecutionResult> {
-    const generatedRequestId = `llmreq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const generatedRequestId = `llmreq_${Date.now().toString(36)}_${this.secureRandomString(6)}`;
     return this.execute({
       context,
       residentId: 'r_system',
@@ -366,5 +366,21 @@ export class LlmOrchestratorService {
       out[key] = value;
     }
     return out;
+  }
+
+  private secureRandomString(length: number): string {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(length);
+      cryptoObj.getRandomValues(bytes);
+      let result = '';
+      for (const byte of bytes) {
+        result += chars[byte % chars.length];
+      }
+      return result;
+    }
+    const fallback = Date.now().toString(36);
+    return fallback.padEnd(length, '0').slice(0, length);
   }
 }

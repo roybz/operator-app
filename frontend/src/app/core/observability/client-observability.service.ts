@@ -57,9 +57,18 @@ export class ClientObservabilityService {
   }
 
   private createId(prefix: string) {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return `${prefix}_${crypto.randomUUID()}`;
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.randomUUID) {
+      return `${prefix}_${cryptoObj.randomUUID()}`;
     }
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      cryptoObj.getRandomValues(bytes);
+      const hex = Array.from(bytes)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+      return `${prefix}_${hex}`;
+    }
+    return `${prefix}_${Date.now().toString(36)}`;
   }
 }

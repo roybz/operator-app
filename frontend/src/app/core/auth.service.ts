@@ -1549,13 +1549,13 @@ export class AuthService {
     universes.forEach((universe) => {
       const key = `${DIALOG_STATE_KEY}:${GUEST_USER_ID}:${universe.id}`;
       if (this.getRaw(key)) return;
-      const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const workspaceId = this.uid('ws', 6);
       const instances: DialogInstanceState[] = [];
       const addInstance = (appId: AppId, x: number, y: number, z: number) => {
         const def = APP_REGISTRY[appId];
         const rect = def?.defaultSize ?? { x: 0, y: 0, width: 480, height: 360 };
         instances.push({
-          id: `dlg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+          id: this.uid('dlg', 6),
           appId,
           titleKey: def?.labelKey ?? `apps.${appId}`,
           rect: { x, y, width: rect.width, height: rect.height },
@@ -1796,12 +1796,30 @@ export class AuthService {
     return 'en';
   }
 
-  private uid(prefix: string) {
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  private uid(prefix: string, randomLength = 8) {
+    const timestamp = Date.now().toString(36);
+    const random = this.secureRandomString(randomLength);
+    return `${prefix}_${timestamp}_${random}`;
   }
 
   private createUniverseId() {
-    return Math.random().toString(36).slice(2, 10);
+    return this.secureRandomString(8);
+  }
+
+  private secureRandomString(length: number) {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(length);
+      cryptoObj.getRandomValues(bytes);
+      let result = '';
+      for (const byte of bytes) {
+        result += chars[byte % chars.length];
+      }
+      return result;
+    }
+    const fallback = Date.now().toString(36);
+    return fallback.padEnd(length, '0').slice(0, length);
   }
 
   async hashPassword(raw: string) {
