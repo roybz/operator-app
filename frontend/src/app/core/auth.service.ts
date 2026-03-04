@@ -1140,7 +1140,7 @@ export class AuthService {
     }
     const session = this.sessionSignal();
     const activeUniverseId = this.getActiveUniverseId(profile.sub);
-    this.sessionSignal.set({
+    const nextSession = this.normalizeSessionState({
       userId: profile.sub,
       previewUserId: null,
       previewPersist: false,
@@ -1149,7 +1149,10 @@ export class AuthService {
       universeOwnerId: null,
       universeId: activeUniverseId ?? session.universeId ?? null,
     });
-    this.persistSession();
+    if (!this.sessionStatesEqual(session, nextSession)) {
+      this.sessionSignal.set(nextSession);
+      this.persistSession();
+    }
     this.applyLoginPhoneModePreference();
   }
 
@@ -1230,7 +1233,9 @@ export class AuthService {
       session.sessionRole ??
       'user';
     if (actualRole !== 'admin') {
-      this.sessionSignal.set({ userId: validUserId, previewUserId: null, previewPersist: false });
+      this.sessionSignal.set(
+        this.normalizeSessionState({ userId: validUserId, previewUserId: null, previewPersist: false }),
+      );
     }
 
     if (guestOnly) {
@@ -2141,6 +2146,32 @@ export class AuthService {
 
   private universeGuestCounterKey(universeId: string) {
     return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
+  }
+
+  private normalizeSessionState(
+    value: Partial<SessionState> & Pick<SessionState, 'userId' | 'previewUserId' | 'previewPersist'>,
+  ): SessionState {
+    return {
+      userId: value.userId ?? null,
+      previewUserId: value.previewUserId ?? null,
+      previewPersist: Boolean(value.previewPersist),
+      sessionRole: value.sessionRole ?? null,
+      sessionUsername: value.sessionUsername ?? null,
+      universeOwnerId: value.universeOwnerId ?? null,
+      universeId: value.universeId ?? null,
+    };
+  }
+
+  private sessionStatesEqual(a: SessionState, b: SessionState): boolean {
+    return (
+      a.userId === b.userId &&
+      a.previewUserId === b.previewUserId &&
+      a.previewPersist === b.previewPersist &&
+      (a.sessionRole ?? null) === (b.sessionRole ?? null) &&
+      (a.sessionUsername ?? null) === (b.sessionUsername ?? null) &&
+      (a.universeOwnerId ?? null) === (b.universeOwnerId ?? null) &&
+      (a.universeId ?? null) === (b.universeId ?? null)
+    );
   }
 
   private mirrorOrgSettingsForRuntimeGuards(value: OrgSettings) {

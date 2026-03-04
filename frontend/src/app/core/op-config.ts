@@ -5,6 +5,7 @@ export interface OpCognitoConfig {
   redirectUri?: string;
   logoutRedirectUri?: string;
   scopes?: string[];
+  sessionPersistence?: 'localStorage' | 'sessionStorage';
 }
 
 export interface OpRuntimeConfig {

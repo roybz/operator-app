@@ -80,6 +80,42 @@ describe('AuthService phone-mode sync', () => {
     expect(auth.isLoggedIn()).toBe(false);
     expect(auth.session().userId).toBeNull();
   });
+
+  it('normalizes non-admin session shape without dropping required nullable fields', async () => {
+    const auth = TestBed.inject(AuthService);
+    const storage = TestBed.inject(StorageService);
+    await storage.setItem(
+      'op_users',
+      JSON.stringify([
+        { id: 'u_guest', username: 'guest', role: 'user' },
+        { id: 'u_123', username: 'alice', role: 'user', password: '' },
+      ]),
+    );
+    await storage.setItem(
+      'op_session',
+      JSON.stringify({
+        userId: 'u_123',
+        previewUserId: null,
+        previewPersist: false,
+        sessionRole: 'user',
+        sessionUsername: 'alice',
+        universeOwnerId: null,
+        universeId: null,
+      }),
+    );
+
+    await auth.hydrate();
+
+    const session = auth.session();
+    expect(session.userId).toBe('u_123');
+    expect(session.previewUserId).toBeNull();
+    expect(session.previewPersist).toBe(false);
+    expect(session.sessionRole ?? null).toBeNull();
+    expect(session.sessionUsername ?? null).toBeNull();
+    expect(session.universeOwnerId ?? null).toBeNull();
+    expect(typeof session.universeId).toBe('string');
+    expect(String(session.universeId).length).toBeGreaterThan(0);
+  });
 });
 
 class MockExternalCognitoOidcService {
@@ -196,6 +232,23 @@ describe('AuthService external auth phone-mode behavior', () => {
 
     await Promise.resolve();
     expect(calls).toBe(0);
+    storage.setItem = originalSetItem;
+  });
+
+  it('does not re-persist unchanged external auth session on subsequent hydrate', async () => {
+    const auth = TestBed.inject(AuthService);
+    const storage = TestBed.inject(StorageService);
+    let setCalls = 0;
+    const originalSetItem = storage.setItem.bind(storage);
+    storage.setItem = (async (...args: Parameters<StorageService['setItem']>) => {
+      setCalls += 1;
+      return originalSetItem(...args);
+    }) as StorageService['setItem'];
+
+    await auth.hydrate();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(setCalls).toBe(0);
     storage.setItem = originalSetItem;
   });
 
