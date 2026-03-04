@@ -29,6 +29,16 @@ export function isRemoteStorageTooManyRequests(error: unknown) {
   return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
 }
 
+export function getRemoteStorageRetryAfterMs(error: unknown): number | null {
+  if (!(error instanceof Error)) return null;
+  const maybeRetryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
+  const retryAfterMs = typeof maybeRetryAfterMs === 'number' ? maybeRetryAfterMs : null;
+  if (retryAfterMs === null || !Number.isFinite(retryAfterMs) || retryAfterMs < 0) {
+    return null;
+  }
+  return retryAfterMs;
+}
+
 export function shouldIgnoreConflictForKey(key: string, error: unknown) {
   return (
     getKeySpaceConflictPolicy(key).ignoreVersionConflict && isRemoteStorageVersionConflict(error)

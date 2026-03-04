@@ -1,4 +1,8 @@
-import { isRemoteStorageTooManyRequests, isRemoteStorageVersionConflict } from '../storage/remote-write-utils';
+import {
+  getRemoteStorageRetryAfterMs,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../storage/remote-write-utils';
 
 export type PersistQueueErrorAction = 'handled' | 'retry';
 
@@ -85,10 +89,12 @@ export class InstancePersistQueue {
           this.backoffMs = 0;
         } catch (error) {
           if (this.isTooManyRequestsFn(error)) {
-            this.backoffMs = Math.min(
+            const exponentialBackoffMs = Math.min(
               Math.max(this.backoffMs || this.baseBackoffMs, this.baseBackoffMs) * 2,
               this.maxBackoffMs,
             );
+            const retryAfterMs = getRemoteStorageRetryAfterMs(error) ?? 0;
+            this.backoffMs = Math.min(Math.max(exponentialBackoffMs, retryAfterMs), this.maxBackoffMs);
             this.queued = true;
             this.scheduleFlush(this.backoffMs);
             break;

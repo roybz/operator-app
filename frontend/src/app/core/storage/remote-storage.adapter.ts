@@ -28,6 +28,7 @@ export class RemoteStorageError extends Error {
     message: string,
     readonly status?: number,
     readonly code?: string,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'RemoteStorageError';
@@ -130,6 +131,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
         details?.message ?? `Remote setItem failed (${response.status})`,
         response.status,
         details?.code,
+        details?.retryAfterMs,
       );
     }
     try {
@@ -225,7 +227,8 @@ export class RemoteStorageAdapter implements StorageAdapter {
 
   private async readErrorBody(
     response: Response,
-  ): Promise<{ message?: string; code?: string } | null> {
+  ): Promise<{ message?: string; code?: string; retryAfterMs?: number } | null> {
+    const retryAfterMs = this.readRetryAfterHeader(response);
     try {
       const data = (await response.json()) as { message?: string; error?: string; code?: string };
       return {
@@ -234,9 +237,22 @@ export class RemoteStorageAdapter implements StorageAdapter {
           (typeof data.error === 'string' && data.error) ||
           undefined,
         code: typeof data.code === 'string' ? data.code : undefined,
+        retryAfterMs,
       };
     } catch {
-      return null;
+      return { retryAfterMs };
     }
+  }
+
+  private readRetryAfterHeader(response: Response): number | undefined {
+    const raw = response.headers.get('retry-after');
+    if (!raw) return undefined;
+    const asSeconds = Number(raw);
+    if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+      return Math.round(asSeconds * 1000);
+    }
+    const asDate = Date.parse(raw);
+    if (!Number.isFinite(asDate)) return undefined;
+    return Math.max(0, asDate - Date.now());
   }
 }

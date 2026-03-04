@@ -48,6 +48,32 @@ describe('InstancePersistQueue', () => {
     queue.destroy();
   });
 
+  it('respects retry-after delay when present on 429 errors', async () => {
+    let calls = 0;
+    const queue = new InstancePersistQueue({
+      flush: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Too Many Requests'), { status: 429, retryAfterMs: 80 });
+        }
+      },
+      minDelayMs: 5,
+      baseBackoffMs: 10,
+      maxBackoffMs: 200,
+    });
+
+    queue.schedule({ immediate: true });
+    await sleep(20);
+    expect(calls).toBe(1);
+
+    await sleep(40);
+    expect(calls).toBe(1);
+
+    await sleep(50);
+    expect(calls).toBe(2);
+    queue.destroy();
+  });
+
   it('supports handled custom conflict errors without console spam', async () => {
     let onUnhandledErrorCalls = 0;
     let onErrorCalls = 0;

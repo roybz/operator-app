@@ -146,4 +146,22 @@ describe('RemoteStorageAdapter', () => {
     expect(latest.limit).toBe(5);
     expect(latest.count).toBeGreaterThanOrEqual(1);
   });
+
+  it('surfaces retry-after metadata for 429 responses', async () => {
+    const fetchSpy = vi.fn(async () => {
+      const headers = new Headers();
+      headers.set('retry-after', '3');
+      return new Response(JSON.stringify({ code: 'too_many_requests' }), { status: 429, headers });
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const adapter = new RemoteStorageAdapter('https://api.example.com', {
+      accessTokenProvider: async () => 'token-123',
+    });
+
+    await expect(adapter.setItem('k', 'v')).rejects.toMatchObject({
+      status: 429,
+      retryAfterMs: 3000,
+    });
+  });
 });
