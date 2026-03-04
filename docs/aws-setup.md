@@ -69,6 +69,7 @@ Notes:
 - User identity comes from JWT `sub` claim, never request body.
 - Backend stores logical keys opaquely (no app-specific interpretation).
 - `PUT /storage/item` supports optimistic versioning and returns `409` on conflicts.
+- Client requests include `X-Operator-Request-Id` and `X-Operator-Session-Id` for log correlation.
 
 ## Frontend Runtime Config (`frontend/src/assets/op-config.js`)
 
@@ -114,6 +115,7 @@ If you move from `plannerdemo.roy.bz` to a new domain:
 - API Gateway access logs are enabled.
 - Lambda logs go to CloudWatch automatically.
 - DynamoDB PITR is enabled.
+- Frontend also enforces a client-side per-minute request budget (configurable in `op-config.js`).
 
 ## Security Notes
 

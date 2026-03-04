@@ -26,6 +26,9 @@ Behavior:
 
 - Guest/no-token path uses local storage.
 - Authenticated path uses remote storage with `Authorization: Bearer <JWT>`.
+- Authenticated requests also send correlation headers:
+  - `X-Operator-Request-Id`
+  - `X-Operator-Session-Id`
 - App hydrates asynchronously at startup using existing `APP_INITIALIZER`.
 - Realtime invalidation is WebSocket-first with polling fallback (optional but recommended).
 
@@ -148,6 +151,7 @@ For another provider:
 - Authentication enabled for all remote storage routes
 - CORS restricted to frontend origin(s)
 - Request logging (without sensitive payload logging)
+- Correlation ID propagation (`request id` + `session id`) through API/Lambda logs
 - Rate limiting / throttling
 - Durable data store backups / PITR equivalent
 - Separate IAM/service account credentials (not root)
