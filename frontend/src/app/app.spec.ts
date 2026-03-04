@@ -54,6 +54,16 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
+  it('shows loading screen while loading is visible', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as { loadingVisible: () => boolean };
+    fixture.detectChanges();
+
+    expect(app.loadingVisible()).toBe(true);
+    const loading = fixture.nativeElement.querySelector('#loading-screen');
+    expect(loading).toBeTruthy();
+  });
+
   it('renders translated header and mock label', () => {
     const w = window as OpWindow;
     w.__OP_CONFIG__ = { mockMode: true, guestModeOnly: false };
@@ -127,6 +137,20 @@ describe('App', () => {
     expect(applySpy).not.toHaveBeenCalled();
     expect(app.suppressRemoteChangeSignature).toBeNull();
     expect(app.suppressRemoteChangeUntil).toBe(0);
+  });
+
+  it('renders remote conflict banner when pending conflict is visible', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      remoteConflictBannerVisible: { set: (v: boolean) => void };
+      remoteConflictPending: { set: (v: { keys: string[]; reason: string } | null) => void };
+    };
+    app.remoteConflictPending.set({ keys: ['op_session'], reason: 'dirty' });
+    app.remoteConflictBannerVisible.set(true);
+    fixture.detectChanges();
+
+    const banner = fixture.nativeElement.querySelector('.remote-conflict-banner');
+    expect(banner).toBeTruthy();
   });
 
   it('queues then auto-applies deferred remote conflict when idle', async () => {

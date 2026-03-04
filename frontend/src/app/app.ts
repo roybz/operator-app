@@ -745,20 +745,17 @@ import {
           </div>
 
           @if (settingsOpen()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
-              (pointerdown)="requestCloseSettings()"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="requestCloseSettings()"
-              (keydown.space)="requestCloseSettings()"
+            <app-modal-shell
+              [zIndex]="2400"
+              ariaLabel="Settings dialog"
+              [maxWidth]="phoneMode() ? '100%' : 'min(920px, 92vw)'"
+              (closed)="requestCloseSettings()"
             >
               <div
-                style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw); position:relative;"
+                style="padding:20px; height:85vh; overflow:auto; width:min(920px, 92vw); position:relative;"
                 [style.width]="phoneMode() ? '100%' : null"
                 [style.height]="phoneMode() ? '100%' : null"
                 [style.borderRadius]="phoneMode() ? '0' : '12px'"
-                (pointerdown)="$event.stopPropagation()"
               >
                 <button
                   (click)="requestCloseSettings()"
@@ -786,7 +783,7 @@ import {
                 </div>
                 <app-settings [showControls]="false" />
               </div>
-            </div>
+            </app-modal-shell>
           }
           @if (licenseOpen()) {
             <app-modal-shell
@@ -807,18 +804,13 @@ import {
             </app-modal-shell>
           }
           @if (moveWorkspaceTargetId()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
-              (pointerdown)="closeMoveWorkspace()"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="closeMoveWorkspace()"
-              (keydown.space)="closeMoveWorkspace()"
+            <app-modal-shell
+              [zIndex]="2100"
+              ariaLabel="Move workspace dialog"
+              maxWidth="min(640px, 92vw)"
+              (closed)="closeMoveWorkspace()"
             >
-              <div
-                style="background:var(--color-surface); padding:24px; border-radius:12px; width:min(640px, 92vw);"
-                (pointerdown)="$event.stopPropagation()"
-              >
+              <div style="padding:24px; width:min(640px, 92vw);">
                 <h3 style="margin:0 0 16px;">
                   {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
                 </h3>
@@ -847,7 +839,7 @@ import {
                   <button (click)="closeMoveWorkspace()">{{ 'dialogs.cancel' | translate }}</button>
                 </div>
               </div>
-            </div>
+            </app-modal-shell>
           }
           @if (universeSwitchConfirmOpen()) {
             <app-confirm-dialog
@@ -1081,27 +1073,19 @@ import {
       }
 
       @if (guestBlocked()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3200;"
-        >
-          <div
-            style="background:var(--color-surface); padding:24px; border-radius:12px; width:360px; text-align:center;"
-          >
+        <app-modal-shell [zIndex]="3200" ariaLabel="Guest blocked" maxWidth="380px">
+          <div style="padding:24px; width:360px; text-align:center;">
             <p>{{ 'auth.guestDisabled' | translate }}</p>
             <div style="display:flex; gap:8px; justify-content:center; margin-top:16px;">
               <button (click)="logout()">{{ 'auth.signIn' | translate }}</button>
             </div>
           </div>
-        </div>
+        </app-modal-shell>
       }
 
       @if (accessibilityPromptOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1200;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
+        <app-modal-shell [zIndex]="1200" ariaLabel="Accessibility prompt" maxWidth="380px">
+          <div style="padding:20px; width:360px;">
             <h3 style="margin-top:0;">{{ 'accessibility.title' | translate }}</h3>
             <p>{{ 'accessibility.body' | translate }}</p>
             <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
@@ -1118,7 +1102,7 @@ import {
               </button>
             </div>
           </div>
-        </div>
+        </app-modal-shell>
       }
     }
   `,

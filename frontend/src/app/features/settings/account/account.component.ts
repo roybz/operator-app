@@ -2,12 +2,13 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { ModalShellComponent } from '../../../shared/modal-shell/modal-shell.component';
 import { AuthService } from '../../../core/auth.service';
 
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ConfirmDialogComponent],
+  imports: [CommonModule, TranslateModule, ConfirmDialogComponent, ModalShellComponent],
   template: `
     <section>
       <h3>{{ 'account.title' | translate }}</h3>
@@ -58,18 +59,14 @@ import { AuthService } from '../../../core/auth.service';
       }
 
       @if (successMessage()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3200;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-          >
+        <app-modal-shell [zIndex]="3200" ariaLabel="Account success" maxWidth="360px" (closed)="successMessage.set(null)">
+          <div style="padding:20px; width:320px;">
             <p>{{ successMessage() }}</p>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
               <button (click)="successMessage.set(null)">OK</button>
             </div>
           </div>
-        </div>
+        </app-modal-shell>
       }
     </section>
   `,

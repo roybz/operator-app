@@ -5,11 +5,18 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
 import { AuthService, UserRecord, UserRole } from '../../../core/auth.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
 import { DialogService } from '../../../core/dialog.service';
+import { ModalShellComponent } from '../../../shared/modal-shell/modal-shell.component';
 
 @Component({
   selector: 'app-users-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, SharedTableComponent, ConfirmDialogComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    SharedTableComponent,
+    ConfirmDialogComponent,
+    ModalShellComponent,
+  ],
   template: `
     <section>
       <h3>{{ 'users.title' | translate }}</h3>
@@ -90,18 +97,14 @@ import { DialogService } from '../../../core/dialog.service';
       }
 
       @if (successMessage()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-          >
+        <app-modal-shell [zIndex]="3000" ariaLabel="Users success" maxWidth="360px" (closed)="successMessage.set(null)">
+          <div style="padding:20px; width:320px;">
             <p>{{ successMessage() }}</p>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
               <button (click)="successMessage.set(null)">OK</button>
             </div>
           </div>
-        </div>
+        </app-modal-shell>
       }
 
       @if (confirmWipeUserId()) {

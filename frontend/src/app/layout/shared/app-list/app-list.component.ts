@@ -414,27 +414,9 @@ export interface AppGroup {
         font-size: 12px;
       }
 
-      .app-list__action-icon--duplicate {
-        font-size: 14px;
-      }
-
-      .app-list__action-icon--lock {
-        font-size: 10px;
-      }
-
-      .app-list__action-icon--unarchive {
-        font-size: 12px;
-        color: #6b7280;
-      }
-
       .app-list__archived-toggle {
         align-self: flex-start;
         opacity: 0.6;
-        transition: opacity 0.15s ease;
-      }
-
-      .app-list__archived-toggle:hover {
-        opacity: 1;
       }
 
       .app-list__archived-empty {
