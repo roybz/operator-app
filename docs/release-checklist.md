@@ -51,6 +51,10 @@ Check `frontend/src/assets/op-config.js`:
 4. WebSocket `$connect` success baseline.
 5. CloudWatch alarms active for storage/realtime incident classes.
 
+## Load/Backpressure Verification
+
+Run `docs/realtime-load-profile.md` and attach evidence for pass criteria before sign-off.
+
 ## Release Sign-off
 
 - [ ] All critical scenarios passed
