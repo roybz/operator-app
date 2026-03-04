@@ -5,12 +5,16 @@ import { AuthService, InviteeRecord, UserPreferences } from '../../../core/auth.
 import { SettingsDraftService } from '../settings-draft.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { LlmActionCardService } from '../../../core/llm/llm-action-card.service';
 import { LlmActionLogService } from '../../../core/llm/llm-action-log.service';
+import { LlmCredentialRefService } from '../../../core/llm/llm-credential-ref.service';
 import { LlmPencilLease } from '../../../core/llm/llm-pencil-lease.service';
 import { LlmResidentAdminService } from '../../../core/llm/llm-resident-admin.service';
 import {
   DEFAULT_LLM_POLICY,
+  LlmActionCard,
   LlmActionEnvelope,
+  LlmAllowedActionType,
   LlmContext,
   LlmPolicy,
   LlmProvider,
@@ -438,6 +442,119 @@ import {
               }
             </div>
           </fieldset>
+
+          <fieldset
+            style="border:1px solid #ddd; border-radius:8px; padding:12px; margin-top:12px;"
+          >
+            <legend>Resident workflow cards</legend>
+            <p style="margin:0 0 10px; opacity:0.8;">
+              Propose actions, approve them, then execute for this universe.
+            </p>
+            <div
+              style="display:grid; gap:8px; grid-template-columns: repeat(2, minmax(180px, 1fr));"
+            >
+              <label>
+                Resident
+                <select
+                  [value]="workflowResidentId()"
+                  (change)="workflowResidentId.set($any($event.target).value)"
+                  style="width:100%; padding:8px;"
+                >
+                  <option value="">Select resident</option>
+                  @for (resident of llmResidents(); track resident.id) {
+                    <option [value]="resident.id">{{ resident.name }} ({{ resident.id }})</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Credential ref
+                <select
+                  [value]="workflowCredentialRefId()"
+                  (change)="workflowCredentialRefId.set($any($event.target).value)"
+                  style="width:100%; padding:8px;"
+                >
+                  <option value="">Select credential</option>
+                  @for (ref of llmCredentialRefs(); track ref.id) {
+                    <option [value]="ref.id">
+                      {{ ref.alias }} ({{ ref.provider }} | {{ ref.mode }})
+                    </option>
+                  }
+                </select>
+              </label>
+              <label>
+                Action
+                <select
+                  [value]="workflowActionType()"
+                  (change)="workflowActionType.set($any($event.target).value)"
+                  style="width:100%; padding:8px;"
+                >
+                  @for (action of llmActionTypes; track action) {
+                    <option [value]="action">{{ action }}</option>
+                  }
+                </select>
+              </label>
+              <label>
+                Model
+                <input
+                  type="text"
+                  [value]="workflowModel()"
+                  (input)="workflowModel.set($any($event.target).value)"
+                  style="width:100%; padding:8px;"
+                />
+              </label>
+              <label style="grid-column:1 / -1;">
+                Prompt
+                <textarea
+                  [value]="workflowPrompt()"
+                  (input)="workflowPrompt.set($any($event.target).value)"
+                  style="width:100%; padding:8px; min-height:84px;"
+                ></textarea>
+              </label>
+              <label style="grid-column:1 / -1;">
+                Payload JSON (optional)
+                <textarea
+                  [value]="workflowPayloadJson()"
+                  (input)="workflowPayloadJson.set($any($event.target).value)"
+                  style="width:100%; padding:8px; min-height:72px;"
+                ></textarea>
+              </label>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+              <button (click)="proposeActionCard()">Propose card</button>
+              <button (click)="clearActionCards()">Clear cards</button>
+            </div>
+            <div style="display:grid; gap:8px; margin-top:12px; max-height:340px; overflow:auto;">
+              @for (card of llmActionCards(); track card.id) {
+                <article style="border:1px solid #ddd; border-radius:8px; padding:10px;">
+                  <div
+                    style="display:flex; justify-content:space-between; gap:8px; align-items:center;"
+                  >
+                    <strong>{{ card.actionType }}</strong>
+                    <small>{{ card.status }}</small>
+                  </div>
+                  <div style="margin-top:4px; opacity:0.8;">
+                    {{ card.residentId }} | {{ card.credentialRefId }} | {{ card.model }}
+                  </div>
+                  <pre style="margin:8px 0 0; white-space:pre-wrap;">{{ card.prompt }}</pre>
+                  @if (card.responseText) {
+                    <pre style="margin:8px 0 0; white-space:pre-wrap; color:#0b4f2f;">{{
+                      card.responseText
+                    }}</pre>
+                  }
+                  @if (card.errorMessage) {
+                    <div style="margin-top:8px; color:#b00020;">{{ card.errorMessage }}</div>
+                  }
+                  <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button (click)="approveActionCard(card.id)">Approve</button>
+                    <button (click)="denyActionCard(card.id)">Deny</button>
+                    <button (click)="executeActionCard(card.id)">Execute</button>
+                  </div>
+                </article>
+              } @empty {
+                <p style="margin:0; opacity:0.8;">No cards yet.</p>
+              }
+            </div>
+          </fieldset>
         </section>
       }
 
@@ -459,6 +576,8 @@ export class MultiUserSettingsComponent {
   private readonly translate = inject(TranslateService);
   private readonly llmAdmin = inject(LlmResidentAdminService);
   private readonly llmActionLogStore = inject(LlmActionLogService);
+  private readonly llmActionCardsStore = inject(LlmActionCardService);
+  private readonly llmCredentialRefsStore = inject(LlmCredentialRefService);
   readonly prefs = signal<UserPreferences>(this.draft.preferences());
   readonly confirmLinkChange = signal(false);
   readonly guestPassword = signal('');
@@ -469,7 +588,19 @@ export class MultiUserSettingsComponent {
   readonly llmPolicy = signal<LlmPolicy>({ ...DEFAULT_LLM_POLICY });
   readonly llmLease = signal<LlmPencilLease | null>(null);
   readonly llmActionLog = signal<LlmActionEnvelope[]>([]);
+  readonly llmActionCards = signal<LlmActionCard[]>([]);
+  readonly llmCredentialRefs = signal<
+    Awaited<ReturnType<LlmCredentialRefService['listForCurrentUser']>>
+  >([]);
   readonly llmProviders: LlmProvider[] = ['openai', 'anthropic', 'ollama', 'custom'];
+  readonly llmActionTypes: LlmAllowedActionType[] = [
+    'chat.post',
+    'comment.create',
+    'instance.create',
+    'instance.write',
+    'dialog.move',
+    'dialog.resize',
+  ];
   readonly leaseTtlSeconds = signal(300);
   readonly residentEditId = signal<string | null>(null);
   readonly residentId = signal('');
@@ -484,6 +615,12 @@ export class MultiUserSettingsComponent {
     canCreateInstances: false,
     canComment: true,
   });
+  readonly workflowResidentId = signal('');
+  readonly workflowCredentialRefId = signal('');
+  readonly workflowActionType = signal<LlmAllowedActionType>('chat.post');
+  readonly workflowModel = signal('gpt-4.1-mini');
+  readonly workflowPrompt = signal('');
+  readonly workflowPayloadJson = signal('');
 
   columns: TableColumn<InviteeRecord>[] = [
     { header: 'users.username', cell: (row) => row.username },
@@ -782,17 +919,107 @@ export class MultiUserSettingsComponent {
     await this.refreshLlmState();
   }
 
+  async proposeActionCard() {
+    this.llmError.set(null);
+    this.llmNotice.set(null);
+    const context = this.getLlmContext();
+    if (!context) return;
+    const residentId = this.workflowResidentId().trim();
+    const credentialRefId = this.workflowCredentialRefId().trim();
+    const model = this.workflowModel().trim();
+    const prompt = this.workflowPrompt().trim();
+    if (!residentId || !credentialRefId || !model || !prompt) {
+      this.llmError.set('Resident, credential, model, and prompt are required.');
+      return;
+    }
+    const payload = this.parsePayloadJson();
+    if (payload === null) return;
+    const result = await this.llmActionCardsStore.propose(context, {
+      residentId,
+      credentialRefId,
+      actionType: this.workflowActionType(),
+      model,
+      prompt,
+      payload,
+    });
+    if (!result.ok) {
+      this.llmError.set(result.message ?? 'Failed to propose action card.');
+      return;
+    }
+    this.workflowPrompt.set('');
+    this.workflowPayloadJson.set('');
+    this.llmNotice.set('Action card proposed.');
+    await this.refreshLlmState();
+  }
+
+  async approveActionCard(cardId: string) {
+    this.llmError.set(null);
+    this.llmNotice.set(null);
+    const context = this.getLlmContext();
+    if (!context) return;
+    const result = await this.llmActionCardsStore.approve(context, cardId);
+    if (!result.ok) {
+      this.llmError.set('Failed to approve action card.');
+      return;
+    }
+    this.llmNotice.set('Action card approved.');
+    await this.refreshLlmState();
+  }
+
+  async denyActionCard(cardId: string) {
+    this.llmError.set(null);
+    this.llmNotice.set(null);
+    const context = this.getLlmContext();
+    if (!context) return;
+    const result = await this.llmActionCardsStore.deny(context, cardId);
+    if (!result.ok) {
+      this.llmError.set('Failed to deny action card.');
+      return;
+    }
+    this.llmNotice.set('Action card denied.');
+    await this.refreshLlmState();
+  }
+
+  async executeActionCard(cardId: string) {
+    this.llmError.set(null);
+    this.llmNotice.set(null);
+    const context = this.getLlmContext();
+    if (!context) return;
+    const result = await this.llmActionCardsStore.execute(context, cardId);
+    if (!result.ok) {
+      this.llmError.set(result.message ?? 'Failed to execute action card.');
+      await this.refreshLlmState();
+      return;
+    }
+    this.llmNotice.set('Action card executed.');
+    await this.refreshLlmState();
+  }
+
+  async clearActionCards() {
+    this.llmError.set(null);
+    this.llmNotice.set(null);
+    const context = this.getLlmContext();
+    if (!context) return;
+    await this.llmActionCardsStore.clear(context);
+    this.llmNotice.set('Action cards cleared.');
+    await this.refreshLlmState();
+  }
+
   async refreshLlmState() {
     const context = this.getLlmContext();
     if (!context) return;
-    const [state, log] = await Promise.all([
+    const [state, log, cards, refs] = await Promise.all([
       this.llmAdmin.loadState(context),
       this.llmActionLogStore.list(context),
+      this.llmActionCardsStore.list(context),
+      this.llmCredentialRefsStore.listForCurrentUser(),
     ]);
     this.llmResidents.set(state.residents);
     this.llmPolicy.set(state.policy);
     this.llmLease.set(state.lease);
     this.llmActionLog.set(log);
+    this.llmActionCards.set(cards);
+    this.llmCredentialRefs.set(refs);
   }
 
   formatTimestamp(ts: number): string {
@@ -811,6 +1038,22 @@ export class MultiUserSettingsComponent {
     const parsed = Number.parseInt(value, 10);
     if (Number.isNaN(parsed) || parsed <= 0) return fallback;
     return parsed;
+  }
+
+  private parsePayloadJson(): Record<string, unknown> | undefined | null {
+    const raw = this.workflowPayloadJson().trim();
+    if (!raw) return undefined;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        this.llmError.set('Payload JSON must be an object.');
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      this.llmError.set('Payload JSON is invalid.');
+      return null;
+    }
   }
 
   private getLlmContext(): LlmContext | null {

@@ -5,7 +5,7 @@ import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.
 import { SavedCredential, UserPreferences } from '../../../core/auth.service';
 import { SettingsDraftService } from '../settings-draft.service';
 import { LlmCredentialRefService } from '../../../core/llm/llm-credential-ref.service';
-import { LlmProvider } from '../../../core/llm/llm-types';
+import { LlmCredentialMode, LlmProvider } from '../../../core/llm/llm-types';
 
 @Component({
   selector: 'app-credentials-settings',
@@ -115,6 +115,17 @@ import { LlmProvider } from '../../../core/llm/llm-types';
               }
             </select>
           </label>
+          <label>
+            Mode
+            <select
+              [value]="draftMode()"
+              (change)="draftMode.set($any($event.target).value)"
+              style="width:100%; padding:8px;"
+            >
+              <option value="clientHeld">Client-held (session secret)</option>
+              <option value="serverHeld">Server-held broker (beta)</option>
+            </select>
+          </label>
           <label style="grid-column: 1 / -1;">
             Model (optional)
             <input
@@ -124,15 +135,17 @@ import { LlmProvider } from '../../../core/llm/llm-types';
               style="width:100%; padding:8px;"
             />
           </label>
-          <label style="grid-column: 1 / -1;">
-            Session secret
-            <input
-              type="password"
-              [value]="draftSecret()"
-              (input)="draftSecret.set($any($event.target).value)"
-              style="width:100%; padding:8px;"
-            />
-          </label>
+          @if (draftMode() === 'clientHeld') {
+            <label style="grid-column: 1 / -1;">
+              Session secret
+              <input
+                type="password"
+                [value]="draftSecret()"
+                (input)="draftSecret.set($any($event.target).value)"
+                style="width:100%; padding:8px;"
+              />
+            </label>
+          }
         </div>
 
         <button style="margin-top:12px;" (click)="addLlmCredential()">
@@ -173,6 +186,7 @@ export class CredentialsSettingsComponent {
   readonly llmRefs = signal<Awaited<ReturnType<LlmCredentialRefService['listForCurrentUser']>>>([]);
   readonly draftAlias = signal('');
   readonly draftProvider = signal<LlmProvider>('openai');
+  readonly draftMode = signal<LlmCredentialMode>('clientHeld');
   readonly draftModel = signal('');
   readonly draftSecret = signal('');
   readonly error = signal<string | null>(null);
@@ -215,6 +229,7 @@ export class CredentialsSettingsComponent {
     const result = await this.llmCredentialRefs.upsertRef({
       alias,
       provider: this.draftProvider(),
+      mode: this.draftMode(),
       model: this.draftModel().trim() || undefined,
     });
     if (!result.ok || !result.ref) {
@@ -223,7 +238,7 @@ export class CredentialsSettingsComponent {
     }
 
     const secret = this.draftSecret().trim();
-    if (secret) {
+    if (this.draftMode() === 'clientHeld' && secret) {
       const secretResult = this.llmCredentialRefs.setSessionSecret(result.ref.id, secret);
       if (!secretResult.ok) {
         this.error.set(secretResult.message ?? 'Failed to set session secret.');
@@ -232,6 +247,7 @@ export class CredentialsSettingsComponent {
     }
 
     this.draftAlias.set('');
+    this.draftMode.set('clientHeld');
     this.draftModel.set('');
     this.draftSecret.set('');
     this.notice.set('Credential reference saved.');

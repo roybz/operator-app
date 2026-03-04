@@ -16,7 +16,7 @@ describe('LlmProviderRegistryService', () => {
     const unknown = service.resolve('custom_unknown' as never);
 
     expect(custom.name).toBe('custom');
-    expect(openai.name).toBe('custom');
+    expect(openai.name).toBe('openai');
     expect(unknown.name).toBe('custom');
   });
 });

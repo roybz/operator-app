@@ -75,6 +75,37 @@ export interface LlmActionEnvelope {
   createdAt: number;
 }
 
+export type LlmActionCardStatus =
+  | 'proposed'
+  | 'approved'
+  | 'denied'
+  | 'executing'
+  | 'executed'
+  | 'failed';
+
+export interface LlmActionCard {
+  id: string;
+  universeOwnerId: string;
+  universeId: string;
+  residentId: string;
+  credentialRefId: string;
+  actionType: LlmAllowedActionType;
+  model: string;
+  prompt: string;
+  payload?: Record<string, unknown>;
+  status: LlmActionCardStatus;
+  createdBy: string;
+  createdAt: number;
+  approvedBy?: string;
+  approvedAt?: number;
+  deniedBy?: string;
+  deniedAt?: number;
+  executedBy?: string;
+  executedAt?: number;
+  responseText?: string;
+  errorMessage?: string;
+}
+
 export interface LlmContext {
   universeOwnerId: string;
   universeId: string;

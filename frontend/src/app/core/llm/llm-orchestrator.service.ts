@@ -3,6 +3,7 @@ import {
   LlmActionEnvelope,
   LlmAllowedActionType,
   LlmContext,
+  LlmCredentialRef,
   LlmProviderRequest,
   LlmProviderResponse,
 } from './llm-types';
@@ -13,6 +14,7 @@ import { LlmModeGuardService } from './llm-mode-guard.service';
 import { LlmPolicyService } from './llm-policy.service';
 import { LlmProviderRegistryService } from './llm-provider-registry.service';
 import { LlmResidentService } from './llm-resident.service';
+import { LlmSecretBrokerService } from './llm-secret-broker.service';
 
 export interface LlmExecutionInput {
   context: LlmContext;
@@ -40,6 +42,7 @@ export class LlmOrchestratorService {
   private readonly residents = inject(LlmResidentService);
   private readonly envelopeGuard = inject(LlmEnvelopeGuardService);
   private readonly actionLog = inject(LlmActionLogService);
+  private readonly secretBroker = inject(LlmSecretBrokerService);
 
   private readonly actionWindow = new Map<string, number[]>();
   private readonly tokenWindow = new Map<string, { ts: number; tokens: number }[]>();
@@ -154,20 +157,6 @@ export class LlmOrchestratorService {
       return { ok: false, message: 'llm.credentials.revoked' };
     }
 
-    const secret = this.credentialRefs.getSecret(input.credentialRefId);
-    if (!secret) {
-      await this.log(
-        context,
-        residentId,
-        requestId,
-        actionType,
-        false,
-        'llm.credentials.secretMissing',
-        input.payload,
-      );
-      return { ok: false, message: 'llm.credentials.secretMissing' };
-    }
-
     const rateAllowed = this.consumeActionAllowance(context, policy.maxActionsPerMinute);
     if (!rateAllowed) {
       await this.log(
@@ -201,26 +190,29 @@ export class LlmOrchestratorService {
       return { ok: false, message: 'llm.rate.tokenLimit' };
     }
 
-    const adapter = this.providers.resolve(ref.provider);
-    const validation = await adapter.validateCredential(secret);
-    if (!validation.ok) {
-      await this.log(
+    try {
+      await this.envelopeGuard.markSeen(context.universeOwnerId, context.universeId, requestId);
+      const response = await this.completeRequest({
+        ref,
+        input,
         context,
         residentId,
         requestId,
-        actionType,
-        false,
-        validation.message ?? 'llm.credentials.invalid',
-        input.payload,
-      );
-      return { ok: false, message: validation.message ?? 'llm.credentials.invalid' };
-    }
-
-    try {
-      await this.envelopeGuard.markSeen(context.universeOwnerId, context.universeId, requestId);
-      const response = await adapter.complete(request, secret);
+      });
+      if (!response.ok) {
+        await this.log(
+          context,
+          residentId,
+          requestId,
+          actionType,
+          false,
+          response.message ?? 'llm.provider.failed',
+          input.payload,
+        );
+        return response;
+      }
       await this.log(context, residentId, requestId, actionType, true, undefined, input.payload);
-      return { ok: true, response };
+      return response;
     } catch {
       // Do not include provider secrets or request details in surfaced errors.
       await this.log(
@@ -234,6 +226,42 @@ export class LlmOrchestratorService {
       );
       return { ok: false, message: 'llm.provider.failed' };
     }
+  }
+
+  private async completeRequest(args: {
+    ref: LlmCredentialRef;
+    input: LlmExecutionInput;
+    context: LlmContext;
+    residentId: string;
+    requestId: string;
+  }): Promise<LlmExecutionResult> {
+    const { ref, input, context, residentId, requestId } = args;
+    if (ref.mode === 'serverHeld') {
+      return this.secretBroker.execute({
+        context,
+        residentId,
+        credentialRef: ref,
+        requestId,
+        actionType: input.actionType,
+        request: input.request,
+      });
+    }
+
+    const secret = this.credentialRefs.getSecret(input.credentialRefId);
+    if (!secret) {
+      return { ok: false, message: 'llm.credentials.secretMissing' };
+    }
+
+    const adapter = this.providers.resolve(ref.provider);
+    if (!adapter.supportsClientHeld) {
+      return { ok: false, message: 'llm.credentials.modeUnsupported' };
+    }
+    const validation = await adapter.validateCredential(secret);
+    if (!validation.ok) {
+      return { ok: false, message: validation.message ?? 'llm.credentials.invalid' };
+    }
+    const providerResponse = await adapter.complete(input.request, secret);
+    return { ok: true, response: providerResponse };
   }
 
   private consumeActionAllowance(context: LlmContext, maxActionsPerMinute: number): boolean {

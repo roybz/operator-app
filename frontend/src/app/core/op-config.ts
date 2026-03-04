@@ -17,6 +17,7 @@ export interface OpCapabilityConfig {
   navigatorApp?: boolean;
   publicSignupPrepared?: boolean;
   publicSignupEnabled?: boolean;
+  llmSecretBroker?: boolean;
 }
 
 export interface OpRuntimeConfig {
@@ -48,6 +49,9 @@ export interface OpRuntimeConfig {
   publicSignupEnabled?: boolean;
   navigatorEnabled?: boolean;
   navigatorAllowedOrigins?: string[];
+  llmSecretBrokerEnabled?: boolean;
+  llmSecretBrokerBaseUrl?: string;
+  llmSecretBrokerTimeoutMs?: number;
   capabilities?: OpCapabilityConfig;
   cognito?: OpCognitoConfig;
 }
@@ -61,6 +65,7 @@ export interface OpRuntimeCapabilities {
   navigatorApp: boolean;
   publicSignupPrepared: boolean;
   publicSignupEnabled: boolean;
+  llmSecretBroker: boolean;
 }
 
 export function getOpConfig(): OpRuntimeConfig {
@@ -79,6 +84,7 @@ export function getOpCapabilities(config = getOpConfig()): OpRuntimeCapabilities
   const publicSignupEnabled = Boolean(
     capabilities.publicSignupEnabled ?? config.publicSignupEnabled,
   );
+  const llmSecretBroker = Boolean(capabilities.llmSecretBroker ?? config.llmSecretBrokerEnabled);
 
   return {
     auth: Boolean(capabilities.auth ?? authDefault),
@@ -89,5 +95,6 @@ export function getOpCapabilities(config = getOpConfig()): OpRuntimeCapabilities
     navigatorApp: Boolean(capabilities.navigatorApp ?? config.navigatorEnabled ?? false),
     publicSignupPrepared,
     publicSignupEnabled: publicSignupPrepared && publicSignupEnabled,
+    llmSecretBroker,
   };
 }

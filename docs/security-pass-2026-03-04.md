@@ -19,7 +19,27 @@ npm audit --audit-level=moderate --json
 
 Result:
 
-- `0` vulnerabilities (`low`, `moderate`, `high`, `critical` all zero).
+- `4 high` vulnerabilities remain, all in the Angular/Storybook build toolchain path:
+  - `serialize-javascript` (via `copy-webpack-plugin`)
+  - `copy-webpack-plugin`
+  - `@angular-devkit/build-angular`
+  - `@storybook/angular`
+- `npm audit fix` does not provide a safe in-place fix for the current stack. The suggested
+  downgrade path (`@storybook/angular@5.1.11`) is not acceptable for this repo.
+- Previously removed audit surface:
+  - `@compodoc/compodoc` was removed from devDependencies.
+
+Current risk posture:
+
+- Runtime app code does not import or execute this vulnerable path directly.
+- Exposure is limited to build/dev toolchain usage.
+- Treat as release gate for infra/toolchain hardening, not as a blocker for app-runtime fixes.
+
+Planned remediation options (in order):
+
+1. Upgrade to upstream Angular/Storybook versions that lift `copy-webpack-plugin`/`serialize-javascript`.
+2. Isolate Storybook build in a separate workspace/toolchain so production app build path is minimal.
+3. If needed, replace Storybook Angular builder path with a controlled alternative where dependency tree is auditable.
 
 ## 2. Auth and Session Hardening
 

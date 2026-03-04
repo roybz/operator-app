@@ -2,7 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { vi } from 'vitest';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
+import { LlmActionCardService } from '../../../core/llm/llm-action-card.service';
 import { LlmActionLogService } from '../../../core/llm/llm-action-log.service';
+import { LlmCredentialRefService } from '../../../core/llm/llm-credential-ref.service';
 import { LlmResidentAdminService } from '../../../core/llm/llm-resident-admin.service';
 import { SettingsDraftService } from '../settings-draft.service';
 import { MultiUserSettingsComponent } from './multi-user.component';
@@ -59,6 +61,17 @@ describe('MultiUserSettingsComponent', () => {
     list: vi.fn(async () => []),
     clear: vi.fn(async () => undefined),
   };
+  const llmActionCardsStub = {
+    list: vi.fn(async () => []),
+    clear: vi.fn(async () => undefined),
+    propose: vi.fn(async () => ({ ok: true })),
+    approve: vi.fn(async () => ({ ok: true })),
+    deny: vi.fn(async () => ({ ok: true })),
+    execute: vi.fn(async () => ({ ok: true })),
+  };
+  const llmCredentialRefsStub = {
+    listForCurrentUser: vi.fn(async () => []),
+  };
 
   const translateStub = {
     instant: vi.fn((key: string) => key),
@@ -73,6 +86,8 @@ describe('MultiUserSettingsComponent', () => {
         { provide: SettingsDraftService, useValue: draftStub },
         { provide: LlmResidentAdminService, useValue: llmAdminStub },
         { provide: LlmActionLogService, useValue: llmActionLogStub },
+        { provide: LlmActionCardService, useValue: llmActionCardsStub },
+        { provide: LlmCredentialRefService, useValue: llmCredentialRefsStub },
         { provide: TranslateService, useValue: translateStub },
       ],
     })
@@ -96,6 +111,11 @@ describe('MultiUserSettingsComponent', () => {
       universeOwnerId: 'owner_1',
       universeId: 'univ_1',
     });
+    expect(llmActionCardsStub.list).toHaveBeenCalledWith({
+      universeOwnerId: 'owner_1',
+      universeId: 'univ_1',
+    });
+    expect(llmCredentialRefsStub.listForCurrentUser).toHaveBeenCalled();
   });
 
   it('rejects invalid resident save requests without id, name, and model', async () => {

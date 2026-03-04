@@ -27,6 +27,9 @@ window.__OP_CONFIG__ = {
   publicSignupEnabled: false, // keep disabled until pricing/onboarding is ready
   navigatorEnabled: false, // deprecated by default (can be re-enabled for local testing)
   navigatorAllowedOrigins: [],
+  llmSecretBrokerEnabled: false,
+  llmSecretBrokerBaseUrl: '',
+  llmSecretBrokerTimeoutMs: 12000,
   capabilities: {
     auth: true,
     realtime: true,
@@ -36,6 +39,7 @@ window.__OP_CONFIG__ = {
     navigatorApp: false,
     publicSignupPrepared: true,
     publicSignupEnabled: false,
+    llmSecretBroker: false,
   },
   cognito: {
     enabled: true,

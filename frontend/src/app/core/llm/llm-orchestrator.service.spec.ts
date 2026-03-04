@@ -8,6 +8,8 @@ import { LlmOrchestratorService } from './llm-orchestrator.service';
 import { LlmPolicyService } from './llm-policy.service';
 import { LlmProviderRegistryService } from './llm-provider-registry.service';
 import { LlmResidentService } from './llm-resident.service';
+import { LlmSecretBrokerService } from './llm-secret-broker.service';
+import { LlmCredentialRef } from './llm-types';
 
 describe('LlmOrchestratorService', () => {
   const context = { universeOwnerId: 'u_owner', universeId: 'u1' };
@@ -50,14 +52,14 @@ describe('LlmOrchestratorService', () => {
     })),
   };
   const credentialStub = {
-    listForCurrentUser: vi.fn(async () => [
+    listForCurrentUser: vi.fn<() => Promise<LlmCredentialRef[]>>(async () => [
       {
         id: 'cred_1',
         userId: 'u_owner',
         alias: 'primary',
-        provider: 'custom' as const,
-        mode: 'clientHeld' as const,
-        status: 'verified' as const,
+        provider: 'custom',
+        mode: 'clientHeld',
+        status: 'verified',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       },
@@ -77,6 +79,9 @@ describe('LlmOrchestratorService', () => {
   const actionLogStub = {
     append: vi.fn(async () => []),
   };
+  const secretBrokerStub = {
+    execute: vi.fn(async () => ({ ok: true, response: { text: 'broker ok' } })),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -90,6 +95,7 @@ describe('LlmOrchestratorService', () => {
         { provide: LlmResidentService, useValue: residentStub },
         { provide: LlmEnvelopeGuardService, useValue: envelopeStub },
         { provide: LlmActionLogService, useValue: actionLogStub },
+        { provide: LlmSecretBrokerService, useValue: secretBrokerStub },
       ],
     });
   });
@@ -109,6 +115,7 @@ describe('LlmOrchestratorService', () => {
 
     expect(result.ok).toBe(true);
     expect(adapter.complete).toHaveBeenCalledTimes(1);
+    expect(secretBrokerStub.execute).not.toHaveBeenCalled();
     expect(envelopeStub.markSeen).toHaveBeenCalledTimes(1);
     expect(actionLogStub.append).toHaveBeenCalledTimes(1);
     const firstCall = actionLogStub.append.mock.calls[0] as unknown[] | undefined;
@@ -198,5 +205,35 @@ describe('LlmOrchestratorService', () => {
     });
 
     expect(second).toEqual({ ok: false, message: 'llm.rate.actionLimit' });
+  });
+
+  it('routes server-held credentials through broker without local secret lookup', async () => {
+    credentialStub.listForCurrentUser.mockResolvedValueOnce([
+      {
+        id: 'cred_server',
+        userId: 'u_owner',
+        alias: 'server',
+        provider: 'openai' as const,
+        mode: 'serverHeld' as const,
+        status: 'verified' as const,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+    ]);
+
+    const service = TestBed.inject(LlmOrchestratorService);
+    const result = await service.execute({
+      context,
+      residentId: 'r1',
+      credentialRefId: 'cred_server',
+      requestId: 'req_server',
+      actionType: 'chat.post',
+      request: { model: 'gpt-4.1-mini', prompt: 'hello' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(secretBrokerStub.execute).toHaveBeenCalledTimes(1);
+    expect(credentialStub.getSecret).not.toHaveBeenCalled();
+    expect(adapter.complete).not.toHaveBeenCalled();
   });
 });
