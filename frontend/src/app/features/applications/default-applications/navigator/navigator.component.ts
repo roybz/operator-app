@@ -87,6 +87,85 @@ const isTrustedBookmarkUrl = (value: string) => {
   return DEFAULT_BOOKMARKS.some((bookmark) => bookmark.url === value);
 };
 
+const normalizeTab = (candidate: Partial<NavigatorTab> | null | undefined): NavigatorTab | null => {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : null;
+  if (!id) return null;
+  const history = Array.isArray(candidate.history)
+    ? candidate.history.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    : [];
+  const fallbackUrl =
+    typeof candidate.url === 'string' && candidate.url.trim().length > 0 ? candidate.url : ABOUT_BLANK;
+  const safeHistory = history.length ? history : [fallbackUrl];
+  const index =
+    typeof candidate.historyIndex === 'number' && Number.isFinite(candidate.historyIndex)
+      ? Math.max(0, Math.min(safeHistory.length - 1, Math.floor(candidate.historyIndex)))
+      : safeHistory.length - 1;
+  const url = safeHistory[index] ?? safeHistory[safeHistory.length - 1] ?? ABOUT_BLANK;
+  return {
+    id,
+    url,
+    title:
+      typeof candidate.title === 'string' && candidate.title.trim().length > 0
+        ? candidate.title
+        : formatTitle(url),
+    history: safeHistory,
+    historyIndex: index,
+  };
+};
+
+const normalizeNavigatorState = (candidate: Partial<NavigatorState> | null | undefined): NavigatorState => {
+  const tabs = Array.isArray(candidate?.tabs)
+    ? candidate.tabs.map((tab) => normalizeTab(tab)).filter((tab): tab is NavigatorTab => Boolean(tab))
+    : [];
+  if (!tabs.length) {
+    const fallback = createTab(ABOUT_BLANK);
+    return { tabs: [fallback], activeTabId: fallback.id };
+  }
+  const activeTabId =
+    typeof candidate?.activeTabId === 'string' && tabs.some((tab) => tab.id === candidate.activeTabId)
+      ? candidate.activeTabId
+      : tabs[0].id;
+  return { tabs, activeTabId };
+};
+
+export const mergeNavigatorStatesForSync = (
+  remoteState: NavigatorState,
+  localState: NavigatorState,
+): NavigatorState => {
+  const tabs = new Map<string, NavigatorTab>();
+  for (const remote of remoteState.tabs) {
+    tabs.set(remote.id, remote);
+  }
+  for (const local of localState.tabs) {
+    const existing = tabs.get(local.id);
+    if (!existing) {
+      tabs.set(local.id, local);
+      continue;
+    }
+    const history = [...existing.history];
+    for (const entry of local.history) {
+      if (history[history.length - 1] === entry) continue;
+      history.push(entry);
+    }
+    const clampedIndex = Math.max(0, Math.min(history.length - 1, local.historyIndex));
+    const url = history[clampedIndex] ?? local.url;
+    tabs.set(local.id, {
+      ...existing,
+      ...local,
+      history,
+      historyIndex: clampedIndex,
+      url,
+      title: local.title || formatTitle(url),
+    });
+  }
+  const mergedTabs = Array.from(tabs.values());
+  const activeTabId = mergedTabs.some((tab) => tab.id === localState.activeTabId)
+    ? localState.activeTabId
+    : mergedTabs[0]?.id ?? '';
+  return { tabs: mergedTabs, activeTabId };
+};
+
 export function clearNavigatorState(instanceId: string, storage: StorageService) {
   clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
 }
@@ -253,7 +332,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as NavigatorState;
+        const parsed = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
         this.state.set(parsed);
         stateStore.set(this.instanceId, parsed);
         return;
@@ -263,7 +342,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...stored, tabs: stored.tabs.map((tab) => ({ ...tab })) });
+      this.state.set(normalizeNavigatorState(stored));
       return;
     }
     const initialUrl = ABOUT_BLANK;
@@ -392,11 +471,7 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (!raw) return false;
     try {
-      const parsed = JSON.parse(raw) as NavigatorState;
-      const next = {
-        ...parsed,
-        tabs: parsed.tabs.map((tab) => ({ ...tab, history: [...tab.history] })),
-      };
+      const next = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       return true;
@@ -409,10 +484,21 @@ export class NavigatorComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: NavigatorState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeNavigatorStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState({ immediate: true });
+        return 'handled' as const;
       }
       this.reloadFromStorage();
       return 'handled' as const;
