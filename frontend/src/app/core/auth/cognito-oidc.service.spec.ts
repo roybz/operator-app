@@ -41,4 +41,41 @@ describe('CognitoOidcService signup guard', () => {
     expect(authorizeSpy).toHaveBeenCalledTimes(1);
     expect(authorizeSpy).toHaveBeenCalledWith({ screenHint: 'signup' });
   });
+
+  it('defaults token session persistence to sessionStorage', () => {
+    const w = window as Window & { __OP_CONFIG__?: Record<string, unknown> };
+    w.__OP_CONFIG__ = {
+      authProvider: 'cognito',
+      cognito: { enabled: true, domain: 'https://example.test', clientId: 'client-1' },
+      capabilities: { auth: true },
+    };
+    const service = new CognitoOidcService();
+
+    const storage = (
+      service as unknown as { sessionStorage: () => Storage | null }
+    ).sessionStorage();
+
+    expect(storage).toBe(window.sessionStorage);
+  });
+
+  it('allows explicit localStorage session persistence opt-in', () => {
+    const w = window as Window & { __OP_CONFIG__?: Record<string, unknown> };
+    w.__OP_CONFIG__ = {
+      authProvider: 'cognito',
+      cognito: {
+        enabled: true,
+        domain: 'https://example.test',
+        clientId: 'client-1',
+        sessionPersistence: 'localStorage',
+      },
+      capabilities: { auth: true },
+    };
+    const service = new CognitoOidcService();
+
+    const storage = (
+      service as unknown as { sessionStorage: () => Storage | null }
+    ).sessionStorage();
+
+    expect(storage).toBe(window.localStorage);
+  });
 });

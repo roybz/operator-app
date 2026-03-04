@@ -1,0 +1,108 @@
+body {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #d1d5db;
+  --color-text: #111827;
+  --color-muted: #6b7280;
+  --color-accent: #0ea5e9;
+  --color-overlay: rgba(0, 0, 0, 0.35);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+body.theme-dark {
+  --color-bg: #0f172a;
+  --color-surface: #111827;
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-accent: #38bdf8;
+  --color-overlay: rgba(0, 0, 0, 0.6);
+}
+
+body.theme-color-notepad {
+  --color-bg: #fff9db;
+  --color-surface: #fffef5;
+  --color-border: #e5c26a;
+  --color-text: #3b2f1a;
+  --color-muted: #7c6a3a;
+  --color-accent: #d97706;
+}
+
+body.theme-color-ice {
+  --color-bg: #e6f6ff;
+  --color-surface: #f7fbff;
+  --color-border: #9dd1f1;
+  --color-text: #0f172a;
+  --color-muted: #577089;
+  --color-accent: #3b82f6;
+}
+
+body.theme-color-lava {
+  --color-bg: #fff1f2;
+  --color-surface: #fff7f7;
+  --color-border: #f5b5b5;
+  --color-text: #3b0a0a;
+  --color-muted: #8f3b3b;
+  --color-accent: #ef4444;
+}
+
+body.theme-color-green {
+  --color-bg: #ecfdf3;
+  --color-surface: #f6fff9;
+  --color-border: #a7f3d0;
+  --color-text: #063d2d;
+  --color-muted: #3c6b57;
+  --color-accent: #22c55e;
+}
+
+body.theme-dark.theme-color-notepad {
+  --color-bg: #2a1f0f;
+  --color-surface: #362714;
+  --color-border: #7a5b2a;
+  --color-text: #f5e6c9;
+  --color-muted: #cbb58a;
+  --color-accent: #f59e0b;
+}
+
+body.theme-dark.theme-color-ice {
+  --color-bg: #0b1b2b;
+  --color-surface: #122338;
+  --color-border: #2f5a78;
+  --color-text: #dbeafe;
+  --color-muted: #9bb6cc;
+  --color-accent: #60a5fa;
+}
+
+body.theme-dark.theme-color-lava {
+  --color-bg: #2b0a0a;
+  --color-surface: #3a1111;
+  --color-border: #7f2a2a;
+  --color-text: #fde2e2;
+  --color-muted: #f1b5b5;
+  --color-accent: #f97316;
+}
+
+body.theme-dark.theme-color-green {
+  --color-bg: #052e1c;
+  --color-surface: #0b3a26;
+  --color-border: #1f6f4a;
+  --color-text: #d1fae5;
+  --color-muted: #9ad6b3;
+  --color-accent: #34d399;
+}
+
+body.accessibility-on {
+  --color-bg: #000000;
+  --color-surface: #000000;
+  --color-border: #ffffff;
+  --color-text: #ffffff;
+  --color-muted: #ffffff;
+  --color-accent: #00ffff;
+  --color-overlay: rgba(0, 0, 0, 0.7);
+}

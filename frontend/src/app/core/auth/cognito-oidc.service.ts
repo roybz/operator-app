@@ -336,10 +336,10 @@ export class CognitoOidcService {
   }
 
   private sessionStorage(): Storage | null {
-    if (this.config().sessionPersistence === 'sessionStorage') {
-      return this.safeStorage('sessionStorage');
+    if (this.config().sessionPersistence === 'localStorage') {
+      return this.safeStorage('localStorage');
     }
-    return this.safeStorage('localStorage');
+    return this.safeStorage('sessionStorage');
   }
 
   private localStorageRef(): Storage | null {

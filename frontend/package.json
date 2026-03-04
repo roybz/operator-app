@@ -11,6 +11,7 @@
     "test": "npm run test:unit",
     "test:unit": "ng test --watch=false",
     "test:e2e": "playwright test",
+    "test:security": "npm audit --audit-level=moderate",
     "test:smoke": "npm run test:unit && npm run test:e2e",
     "test:regression": "npm run test:smoke",
     "test:release-gates": "npm run lint && npm run test:unit -- --watch=false && npm run build",

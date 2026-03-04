@@ -73,12 +73,14 @@ Realtime sync uses WebSocket invalidation when available and polling fallback wh
 
 ## Docs
 
-- `Docs/aws-setup.md` - current AWS resources and deployment notes
-- `Docs/backend-setup.md` - provider-agnostic backend contract
-- `Docs/observability-runbook.md` - correlation IDs, alert taxonomy, and incident triage flow
-- `Docs/compliance-prep.md` - data classification, retention, and access-control prep artifacts
-- `Docs/qa-matrix.md` - pre-launch scenario matrix and evidence worksheet
-- `Docs/release-checklist.md` - pre-launch matrix and ship checklist
+- `docs/conventions.md` - coding, styling, unit/e2e, and security coding conventions
+- `docs/aws-setup.md` - current AWS resources and deployment notes
+- `docs/backend-setup.md` - provider-agnostic backend contract
+- `docs/observability-runbook.md` - correlation IDs, alert taxonomy, and incident triage flow
+- `docs/compliance-prep.md` - data classification, retention, and access-control prep artifacts
+- `docs/qa-matrix.md` - pre-launch scenario matrix and evidence worksheet
+- `docs/release-checklist.md` - pre-launch matrix and ship checklist
+- `docs/security-pass-2026-03-04.md` - latest security audit and hardening summary
 
 ## License
 
