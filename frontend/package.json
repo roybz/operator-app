@@ -62,7 +62,6 @@
     "@angular/cli": "^21.2.0",
     "@angular/compiler-cli": "^21.2.0",
     "@angular/platform-browser-dynamic": "^21.2.0",
-    "@compodoc/compodoc": "^1.2.1",
     "@playwright/test": "^1.57.0",
     "@storybook/addon-a11y": "^10.2.15",
     "@storybook/addon-docs": "^10.2.15",
