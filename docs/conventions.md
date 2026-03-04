@@ -53,6 +53,13 @@ Keep related methods adjacent (for example `startX`, `finishX`, `isX`).
 - Define design tokens in shared SCSS partials (colors, spacing, radii, shadows, z-index).
 - Consume tokens via CSS variables (`var(--color-*)`) in components.
 - Avoid hard-coded color literals in templates unless explicitly temporary.
+- Use these token prefixes consistently:
+  - `--color-*` for semantic color values (including `--color-accent-contrast`)
+  - `--space-*` for spacing scale
+  - `--radius-*` for corner radii
+  - `--font-*` and `--line-height-*` for typography
+  - `--shadow-*` for elevation
+  - `--motion-*` and `--easing-*` for animation timing
 
 ## 3.2 Mixins and Shared Utilities
 
