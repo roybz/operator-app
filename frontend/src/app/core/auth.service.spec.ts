@@ -116,6 +116,13 @@ describe('AuthService phone-mode sync', () => {
     expect(typeof session.universeId).toBe('string');
     expect(String(session.universeId).length).toBeGreaterThan(0);
   });
+
+  it('enforces invite policy guard for non-owner sessions', async () => {
+    const auth = TestBed.inject(AuthService);
+    const result = await auth.createInvitee('owner_1', 'editor1', 'pass123');
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe('users.error.adminOnly');
+  });
 });
 
 class MockExternalCognitoOidcService {
@@ -337,5 +344,26 @@ describe('AuthService external auth phone-mode behavior', () => {
 
     expect(result.ok).toBe(true);
     expect(signupSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('derives universe permission helpers consistently for owner and observer contexts', () => {
+    const auth = TestBed.inject(AuthService);
+    const ownerPermissions = auth.getUniversePermissionSet({
+      universeOwnerId: 'ext-user-1',
+      multiUserEnabled: true,
+      universeEditHolderId: null,
+    });
+    const observerPermissions = auth.getUniversePermissionSet({
+      universeOwnerId: 'someone-else',
+      multiUserEnabled: true,
+      universeEditHolderId: null,
+      viaShareLink: true,
+    });
+
+    expect(ownerPermissions.canInvite).toBe(true);
+    expect(ownerPermissions.canGrantPencil).toBe(true);
+    expect(ownerPermissions.canEditUniverse).toBe(true);
+    expect(observerPermissions.canViewOnly).toBe(true);
+    expect(observerPermissions.canEditUniverse).toBe(false);
   });
 });

@@ -27,7 +27,10 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
         <div style="display:flex; flex-direction:column; gap:6px;">
           <span>{{ 'universe.linkLabel' | translate }}</span>
           <code>{{ universeLink() }}</code>
-          <button (click)="openLinkConfirm()" [disabled]="!prefs().multiUserEnabled">
+          <button
+            (click)="openLinkConfirm()"
+            [disabled]="!prefs().multiUserEnabled || !canManageInvites()"
+          >
             {{ 'universe.changeLink' | translate }}
           </button>
         </div>
@@ -104,8 +107,12 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
               [emptyMessage]="'users.empty'"
             />
             <ng-template #actionsTpl let-row>
-              <button (click)="startEdit(row)">{{ 'users.edit' | translate }}</button>
-              <button (click)="remove(row)">{{ 'users.delete' | translate }}</button>
+              <button [disabled]="!canManageInvites()" (click)="startEdit(row)">
+                {{ 'users.edit' | translate }}
+              </button>
+              <button [disabled]="!canManageInvites()" (click)="remove(row)">
+                {{ 'users.delete' | translate }}
+              </button>
             </ng-template>
           </div>
 
@@ -141,8 +148,10 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
             }
 
             <div style="display:flex; gap:8px; margin-top: 12px;">
-              <button (click)="save()">{{ saveLabel() }}</button>
-              <button (click)="reset()">{{ 'users.reset' | translate }}</button>
+              <button [disabled]="!canManageInvites()" (click)="save()">{{ saveLabel() }}</button>
+              <button [disabled]="!canManageInvites()" (click)="reset()">
+                {{ 'users.reset' | translate }}
+              </button>
             </div>
           </div>
         </div>
@@ -186,8 +195,12 @@ export class MultiUserSettingsComponent {
   }
 
   invitees() {
-    const ownerId = this.auth.actualUser()?.id ?? '';
+    const ownerId = this.auth.session().universeOwnerId ?? this.auth.actualUser()?.id ?? '';
     return ownerId ? this.auth.getInviteesForOwner(ownerId) : [];
+  }
+
+  canManageInvites() {
+    return this.auth.canInvite({ universeOwnerId: this.auth.session().universeOwnerId ?? null });
   }
 
   universeLink() {
@@ -221,8 +234,9 @@ export class MultiUserSettingsComponent {
   }
 
   changeLink() {
-    const ownerId = this.auth.actualUser()?.id;
+    const ownerId = this.auth.session().universeOwnerId ?? this.auth.actualUser()?.id;
     if (!ownerId) return;
+    if (!this.canManageInvites()) return;
     const nextId = Math.random().toString(36).slice(2, 10);
     this.auth.setUniverseId(ownerId, nextId);
     this.draft.updatePreferences({ ...this.prefs(), universeId: nextId });
@@ -271,8 +285,9 @@ export class MultiUserSettingsComponent {
 
   async save() {
     this.error.set(null);
-    const ownerId = this.auth.actualUser()?.id;
+    const ownerId = this.auth.session().universeOwnerId ?? this.auth.actualUser()?.id;
     if (!ownerId) return;
+    if (!this.canManageInvites()) return;
     const payload = {
       username: this.username(),
       password: this.password(),
@@ -290,8 +305,9 @@ export class MultiUserSettingsComponent {
   }
 
   remove(user: InviteeRecord) {
-    const ownerId = this.auth.actualUser()?.id;
+    const ownerId = this.auth.session().universeOwnerId ?? this.auth.actualUser()?.id;
     if (!ownerId) return;
+    if (!this.canManageInvites()) return;
     this.auth.deleteInvitee(ownerId, user.id);
   }
 }

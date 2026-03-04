@@ -59,7 +59,12 @@ import { AuthService } from '../../../core/auth.service';
       }
 
       @if (successMessage()) {
-        <app-modal-shell [zIndex]="3200" ariaLabel="Account success" maxWidth="360px" (closed)="successMessage.set(null)">
+        <app-modal-shell
+          [zIndex]="3200"
+          ariaLabel="Account success"
+          maxWidth="360px"
+          (closed)="successMessage.set(null)"
+        >
           <div style="padding:20px; width:320px;">
             <p>{{ successMessage() }}</p>
             <div style="display:flex; justify-content:flex-end; margin-top:16px;">
@@ -80,8 +85,7 @@ export class AccountSettingsComponent {
   deleteConfirmOpen = signal(false);
 
   passwordAllowed() {
-    const role = this.auth.currentUser()?.role;
-    return role !== 'guest' && role !== 'observer';
+    return !this.auth.canViewOnly();
   }
 
   async updatePassword() {

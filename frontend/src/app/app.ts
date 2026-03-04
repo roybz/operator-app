@@ -608,10 +608,11 @@ export class AppComponent implements OnInit, OnDestroy {
   isLimitedRole = computed(() => ['guest', 'observer', 'invitee'].includes(this.sessionRole()));
   canOpenSettings = computed(() => !this.isLimitedRole());
   canEdit = computed(() => {
-    if (!this.multiUserEnabled()) return true;
-    const holder = this.universeEditHolder();
-    if (!holder) return this.isUniverseOwner();
-    return holder.id === this.auth.session().userId;
+    return this.auth.canEditUniverse({
+      universeOwnerId: this.universeOwnerId(),
+      multiUserEnabled: this.multiUserEnabled(),
+      universeEditHolderId: this.universeEditHolder()?.id ?? null,
+    });
   });
   inviteesOnline = computed(() =>
     this.universePresence().filter((entry) => entry.role === 'invitee'),
@@ -2469,7 +2470,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   grantEdit(invitee: UniversePresenceEntry) {
-    if (!this.isUniverseOwner()) return;
+    if (
+      !this.auth.canGrantPencil({
+        universeOwnerId: this.universeOwnerId(),
+        multiUserEnabled: this.multiUserEnabled(),
+        universeEditHolderId: this.universeEditHolder()?.id ?? null,
+      })
+    ) {
+      return;
+    }
     const universeId = this.universeId();
     if (!universeId) return;
     const holder: UniverseEditHolder = {
@@ -2482,7 +2491,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   takeBackEditPermissions() {
-    if (!this.isUniverseOwner()) return;
+    if (
+      !this.auth.canGrantPencil({
+        universeOwnerId: this.universeOwnerId(),
+        multiUserEnabled: this.multiUserEnabled(),
+        universeEditHolderId: this.universeEditHolder()?.id ?? null,
+      })
+    ) {
+      return;
+    }
     const universeId = this.universeId();
     if (!universeId) return;
     const ownerName = this.auth.actualUser()?.username ?? 'Owner';

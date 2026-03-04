@@ -7,6 +7,14 @@ import { StorageService } from './storage/storage.service';
 import { CognitoOidcService } from './auth/cognito-oidc.service';
 import { writeWithConflictRetry } from './storage/remote-write-utils';
 import { getOpCapabilities } from './op-config';
+import {
+  UniverseAccessContext,
+  canEditUniverse,
+  canGrantUniversePencil,
+  canInviteToUniverse,
+  getUniversePermissionSet,
+  isUniverseViewOnly,
+} from './authz/universe-role-policy';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -452,6 +460,70 @@ export class AuthService {
 
   canUsePasswordLogin(): boolean {
     return !this.usesExternalAuth();
+  }
+
+  getUniverseAccessContext(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): UniverseAccessContext {
+    const session = this.sessionSignal();
+    const ownerId = input?.universeOwnerId ?? session.universeOwnerId ?? session.userId ?? null;
+    return {
+      sessionUserId: session.userId,
+      sessionRole:
+        session.sessionRole ?? this.actualUser()?.role ?? this.currentUser()?.role ?? 'user',
+      universeOwnerId: ownerId,
+      multiUserEnabled: Boolean(input?.multiUserEnabled ?? false),
+      universeEditHolderId: input?.universeEditHolderId ?? null,
+      viaShareLink: Boolean(input?.viaShareLink),
+    };
+  }
+
+  getUniversePermissionSet(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }) {
+    return getUniversePermissionSet(this.getUniverseAccessContext(input));
+  }
+
+  canEditUniverse(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canEditUniverse(this.getUniverseAccessContext(input));
+  }
+
+  canInvite(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canInviteToUniverse(this.getUniverseAccessContext(input));
+  }
+
+  canGrantPencil(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canGrantUniversePencil(this.getUniverseAccessContext(input));
+  }
+
+  canViewOnly(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return isUniverseViewOnly(this.getUniverseAccessContext(input));
   }
 
   async startExternalLogin() {
@@ -1889,6 +1961,9 @@ export class AuthService {
   }
 
   async createInvitee(ownerId: string, username: string, password: string) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return { ok: false, message: 'users.error.adminOnly' };
+    }
     const trimmed = username.trim();
     if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
     if (!password || !password.trim()) {
@@ -1918,6 +1993,9 @@ export class AuthService {
     inviteeId: string,
     updates: { username: string; password?: string },
   ) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return { ok: false, message: 'users.error.adminOnly' };
+    }
     const trimmed = updates.username.trim();
     if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
     const list = this.getInviteesForOwner(ownerId);
@@ -1937,6 +2015,9 @@ export class AuthService {
   }
 
   deleteInvitee(ownerId: string, inviteeId: string) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return;
+    }
     const list = this.getInviteesForOwner(ownerId);
     const nextList = list.filter((u) => u.id !== inviteeId);
     this.inviteesSignal.set({ ...this.inviteesSignal(), [ownerId]: nextList });
