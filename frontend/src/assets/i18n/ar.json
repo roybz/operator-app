@@ -248,7 +248,7 @@
   "license": {
     "mitBody": "Copyright © 2026 Roy Nouneh\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "mitTitle": "MIT License",
-    "privacyBody": "The demo hosted at roy.bz may store account and application data for authenticated users when cloud features are enabled. Guest use remains local to the browser on that device. The app is not intended to use analytics or advertising cookies, and any authentication/session behavior may involve strictly necessary browser or provider-managed storage.\n\nThis demo also uses external services (for example, public currency conversion APIs, cloud hosting, and authentication providers) that are subject to their own privacy policies and availability.\n\nBy using this demo or the code, you agree that you are responsible for your own use, and the author is not liable for any outcomes.",
+    "privacyBody": "The demo hosted at roy.bz may store account and application data for authenticated users when cloud features are enabled. Guest use and test mode remain local to the browser on that device, and guest/test mode does not perform remote LLM calls or remote writes.\n\nWhen LLM Resident features are enabled in authenticated cloud mode, provider credentials are handled in a liability-minimizing posture: credential references (provider, alias, status) may be persisted, while secret key material is session-scoped on the client by default and not stored as plaintext in cloud records. You are fully responsible for credentials, secrets, prompts, model outputs, and any actions taken using your accounts or keys.\n\nNo warranty or guarantee: Operator App and its author make best-effort security improvements, but security, availability, correctness, and data integrity cannot be guaranteed.\n\nLimitation of liability: to the maximum extent permitted by applicable law, Operator App and its author are not liable, shall not be held liable, and cannot be held liable for any direct, indirect, incidental, consequential, special, punitive, or other damages, losses, claims, costs, or liabilities of any kind arising from or related to the app, its code, integrations, credentials/secrets handling, third-party services, model behavior, user actions, data loss, data corruption, outages, or unauthorized access.\n\nThe app is not intended to use analytics or advertising cookies. Authentication/session behavior may involve strictly necessary browser or provider-managed storage.\n\nThis demo uses external services (for example, public currency conversion APIs, cloud hosting, authentication providers, and optional LLM providers) that are subject to their own privacy policies and availability.\n\nNavigator bookmarks may include links to third-party websites for demonstration purposes only. Operator App and its author are not affiliated with, endorsed by, or owners of those external sites, their trademarks, or their content. Access and use of third-party sites are governed by their own terms and privacy policies.",
     "privacyTitle": "Privacy Policy",
     "title": "License & Privacy Policy"
   },
@@ -639,5 +639,16 @@
     "calendar": "Calendar",
     "clock": "Clock",
     "dataTable": "Data Table"
+  },
+  "navigator": {
+    "bookmarks": "Bookmarks",
+    "blockedTitle": "This page cannot be displayed inside Operator Navigator",
+    "blockedMessage": "This URL is not in the trusted embeddable list for the demo. Use a bookmark or open it in a new tab.",
+    "openExternal": "Open in new tab",
+    "bookmarkExample": "Example.com",
+    "bookmarkHttpbin": "HTTPBin",
+    "bookmarkOpenStreetMap": "OpenStreetMap (embed)",
+    "bookmarkYouTubeEmbed": "YouTube (embed demo)",
+    "bookmarkVimeoEmbed": "Vimeo (embed demo)"
   }
 }

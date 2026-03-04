@@ -13,6 +13,160 @@ export interface UniverseItem {
   imports: [CommonModule, TranslateModule],
   styles: [
     `
+      .topbar {
+        background: var(--color-surface);
+        border-bottom: 1px solid var(--color-border);
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .topbar--phone {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .topbar__main {
+        position: relative;
+        width: 100%;
+      }
+
+      .topbar__logo {
+        margin-right: 6px;
+      }
+
+      .topbar__title-row {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        max-width: 100%;
+        gap: 24px;
+      }
+
+      .topbar__title-row--phone {
+        gap: 12px;
+      }
+
+      .topbar__title {
+        max-width: 70vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 18px;
+      }
+
+      .topbar__title--phone {
+        font-size: 16px;
+        display: inline-block;
+      }
+
+      .topbar__badges {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        max-width: 100%;
+        gap: 9px;
+      }
+
+      .topbar__badges--phone {
+        gap: 6px;
+      }
+
+      .topbar__badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        vertical-align: middle;
+        font-size: 12px;
+      }
+
+      .topbar__badge--phone {
+        font-size: 11px;
+      }
+
+      .topbar__badge--login {
+        background: #f3f4f6;
+        color: #334155;
+        border: 1px solid #e2e8f0;
+      }
+
+      .topbar__badge--warn {
+        background: #fff3cd;
+        color: #7a5b00;
+        border: 1px solid #ffe49a;
+      }
+
+      .topbar__badge--preview {
+        background: #e8f2ff;
+        color: #1f5fa7;
+        border: 1px solid #cfe2ff;
+      }
+
+      .topbar__universe {
+        margin-top: 2px;
+        font-size: 12px;
+        font-style: italic;
+        position: relative;
+      }
+
+      .topbar__universe--logo {
+        padding-left: 22px;
+      }
+
+      .topbar__universe-name {
+        max-width: 70vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: middle;
+      }
+
+      .topbar__universe-toggle {
+        margin-left: 6px;
+        font-size: 15px;
+        line-height: 1;
+        min-width: 22px;
+        min-height: 22px;
+      }
+
+      .topbar__overlay-dismiss {
+        position: fixed;
+        inset: 0;
+        background: var(--color-overlay);
+        z-index: 1400;
+      }
+
+      .topbar__controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        white-space: nowrap;
+      }
+
+      .topbar__controls--phone {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .topbar__controls-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .topbar__meta {
+        font-size: 14px;
+        opacity: 0.8;
+      }
+
+      .topbar__nav {
+        font-size: 22px;
+      }
+
       .square-btn {
         padding: 5px 6px;
         border-radius: 3px;
@@ -63,60 +217,44 @@ export interface UniverseItem {
     `,
   ],
   template: `
-    <header
-      id="topbar-header"
-      style="background:var(--color-surface); border-bottom:1px solid var(--color-border); padding: 12px 16px; display:flex; justify-content:space-between; align-items:center;"
-      [style.flexDirection]="phoneMode ? 'column' : 'row'"
-      [style.alignItems]="phoneMode ? 'flex-start' : 'center'"
-      [style.gap]="phoneMode ? '8px' : '0'"
-    >
-      <div style="position:relative; width:100%;">
+    <header id="topbar-header" class="topbar" [class.topbar--phone]="phoneMode">
+      <div class="topbar__main">
         @if (siteLogoEmoji) {
-          <span style="margin-right:6px;">{{ siteLogoEmoji }}</span>
+          <span class="topbar__logo">{{ siteLogoEmoji }}</span>
         }
-        <div
-          style="display:inline-flex; align-items:center; flex-wrap:wrap; max-width:100%;"
-          [style.gap]="phoneMode ? '12px' : '24px'"
-        >
-          <strong
-            [style.fontSize]="phoneMode ? '16px' : '18px'"
-            style="max-width:70vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-            [style.display]="phoneMode ? 'inline-block' : 'inline'"
-          >
+        <div class="topbar__title-row" [class.topbar__title-row--phone]="phoneMode">
+          <strong class="topbar__title" [class.topbar__title--phone]="phoneMode">
             {{ siteTitle }}
           </strong>
-          <div
-            style="display:inline-flex; align-items:center; flex-wrap:wrap; max-width:100%;"
-            [style.gap]="phoneMode ? '6px' : '9px'"
-          >
+          <div class="topbar__badges" [class.topbar__badges--phone]="phoneMode">
             @if (loggedInLabel) {
               <span
-                style="display:inline-block; padding:2px 8px; border-radius:999px; background:#f3f4f6; color:#334155; border:1px solid #e2e8f0; vertical-align:middle;"
-                [style.fontSize]="phoneMode ? '11px' : '12px'"
+                class="topbar__badge topbar__badge--login"
+                [class.topbar__badge--phone]="phoneMode"
               >
                 {{ 'auth.loggedInAs' | translate: { user: loggedInLabel } }}
               </span>
             }
             @if (mockLabel) {
               <span
-                style="display:inline-block; padding:2px 8px; border-radius:999px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                [style.fontSize]="phoneMode ? '11px' : '12px'"
+                class="topbar__badge topbar__badge--warn"
+                [class.topbar__badge--phone]="phoneMode"
               >
                 {{ 'mock.label' | translate }}
               </span>
             }
             @if (previewLabel) {
               <span
-                style="display:inline-block; padding:2px 8px; border-radius:999px; background:#e8f2ff; color:#1f5fa7; border:1px solid #cfe2ff; vertical-align:middle;"
-                [style.fontSize]="phoneMode ? '11px' : '12px'"
+                class="topbar__badge topbar__badge--preview"
+                [class.topbar__badge--phone]="phoneMode"
               >
                 {{ 'preview.label' | translate: { user: previewLabel } }}
               </span>
             }
             @if (previewPersist) {
               <span
-                style="display:inline-block; padding:2px 8px; border-radius:999px; background:#fff3cd; color:#7a5b00; border:1px solid #ffe49a; vertical-align:middle;"
-                [style.fontSize]="phoneMode ? '11px' : '12px'"
+                class="topbar__badge topbar__badge--warn"
+                [class.topbar__badge--phone]="phoneMode"
               >
                 {{ 'preview.persist' | translate }}
               </span>
@@ -124,25 +262,16 @@ export interface UniverseItem {
           </div>
         </div>
         @if (canSwitchUniverse) {
-          <div
-            style="margin-top:2px; font-size:12px; font-style:italic; position:relative;"
-            [style.paddingLeft.px]="siteLogoEmoji ? 22 : 0"
-          >
-            <span
-              style="max-width:70vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;"
-            >
+          <div class="topbar__universe" [class.topbar__universe--logo]="!!siteLogoEmoji">
+            <span class="topbar__universe-name">
               {{ currentUniverseName }}
             </span>
-            <button
-              class="square-btn"
-              (click)="toggleUniverseMenu.emit()"
-              style="margin-left:6px; font-size:10px;"
-            >
+            <button class="square-btn topbar__universe-toggle" (click)="toggleUniverseMenu.emit()">
               &#9662;
             </button>
             @if (universeMenuOpen) {
               <div
-                style="position:fixed; inset:0; background:var(--color-overlay); z-index:1400;"
+                class="topbar__overlay-dismiss"
                 role="button"
                 tabindex="0"
                 (click)="closeUniverseMenu.emit()"
@@ -166,13 +295,11 @@ export interface UniverseItem {
       </div>
 
       @if (phoneMode) {
-        <div style="width:100%; display:flex; align-items:center; justify-content:space-between;">
-          <button class="square-btn" (click)="toggleNav.emit()" style="font-size:22px;">
-            &#9776;
-          </button>
-          <div style="display:flex; align-items:center; gap:12px; justify-content:flex-end;">
+        <div class="topbar__controls topbar__controls--phone">
+          <button class="square-btn topbar__nav" (click)="toggleNav.emit()">&#9776;</button>
+          <div class="topbar__controls-right">
             @if (showTime) {
-              <div style="font-size:14px; opacity:0.8; white-space:nowrap;">
+              <div class="topbar__meta">
                 {{ timeLabel }}
               </div>
             }
@@ -194,12 +321,12 @@ export interface UniverseItem {
           </div>
         </div>
       } @else {
-        <div style="display:flex; align-items:center; gap:12px;" [style.flexWrap]="'nowrap'">
+        <div class="topbar__controls">
           @if (city) {
-            <div style="font-size:14px; opacity:0.8;">{{ city }}</div>
+            <div class="topbar__meta">{{ city }}</div>
           }
           @if (showTime) {
-            <div style="font-size:14px; opacity:0.8; white-space:nowrap;">
+            <div class="topbar__meta">
               {{ timeLabel }}
             </div>
           }

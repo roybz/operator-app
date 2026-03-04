@@ -17,6 +17,10 @@ interface BatchGetResponse {
 interface RemoteStorageAdapterOptions {
   accessTokenProvider?: () => Promise<string | null>;
   localFallback?: StorageAdapter;
+  requestIdProvider?: () => string;
+  sessionIdProvider?: () => string;
+  requestRateLimitPerMinute?: number;
+  onRequestWindowUsage?: (usage: { count: number; limit: number }) => void;
 }
 
 export class RemoteStorageError extends Error {
@@ -24,6 +28,7 @@ export class RemoteStorageError extends Error {
     message: string,
     readonly status?: number,
     readonly code?: string,
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'RemoteStorageError';
@@ -35,6 +40,7 @@ const REMOTE_VALUE_SOFT_LIMIT_BYTES = 340 * 1024;
 
 export class RemoteStorageAdapter implements StorageAdapter {
   private versions = new Map<string, number>();
+  private requestWindow: number[] = [];
 
   constructor(
     private baseUrl: string,
@@ -47,6 +53,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
     }
     const url = `${this.baseUrl}/storage/item?key=${encodeURIComponent(key)}`;
     const headers = await this.authHeaders({ Accept: 'application/json' });
+    this.enforceRequestRateLimit();
     const response = await fetch(url, {
       method: 'GET',
       headers,
@@ -66,6 +73,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
     if (keys.length === 0) return {};
     const url = `${this.baseUrl}/storage/batchGet`;
     const headers = await this.authHeaders({ 'Content-Type': 'application/json' });
+    this.enforceRequestRateLimit();
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -107,6 +115,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
       );
     }
     const version = this.versions.get(key);
+    this.enforceRequestRateLimit();
     const response = await fetch(url, {
       method: 'PUT',
       headers,
@@ -122,6 +131,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
         details?.message ?? `Remote setItem failed (${response.status})`,
         response.status,
         details?.code,
+        details?.retryAfterMs,
       );
     }
     try {
@@ -139,6 +149,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
     }
     const url = `${this.baseUrl}/storage/item?key=${encodeURIComponent(key)}`;
     const headers = await this.authHeaders();
+    this.enforceRequestRateLimit();
     const response = await fetch(url, {
       method: 'DELETE',
       headers,
@@ -152,6 +163,7 @@ export class RemoteStorageAdapter implements StorageAdapter {
     }
     const url = `${this.baseUrl}/storage/keys`;
     const headers = await this.authHeaders({ Accept: 'application/json' });
+    this.enforceRequestRateLimit();
     const response = await fetch(url, {
       method: 'GET',
       headers,
@@ -170,7 +182,28 @@ export class RemoteStorageAdapter implements StorageAdapter {
 
   private async authHeaders(headers: Record<string, string> = {}) {
     const token = await this.options.accessTokenProvider?.();
-    return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+    const requestId = this.options.requestIdProvider?.();
+    const sessionId = this.options.sessionIdProvider?.();
+    const withObsHeaders = {
+      ...headers,
+      ...(requestId ? { 'X-Operator-Request-Id': requestId } : {}),
+      ...(sessionId ? { 'X-Operator-Session-Id': sessionId } : {}),
+    };
+    return token ? { ...withObsHeaders, Authorization: `Bearer ${token}` } : withObsHeaders;
+  }
+
+  private enforceRequestRateLimit() {
+    const limit = Math.max(0, Math.floor(this.options.requestRateLimitPerMinute ?? 0));
+    if (!limit) return;
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    this.requestWindow = this.requestWindow.filter((ts) => ts >= windowStart);
+    this.options.onRequestWindowUsage?.({ count: this.requestWindow.length, limit });
+    if (this.requestWindow.length >= limit) {
+      throw new RemoteStorageError('Request quota exceeded', 429, 'quota_request_rate_exceeded');
+    }
+    this.requestWindow.push(now);
+    this.options.onRequestWindowUsage?.({ count: this.requestWindow.length, limit });
   }
 
   private isTestModeEnabled() {
@@ -194,7 +227,8 @@ export class RemoteStorageAdapter implements StorageAdapter {
 
   private async readErrorBody(
     response: Response,
-  ): Promise<{ message?: string; code?: string } | null> {
+  ): Promise<{ message?: string; code?: string; retryAfterMs?: number } | null> {
+    const retryAfterMs = this.readRetryAfterHeader(response);
     try {
       const data = (await response.json()) as { message?: string; error?: string; code?: string };
       return {
@@ -203,9 +237,22 @@ export class RemoteStorageAdapter implements StorageAdapter {
           (typeof data.error === 'string' && data.error) ||
           undefined,
         code: typeof data.code === 'string' ? data.code : undefined,
+        retryAfterMs,
       };
     } catch {
-      return null;
+      return { retryAfterMs };
     }
+  }
+
+  private readRetryAfterHeader(response: Response): number | undefined {
+    const raw = response.headers.get('retry-after');
+    if (!raw) return undefined;
+    const asSeconds = Number(raw);
+    if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+      return Math.round(asSeconds * 1000);
+    }
+    const asDate = Date.parse(raw);
+    if (!Number.isFinite(asDate)) return undefined;
+    return Math.max(0, asDate - Date.now());
   }
 }

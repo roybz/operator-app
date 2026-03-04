@@ -1,3 +1,9 @@
+import {
+  getRemoteStorageRetryAfterMs,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../storage/remote-write-utils';
+
 export type PersistQueueErrorAction = 'handled' | 'retry';
 
 export interface InstancePersistQueueOptions {
@@ -83,8 +89,13 @@ export class InstancePersistQueue {
           this.backoffMs = 0;
         } catch (error) {
           if (this.isTooManyRequestsFn(error)) {
-            this.backoffMs = Math.min(
+            const exponentialBackoffMs = Math.min(
               Math.max(this.backoffMs || this.baseBackoffMs, this.baseBackoffMs) * 2,
+              this.maxBackoffMs,
+            );
+            const retryAfterMs = getRemoteStorageRetryAfterMs(error) ?? 0;
+            this.backoffMs = Math.min(
+              Math.max(exponentialBackoffMs, retryAfterMs),
               this.maxBackoffMs,
             );
             this.queued = true;
@@ -112,22 +123,4 @@ export class InstancePersistQueue {
   }
 }
 
-export function isRemoteStorageVersionConflict(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const maybeCode = (error as Error & { code?: unknown }).code;
-  const maybeStatus = (error as Error & { status?: unknown }).status;
-  const code = typeof maybeCode === 'string' ? maybeCode : '';
-  const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-  const message = String(error.message || '');
-  return status === 409 || code === 'version_conflict' || message.includes('version_conflict');
-}
-
-export function isRemoteStorageTooManyRequests(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const maybeCode = (error as Error & { code?: unknown }).code;
-  const maybeStatus = (error as Error & { status?: unknown }).status;
-  const code = typeof maybeCode === 'string' ? maybeCode : '';
-  const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-  const message = String(error.message || '');
-  return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
-}
+export { isRemoteStorageTooManyRequests, isRemoteStorageVersionConflict };

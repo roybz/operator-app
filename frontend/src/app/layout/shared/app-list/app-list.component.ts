@@ -1,11 +1,11 @@
 import {
+  AfterViewInit,
   Component,
+  ElementRef,
   EventEmitter,
   HostListener,
   Input,
   Output,
-  AfterViewInit,
-  ElementRef,
   inject,
   signal,
 } from '@angular/core';
@@ -24,463 +24,8 @@ export interface AppGroup {
   selector: 'app-app-list',
   standalone: true,
   imports: [CommonModule, TranslateModule],
-  template: `
-    <div class="app-list" (pointerdown)="closeActions()">
-      <div
-        class="app-list__scroll"
-        [style.flex]="phoneMode ? '1 1 auto' : null"
-        [style.minHeight]="phoneMode ? '0' : null"
-      >
-        @for (app of apps; track app.id) {
-          <div class="app-row" [attr.data-app-id]="app.id">
-            <button
-              class="app-list__toggle"
-              (click)="toggleCollapsed(app.id); $event.stopPropagation()"
-              [disabled]="actionsDisabled"
-              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-              [style.opacity]="phoneMode ? 1 : null"
-              [style.background]="phoneMode ? 'transparent' : null"
-              [style.borderRadius]="phoneMode ? '999px' : null"
-              [title]="
-                isCollapsed(app.id)
-                  ? ('dialogs.expandList' | translate)
-                  : ('dialogs.collapseList' | translate)
-              "
-            >
-              {{ isCollapsed(app.id) ? '▶' : '▼' }}
-            </button>
-            <span class="app-list__app-icon">{{ app.icon }}</span>
-            <span class="app-list__name">{{ app.labelKey | translate }}</span>
-            <button
-              class="app-list__icon app-list__icon--add"
-              (click)="openApp.emit(app.id); $event.stopPropagation()"
-              [disabled]="actionsDisabled"
-              [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-              [style.opacity]="phoneMode ? 1 : null"
-              [style.background]="phoneMode ? 'transparent' : null"
-              [style.borderRadius]="phoneMode ? '999px' : null"
-              title="{{ 'dialogs.add' | translate }}"
-            >
-              +
-            </button>
-          </div>
-          @if (!isCollapsed(app.id) && visibleInstances(app.id).length) {
-            <div class="app-list__instances">
-              @for (instance of visibleInstances(app.id); track instance.id) {
-                <div class="app-instance">
-                  <button
-                    class="app-instance__name"
-                    (click)="restore.emit(instance.id); $event.stopPropagation()"
-                    [style.fontStyle]="isInstanceActive(instance) ? 'italic' : 'normal'"
-                    [disabled]="actionsDisabled"
-                    [style.opacity]="instance.archived ? 0.6 : 1"
-                  >
-                    {{ instanceLabel(instance) }}
-                  </button>
-                  @if (instance.archived) {
-                    @if (showArchived()) {
-                      <button
-                        class="app-instance__unarchive"
-                        (click)="onUnarchive(instance.id); $event.stopPropagation()"
-                        [disabled]="actionsDisabled"
-                        [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-                        [style.opacity]="phoneMode ? 1 : null"
-                        [style.background]="phoneMode ? 'transparent' : null"
-                        [style.borderRadius]="phoneMode ? '999px' : null"
-                        title="{{ 'dialogs.unarchive' | translate }}"
-                      >
-                        <span class="app-list__action-icon app-list__action-icon--unarchive"
-                          >⤴︎</span
-                        >
-                      </button>
-                    }
-                  } @else {
-                    <button
-                      class="app-instance__kebab"
-                      (pointerdown)="$event.stopPropagation()"
-                      (click)="toggleActions(instance.id, $event)"
-                      [disabled]="actionsDisabled"
-                      [style.border]="phoneMode ? '1px solid rgba(148, 163, 184, 0.55)' : null"
-                      [style.opacity]="phoneMode ? 1 : null"
-                      [style.background]="phoneMode ? 'transparent' : null"
-                      [style.borderRadius]="phoneMode ? '999px' : null"
-                      title="{{ 'dialogs.actions' | translate }}"
-                    >
-                      ⋯
-                    </button>
-                    @if (openActionsId() === instance.id) {
-                      <div
-                        class="app-instance__actions"
-                        [class.app-instance__actions--up]="openActionsDirection() === 'up'"
-                        (pointerdown)="$event.stopPropagation()"
-                      >
-                        <button
-                          class="app-instance__action"
-                          (click)="onDuplicate(instance.id)"
-                          [disabled]="actionsDisabled"
-                        >
-                          <span class="app-list__action-icon app-list__action-icon--duplicate"
-                            >⧉</span
-                          >
-                          <span>{{ 'dialogs.duplicate' | translate }}</span>
-                        </button>
-                        <button
-                          class="app-instance__action"
-                          (click)="onToggleLock(instance.id)"
-                          [disabled]="deleteTargetActive || actionsDisabled"
-                        >
-                          <span class="app-list__action-icon app-list__action-icon--lock">
-                            {{ instance.deleteLocked ? '🔒' : '🔓' }}
-                          </span>
-                          <span>
-                            {{
-                              instance.deleteLocked
-                                ? ('dialogs.unlockDelete' | translate)
-                                : ('dialogs.lockDelete' | translate)
-                            }}
-                          </span>
-                        </button>
-                        <button
-                          class="app-instance__action"
-                          (click)="onArchive(instance.id)"
-                          [disabled]="actionsDisabled"
-                        >
-                          <span class="app-list__action-icon">📥</span>
-                          <span>{{ 'dialogs.archive' | translate }}</span>
-                        </button>
-                      </div>
-                    }
-                  }
-                </div>
-              }
-            </div>
-          }
-        }
-      </div>
-      <div class="app-list__footer">
-        <button class="app-list__archived-toggle" (click)="toggleArchivedList()">
-          {{
-            showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate)
-          }}
-        </button>
-        @if (showArchived() && !hasArchivedInstances()) {
-          <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
-        }
-      </div>
-    </div>
-  `,
-  styles: [
-    `
-      .app-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        --app-list-footer-height: 56px;
-      }
-
-      .app-list__scroll {
-        max-height: calc(53vh - var(--app-list-footer-height));
-        overflow: auto;
-        padding: 4px 4px var(--app-list-footer-height) 4px;
-        border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-        touch-action: pan-y;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
-        pointer-events: auto;
-      }
-
-      :host-context(.phone-mode) .app-list {
-        flex: 1;
-        min-height: 0;
-        height: 100%;
-        font-size: 16px;
-      }
-
-      :host-context(.phone-mode) .app-list__scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-      }
-
-      .app-list__footer {
-        position: sticky;
-        bottom: 0;
-        background: transparent;
-        padding: 14px 0 10px;
-        min-height: var(--app-list-footer-height);
-      }
-
-      .app-row {
-        display: grid;
-        grid-template-columns: 18px 18px 1fr 24px;
-        align-items: center;
-        column-gap: 6px;
-        padding: 4px 0;
-      }
-
-      .app-list__name {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .app-list__app-icon {
-        width: 18px;
-        height: 18px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-      }
-
-      .app-list__toggle,
-      .app-list__icon--add,
-      .app-instance__kebab {
-        opacity: 0.6;
-        transition: opacity 0.15s ease;
-      }
-
-      .app-list__toggle:hover,
-      .app-list__icon--add:hover,
-      .app-instance__kebab:hover {
-        opacity: 1;
-      }
-
-      .app-list__icon {
-        width: 24px;
-        height: 24px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 14px;
-      }
-
-      .app-list__icon:disabled,
-      .app-list__toggle:disabled,
-      .app-instance__kebab:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-
-      .app-list__icon--add:hover {
-        border: 1px solid var(--color-border);
-        border-radius: 6px;
-      }
-
-      button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-
-      .app-list__toggle {
-        width: 18px;
-        height: 18px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 12px;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .app-list__instances {
-        margin: 0 0 0 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .app-instance {
-        position: relative;
-        display: grid;
-        grid-template-columns: 1fr 24px;
-        align-items: center;
-        column-gap: 6px;
-      }
-
-      .app-instance__name {
-        text-align: left;
-        width: 100%;
-      }
-
-      .app-instance__kebab {
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        font-size: 16px;
-        width: 24px;
-        height: 24px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .app-instance__actions {
-        position: absolute;
-        right: 0;
-        top: 100%;
-        margin-top: 6px;
-        background: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        padding: 6px;
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 160px;
-        z-index: 10;
-        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
-      }
-
-      .app-instance__actions--up {
-        top: auto;
-        bottom: 100%;
-        margin-top: 0;
-        margin-bottom: 6px;
-      }
-
-      :host-context(.phone-mode) .app-row {
-        grid-template-columns: 24px 22px 1fr 32px;
-        column-gap: 8px;
-        padding: 8px 0;
-      }
-
-      :host-context(.phone-mode) .app-list__toggle {
-        width: 22px;
-        height: 22px;
-        font-size: 14px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
-      :host-context(.phone-mode) .app-list__app-icon {
-        width: 20px;
-        height: 20px;
-        font-size: 16px;
-      }
-
-      :host-context(.phone-mode) .app-list__icon {
-        width: 36px;
-        height: 36px;
-        font-size: 20px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
-      :host-context(.phone-mode) .app-instance {
-        grid-template-columns: 1fr 32px;
-        column-gap: 8px;
-        padding: 6px 0;
-      }
-
-      :host-context(.phone-mode) .app-instance__kebab,
-      :host-context(.phone-mode) .app-instance__unarchive {
-        width: 36px;
-        height: 36px;
-        font-size: 20px;
-        opacity: 1 !important;
-        border: 1px solid rgba(148, 163, 184, 0.55) !important;
-        border-radius: 8px;
-        background: transparent;
-      }
-
-      :host-context(.phone-mode) .app-list__toggle,
-      :host-context(.phone-mode) .app-list__icon,
-      :host-context(.phone-mode) .app-instance__kebab,
-      :host-context(.phone-mode) .app-instance__unarchive {
-        opacity: 1 !important;
-      }
-
-      :host-context(.phone-mode) .app-instance__actions {
-        min-width: 180px;
-      }
-
-      :host-context(.phone-mode) .app-instance__action {
-        padding: 10px 12px;
-        font-size: 15px;
-      }
-
-      :host-context(.phone-mode) .app-instance__action span {
-        font-size: 15px;
-      }
-
-      .app-instance__action,
-      .app-instance__unarchive {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        text-align: left;
-        padding: 4px 6px;
-        border-radius: 6px;
-        font-size: 12px;
-      }
-
-      .app-instance__action:hover,
-      .app-instance__unarchive:hover {
-        background: rgba(0, 0, 0, 0.04);
-      }
-
-      .app-list__action-icon {
-        width: 14px;
-        height: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-      }
-
-      .app-list__action-icon--duplicate {
-        font-size: 14px;
-      }
-
-      .app-list__action-icon--lock {
-        font-size: 10px;
-      }
-
-      .app-list__action-icon--unarchive {
-        font-size: 12px;
-        color: #6b7280;
-      }
-
-      .app-list__archived-toggle {
-        align-self: flex-start;
-        opacity: 0.6;
-        transition: opacity 0.15s ease;
-      }
-
-      .app-list__archived-toggle:hover {
-        opacity: 1;
-      }
-
-      .app-list__archived-empty {
-        font-size: 11px;
-        font-style: italic;
-        opacity: 0.7;
-        margin-top: 4px;
-      }
-
-      .app-list__toggle:focus-visible,
-      .app-list__icon--add:focus-visible,
-      .app-instance__kebab:focus-visible,
-      .app-instance__action:focus-visible,
-      .app-instance__name:focus-visible {
-        outline: none;
-        box-shadow: none;
-      }
-    `,
-  ],
+  templateUrl: './app-list.component.html',
+  styleUrls: ['./app-list.component.scss'],
 })
 export class AppListComponent implements AfterViewInit {
   @Input({ required: true }) apps: AppGroup[] = [];
@@ -510,6 +55,24 @@ export class AppListComponent implements AfterViewInit {
 
   private host = inject(ElementRef<HTMLElement>);
   private scrollEl = signal<HTMLElement | null>(null);
+  private translate = inject(TranslateService);
+
+  private collapsed = signal<Record<AppId, boolean>>({
+    kanban: false,
+    todo: false,
+    calculator: false,
+    timer: false,
+    navigator: false,
+    notes: false,
+    stickyNotes: false,
+    calendar: false,
+    clock: false,
+    dataTable: false,
+  });
+
+  showArchived = signal(false);
+  openActionsId = signal<string | null>(null);
+  openActionsDirection = signal<'up' | 'down'>('down');
 
   ngAfterViewInit() {
     queueMicrotask(() => {
@@ -529,23 +92,6 @@ export class AppListComponent implements AfterViewInit {
       );
     });
   }
-
-  private translate = inject(TranslateService);
-  private collapsed = signal<Record<AppId, boolean>>({
-    kanban: false,
-    todo: false,
-    calculator: false,
-    timer: false,
-    navigator: false,
-    notes: false,
-    stickyNotes: false,
-    calendar: false,
-    clock: false,
-    dataTable: false,
-  });
-  showArchived = signal(false);
-  openActionsId = signal<string | null>(null);
-  openActionsDirection = signal<'up' | 'down'>('down');
 
   instanceLabel(instance: DialogInstance) {
     if (instance.titleOverride) return instance.titleOverride;
@@ -596,6 +142,7 @@ export class AppListComponent implements AfterViewInit {
       this.openActionsId.set(null);
       return;
     }
+
     const target = event.currentTarget as HTMLElement | null;
     const menuHeight = 140;
     if (target) {

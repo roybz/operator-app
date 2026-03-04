@@ -24,6 +24,8 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { ContextFieldStoreService } from '../../../../core/events/context-field-store.service';
+import { ObjectRef } from '../../../../core/events/context-fields.types';
 
 type StickyMode = 'rich' | 'markdown';
 
@@ -61,6 +63,58 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
   bgColor: '',
   textColor: '',
 });
+
+const normalizeStickyState = (
+  candidate: Partial<StickyNoteState> | null | undefined,
+  fallback: StickyNoteState,
+): StickyNoteState => ({
+  content: typeof candidate?.content === 'string' ? candidate.content : fallback.content,
+  mode:
+    candidate?.mode === 'markdown' || candidate?.mode === 'rich' ? candidate.mode : fallback.mode,
+  visualMode:
+    typeof candidate?.visualMode === 'boolean' ? candidate.visualMode : fallback.visualMode,
+  locked: typeof candidate?.locked === 'boolean' ? candidate.locked : fallback.locked,
+  fontSize:
+    typeof candidate?.fontSize === 'number' && Number.isFinite(candidate.fontSize)
+      ? Math.min(64, Math.max(10, candidate.fontSize))
+      : fallback.fontSize,
+  colorEnabled:
+    typeof candidate?.colorEnabled === 'boolean' ? candidate.colorEnabled : fallback.colorEnabled,
+  bgColor: typeof candidate?.bgColor === 'string' ? candidate.bgColor : fallback.bgColor,
+  textColor: typeof candidate?.textColor === 'string' ? candidate.textColor : fallback.textColor,
+});
+
+const mergeStickyContent = (remote: string, local: string) => {
+  const remoteTrimmed = remote.trim();
+  const localTrimmed = local.trim();
+  if (!remoteTrimmed) return local;
+  if (!localTrimmed) return remote;
+  if (remoteTrimmed === localTrimmed) return local;
+  if (local.includes(remoteTrimmed)) return local;
+  if (remote.includes(localTrimmed)) return remote;
+  return `${localTrimmed}\n\n--- Remote update ---\n${remoteTrimmed}`;
+};
+
+export const mergeStickyStatesForSync = (
+  remoteState: Partial<StickyNoteState> | null | undefined,
+  localState: StickyNoteState,
+  fallback: StickyNoteState,
+): StickyNoteState => {
+  const remote = normalizeStickyState(remoteState, fallback);
+  const local = normalizeStickyState(localState, fallback);
+  return {
+    ...remote,
+    ...local,
+    content: mergeStickyContent(remote.content, local.content),
+    mode: local.mode,
+    visualMode: local.visualMode,
+    locked: local.locked,
+    fontSize: local.fontSize,
+    colorEnabled: local.colorEnabled,
+    bgColor: local.bgColor,
+    textColor: local.textColor,
+  };
+};
 
 @Component({
   selector: 'app-sticky-notes',
@@ -196,6 +250,16 @@ const defaultState = (mode: StickyMode): StickyNoteState => ({
           [style.color]="state().colorEnabled ? state().textColor : 'inherit'"
           style="flex:1; display:flex; flex-direction:column; gap:8px;"
         >
+          @if (externalContextRef()) {
+            <div
+              style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
+            >
+              <span style="font-size:12px; opacity:0.8;">
+                Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+              </span>
+              <button type="button" (click)="appendExternalContext()">+</button>
+            </div>
+          }
           @if (!state().visualMode) {
             @if (state().mode === 'rich') {
               <div
@@ -239,6 +303,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private contextFields = inject(ContextFieldStoreService);
 
   state = signal<StickyNoteState>(defaultState('rich'));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
@@ -247,6 +312,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   markdownFocused = signal(false);
   richSnapshot = signal('');
   richHtml = computed(() => (this.richFocused() ? this.richSnapshot() : this.state().content));
+  externalContextRef = signal<ObjectRef | null>(null);
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -272,6 +338,24 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
       }
       this.reloadFromStorage();
     });
+    effect(() => {
+      const universeId = this.currentUniverseId();
+      if (!universeId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      const selection = this.contextFields.selection(universeId);
+      const primary = selection?.primaryRef ?? null;
+      if (!primary || primary.instanceId === this.instanceId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      if (primary.kind === 'todo' || primary.kind === 'note' || primary.kind === 'kanbanCard') {
+        this.externalContextRef.set(primary);
+        return;
+      }
+      this.externalContextRef.set(null);
+    });
   }
 
   ngOnInit() {
@@ -281,7 +365,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as StickyNoteState;
-        this.state.set({ ...fallback, ...parsed });
+        this.state.set(normalizeStickyState(parsed, fallback));
         this.syncRichSnapshot();
         stateStore.set(this.instanceId, this.state());
         return;
@@ -291,7 +375,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...fallback, ...stored });
+      this.state.set(normalizeStickyState(stored, fallback));
       this.syncRichSnapshot();
     } else {
       this.state.set(fallback);
@@ -380,6 +464,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
 
   startRichEdit() {
     this.richFocused.set(true);
+    this.publishStickySelectionContext();
     this.remoteConflict.markDirty(this.instanceStorageKey());
     this.syncRichSnapshot();
   }
@@ -408,7 +493,15 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
 
   startMarkdownEdit() {
     this.markdownFocused.set(true);
+    this.publishStickySelectionContext();
     this.remoteConflict.markDirty(this.instanceStorageKey());
+  }
+
+  appendExternalContext() {
+    const ref = this.externalContextRef();
+    if (!ref) return;
+    const next = `${this.state().content}\n[${ref.kind}] ${ref.id}`.trim();
+    this.commit({ ...this.state(), content: next });
   }
 
   finishMarkdownEdit() {
@@ -439,6 +532,28 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
   }
 
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  private publishStickySelectionContext() {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const ref: ObjectRef = {
+      universeId,
+      instanceId: this.instanceId,
+      kind: 'sticky',
+      id: this.instanceId,
+    };
+    this.contextFields.setSelection(universeId, [ref], {
+      primaryRef: ref,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
+  }
+
   private reloadFromStorage() {
     const defaultMode = this.prefs.preferences().stickyNoteDefaultMode ?? 'rich';
     const fallback = defaultState(defaultMode);
@@ -446,7 +561,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as StickyNoteState;
-      const next = { ...fallback, ...parsed };
+      const next = normalizeStickyState(parsed, fallback);
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.syncRichSnapshot();
@@ -470,10 +585,25 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState(this.prefs.preferences().stickyNoteDefaultMode ?? 'rich');
+      let remoteState: StickyNoteState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeStickyState(JSON.parse(raw) as StickyNoteState, fallback);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeStickyStatesForSync(remoteState, this.state(), fallback);
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.syncRichSnapshot();
+        if (!this.isLocallyEditing()) {
+          this.persistState({ immediate: true });
+        }
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage();

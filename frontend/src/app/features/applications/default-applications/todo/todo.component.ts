@@ -21,6 +21,8 @@ import {
   createSubtask,
   createTodoItem,
   loadTodoState,
+  mergeTodoStates,
+  parseTodoState,
   serializeTodoState,
 } from './todo-api';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -35,6 +37,9 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { UniverseEventHubService } from '../../../../core/events/universe-event-hub.service';
+import { ContextFieldStoreService } from '../../../../core/events/context-field-store.service';
+import { ObjectRef } from '../../../../core/events/context-fields.types';
 
 const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
 
@@ -150,6 +155,18 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
             {{ 'todo.clearCompleted' | translate }}
           </button>
         </header>
+        @if (externalContextRef()) {
+          <div
+            style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
+          >
+            <span style="font-size:12px; opacity:0.8;">
+              Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+            </span>
+            <button type="button" (click)="createTodoFromExternalContext()">
+              {{ 'todo.add' | translate }}
+            </button>
+          </div>
+        }
 
         @if (state().projectsEnabled) {
           <label style="display:flex; align-items:center; gap:8px; max-width:260px;">
@@ -226,7 +243,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                         style="font-weight:600; white-space:normal; overflow-wrap:anywhere; word-break:break-word; cursor:text; background:transparent; border:none; padding:0; text-align:left;"
                         [style.textDecoration]="t.completed ? 'line-through' : 'none'"
                         [style.opacity]="t.completed ? 0.6 : 1"
-                        (click)="startEdit(t)"
+                        (click)="selectTodoContext(t); startEdit(t)"
                       >
                         {{ t.text }}
                       </button>
@@ -508,6 +525,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   draggingTodoId = signal<string | null>(null);
   hoverTodoId = signal<string | null>(null);
   hoverTodoSide = signal<'above' | 'below' | null>(null);
+  externalContextRef = signal<ObjectRef | null>(null);
   draggingSubtask = signal<{ todoId: string; subtaskId: string } | null>(null);
   hoverSubtask = signal<{ todoId: string; subtaskId: string; side: 'above' | 'below' } | null>(
     null,
@@ -519,6 +537,8 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   private readonly exportGuard = inject(ExportGuardService);
   private readonly storage = inject(StorageService);
   private readonly remoteConflict = inject(RemoteConflictService);
+  private readonly eventHub = inject(UniverseEventHubService);
+  private readonly contextFields = inject(ContextFieldStoreService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
@@ -543,6 +563,24 @@ export class TodoPageComponent implements OnInit, OnDestroy {
         return;
       }
       void this.reload({ suppressNormalizationPersist: true });
+    });
+    effect(() => {
+      const universeId = this.currentUniverseId();
+      if (!universeId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      const selection = this.contextFields.selection(universeId);
+      const primary = selection?.primaryRef ?? null;
+      if (!primary || primary.instanceId === this.instanceId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      if (primary.kind === 'note' || primary.kind === 'kanbanCard' || primary.kind === 'sticky') {
+        this.externalContextRef.set(primary);
+        return;
+      }
+      this.externalContextRef.set(null);
     });
   }
 
@@ -585,6 +623,20 @@ export class TodoPageComponent implements OnInit, OnDestroy {
         p.id === project.id ? { ...p, todos: [created, ...p.todos] } : p,
       );
       this.updateState({ ...nextState, projects: nextProjects });
+      this.selectTodoContext(created);
+      const universeId = this.currentUniverseId();
+      if (universeId) {
+        this.eventHub.publishDomain(
+          universeId,
+          'TodoCreated',
+          {
+            instanceId: this.instanceId,
+            projectId: project.id,
+            todoId: created.id,
+          },
+          { source: { instanceId: this.instanceId, agent: 'todo-app' }, durable: true },
+        );
+      }
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     }
@@ -592,6 +644,12 @@ export class TodoPageComponent implements OnInit, OnDestroy {
 
   async onDuplicate(t: Todo) {
     await this.onAdd(t.text);
+  }
+
+  async createTodoFromExternalContext() {
+    const ref = this.externalContextRef();
+    if (!ref) return;
+    await this.onAdd(`[${ref.kind}] ${ref.id}`);
   }
 
   async onDelete(t: Todo) {
@@ -998,7 +1056,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.updateState(nextState);
   }
 
-  private updateState(nextState: TodoState) {
+  private updateState(nextState: TodoState, options?: { suppressPersist?: boolean }) {
     const ensuredProjects = nextState.projects.length
       ? nextState.projects
       : [this.defaultProject()];
@@ -1014,7 +1072,9 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.todos.set(this.activeProject(next)?.todos ?? []);
     this.subtaskCollapsed.set(collapsed);
     this.syncSubtaskCollapse(this.activeProject(next)?.todos ?? []);
-    this.persistState();
+    if (!options?.suppressPersist) {
+      this.persistState();
+    }
   }
 
   private activeProject(state = this.state()) {
@@ -1261,6 +1321,28 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     return `${TODO_STATE_STORAGE_KEY}:${this.prefs.userId()}:${this.instanceId || ''}`;
   }
 
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  selectTodoContext(todo: Todo) {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const ref: ObjectRef = {
+      universeId,
+      instanceId: this.instanceId,
+      kind: 'todo',
+      id: todo.id,
+    };
+    this.contextFields.setSelection(universeId, [ref], {
+      primaryRef: ref,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
+  }
+
   private isLocallyEditing() {
     return Boolean(this.editFocusCount > 0 || this.editingId() || this.editingSubtaskId());
   }
@@ -1279,10 +1361,22 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: TodoState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = parseTodoState(raw);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const mergedState = mergeTodoStates(remoteState, this.state());
+        this.updateState(mergedState, { suppressPersist: true });
+        if (!this.isLocallyEditing()) {
+          this.persistState({ immediate: true });
+        }
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         await this.reload({ suppressNormalizationPersist: true });

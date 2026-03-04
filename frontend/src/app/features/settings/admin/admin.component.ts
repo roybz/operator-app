@@ -5,6 +5,7 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
 import { InfoTooltipComponent } from '../../../shared/info-tooltip/info-tooltip.component';
 import { AuthService, UserPreferences } from '../../../core/auth.service';
 import { DialogService } from '../../../core/dialog.service';
+import { UsageQuotaService } from '../../../core/quotas/usage-quota.service';
 import { SettingsDraftService } from '../settings-draft.service';
 
 const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
@@ -131,6 +132,32 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
             (input)="onMaxPersistedChange($event)"
           />
         </label>
+
+        <section style="padding: 12px; border: 1px solid var(--color-border);">
+          <h4 style="margin: 0 0 8px;">Runtime quotas (read-only)</h4>
+          <div style="display:grid; gap:6px; font-size: 13px;">
+            <div>
+              Requests/minute:
+              {{ quotaUsage().requestRateCount }} /
+              {{ quotaUsage().requestRateLimit || quotaLimits().requestsPerMinute }}
+            </div>
+            <div>
+              Realtime channels:
+              {{ quotaUsage().realtimeChannelsInUse }} / {{ quotaLimits().realtimeChannels }}
+            </div>
+            <div>Storage budget: {{ formatBytes(quotaLimits().storageBytes) }}</div>
+            <div>Vault budget: {{ formatBytes(quotaLimits().vaultTotalBytes) }}</div>
+            <div>
+              Vault attachments total: {{ formatBytes(quotaLimits().vaultAttachmentTotalBytes) }}
+            </div>
+            <div>
+              Single attachment cap: {{ formatBytes(quotaLimits().vaultAttachmentAssetBytes) }}
+            </div>
+          </div>
+          <div style="margin-top: 8px; font-size: 12px; opacity: 0.7;">
+            Need larger limits? Contact us before enabling public signup.
+          </div>
+        </section>
       </div>
       @if (confirmWipeGuest()) {
         <app-confirm-dialog
@@ -147,12 +174,15 @@ const LOGO_OPTIONS = ['🌎', '🌍', '🌏', '🧭', '🗺️', '✨', '📌'];
 })
 export class AdminSettingsComponent {
   auth = inject(AuthService);
+  private quotas = inject(UsageQuotaService);
   private draft = inject(SettingsDraftService);
   private dialogService = inject(DialogService);
   logoOptions = LOGO_OPTIONS;
   backendConnected = this.auth.isBackendConnected();
   prefs = signal<UserPreferences>(this.draft.preferences());
   confirmWipeGuest = signal(false);
+  quotaLimits = signal(this.quotas.getLimits());
+  quotaUsage = this.quotas.usage.asReadonly();
 
   constructor() {
     effect(() => {
@@ -228,5 +258,18 @@ export class AdminSettingsComponent {
   onPersistChange(event: Event) {
     const checked = (event.target as HTMLInputElement).checked;
     this.auth.setPreviewPersist(checked);
+  }
+
+  formatBytes(value: number): string {
+    if (!Number.isFinite(value) || value <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = value;
+    let unitIndex = 0;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    const rounded = unitIndex === 0 ? Math.round(size).toString() : size.toFixed(2);
+    return `${rounded} ${units[unitIndex]}`;
   }
 }

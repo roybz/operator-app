@@ -19,12 +19,18 @@ import { DialogService } from './core/dialog.service';
 import { StorageService } from './core/storage/storage.service';
 import { CognitoOidcService } from './core/auth/cognito-oidc.service';
 import { getOpConfig } from './core/op-config';
+import { ClientObservabilityService } from './core/observability/client-observability.service';
+import { UsageQuotaService } from './core/quotas/usage-quota.service';
 
 export function httpLoaderFactory(http: HttpClient) {
   return new TranslateHttpLoader(http, '/assets/i18n/', '.json');
 }
 
-const resolveStorageAdapter = (cognitoOidc: CognitoOidcService) => {
+const resolveStorageAdapter = (
+  cognitoOidc: CognitoOidcService,
+  observability: ClientObservabilityService,
+  quotaUsage: UsageQuotaService,
+) => {
   const config = getOpConfig();
   const storageMode = config['storageMode'];
   if (storageMode !== 'remote') return new LocalStorageAdapter();
@@ -35,6 +41,10 @@ const resolveStorageAdapter = (cognitoOidc: CognitoOidcService) => {
   return new RemoteStorageAdapter(baseUrl, {
     accessTokenProvider: () => cognitoOidc.getAccessToken(),
     localFallback: new LocalStorageAdapter(),
+    requestIdProvider: () => observability.nextRequestId('api'),
+    sessionIdProvider: () => observability.getSessionId(),
+    requestRateLimitPerMinute: Number(config.quotaRequestsPerMinute ?? 240),
+    onRequestWindowUsage: (usage) => quotaUsage.updateRequestRateUsage(usage.count, usage.limit),
   });
 };
 
@@ -54,7 +64,11 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
-    { provide: STORAGE_ADAPTER, useFactory: resolveStorageAdapter, deps: [CognitoOidcService] },
+    {
+      provide: STORAGE_ADAPTER,
+      useFactory: resolveStorageAdapter,
+      deps: [CognitoOidcService, ClientObservabilityService, UsageQuotaService],
+    },
     {
       provide: APP_INITIALIZER,
       multi: true,

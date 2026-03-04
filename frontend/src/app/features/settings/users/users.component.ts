@@ -5,11 +5,73 @@ import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-d
 import { AuthService, UserRecord, UserRole } from '../../../core/auth.service';
 import { SharedTableComponent, TableColumn } from '../../../shared/table/table.component';
 import { DialogService } from '../../../core/dialog.service';
+import { ModalShellComponent } from '../../../shared/modal-shell/modal-shell.component';
 
 @Component({
   selector: 'app-users-settings',
   standalone: true,
-  imports: [CommonModule, TranslateModule, SharedTableComponent, ConfirmDialogComponent],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    SharedTableComponent,
+    ConfirmDialogComponent,
+    ModalShellComponent,
+  ],
+  styles: [
+    `
+      .users-layout {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .users-table {
+        flex: 1;
+        min-width: 320px;
+      }
+
+      .users-form {
+        flex: 1;
+        min-width: 280px;
+      }
+
+      .users-form__title {
+        margin-top: 0;
+      }
+
+      .users-form__label {
+        display: block;
+        margin: 8px 0 4px;
+      }
+
+      .users-form__input {
+        width: 100%;
+        padding: 8px;
+      }
+
+      .users-form__error {
+        color: #b00020;
+        margin-top: 8px;
+      }
+
+      .users-form__actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .users-success {
+        padding: 20px;
+        width: 320px;
+      }
+
+      .users-success__actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+    `,
+  ],
   template: `
     <section>
       <h3>{{ 'users.title' | translate }}</h3>
@@ -19,8 +81,8 @@ import { DialogService } from '../../../core/dialog.service';
       }
 
       @if (isAdminUser()) {
-        <div style="display:flex; gap:16px; flex-wrap:wrap;">
-          <div style="flex: 1; min-width: 320px;">
+        <div class="users-layout">
+          <div class="users-table">
             <app-shared-table
               [columns]="columns"
               [rows]="auth.users()"
@@ -35,10 +97,10 @@ import { DialogService } from '../../../core/dialog.service';
             </ng-template>
           </div>
 
-          <div style="flex: 1; min-width: 280px;">
-            <h4 style="margin-top:0;">{{ formTitle() }}</h4>
+          <div class="users-form">
+            <h4 class="users-form__title">{{ formTitle() }}</h4>
 
-            <label for="user-username" style="display:block; margin: 8px 0 4px;">
+            <label for="user-username" class="users-form__label">
               {{ 'users.username' | translate }}
             </label>
             <input
@@ -47,10 +109,10 @@ import { DialogService } from '../../../core/dialog.service';
               type="text"
               [value]="username()"
               (input)="username.set(usernameInput.value)"
-              style="width:100%; padding:8px;"
+              class="users-form__input"
             />
 
-            <label for="user-password" style="display:block; margin: 8px 0 4px;">
+            <label for="user-password" class="users-form__label">
               {{ 'users.password' | translate }}
             </label>
             <input
@@ -59,11 +121,11 @@ import { DialogService } from '../../../core/dialog.service';
               type="password"
               [value]="password()"
               (input)="password.set(passwordInput.value)"
-              style="width:100%; padding:8px;"
+              class="users-form__input"
               [disabled]="passwordDisabled()"
             />
 
-            <label for="user-role" style="display:block; margin: 8px 0 4px;">
+            <label for="user-role" class="users-form__label">
               {{ 'users.role' | translate }}
             </label>
             <select
@@ -71,17 +133,17 @@ import { DialogService } from '../../../core/dialog.service';
               #roleSelect
               [value]="role()"
               (change)="onRoleChange(roleSelect.value)"
-              style="width:100%; padding:8px;"
+              class="users-form__input"
             >
               <option value="admin">{{ 'users.roleAdmin' | translate }}</option>
               <option value="user">{{ 'users.roleUser' | translate }}</option>
             </select>
 
             @if (error()) {
-              <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
+              <p class="users-form__error">{{ error() }}</p>
             }
 
-            <div style="display:flex; gap:8px; margin-top: 12px;">
+            <div class="users-form__actions">
               <button (click)="save()">{{ saveLabel() }}</button>
               <button (click)="reset()">{{ 'users.reset' | translate }}</button>
             </div>
@@ -90,18 +152,19 @@ import { DialogService } from '../../../core/dialog.service';
       }
 
       @if (successMessage()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3000;"
+        <app-modal-shell
+          [zIndex]="3000"
+          ariaLabel="Users success"
+          maxWidth="360px"
+          (closed)="successMessage.set(null)"
         >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:320px;"
-          >
+          <div class="users-success">
             <p>{{ successMessage() }}</p>
-            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+            <div class="users-success__actions">
               <button (click)="successMessage.set(null)">OK</button>
             </div>
           </div>
-        </div>
+        </app-modal-shell>
       }
 
       @if (confirmWipeUserId()) {

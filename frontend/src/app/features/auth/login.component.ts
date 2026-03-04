@@ -7,267 +7,23 @@ import { DialogService } from '../../core/dialog.service';
 import { LicenseComponent } from '../license/license.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog/confirm-dialog.component';
 import { StorageService } from '../../core/storage/storage.service';
+import { DeviceModeToggleComponent } from '../../shared/device-mode-toggle/device-mode-toggle.component';
+import { ModalShellComponent } from '../../shared/modal-shell/modal-shell.component';
 import packageJson from '../../../../package.json';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, TranslateModule, LicenseComponent, ConfirmDialogComponent],
-  template: `
-    <main style="max-width: 420px; margin: 96px auto;">
-      <h1>
-        {{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}
-      </h1>
-      <div style="font-size: 14px; margin-top: -14px;">
-        {{ 'auth.tagline' | translate }}
-      </div>
-      <div style="font-size: 12px; opacity: 0.7; margin-top: 10px;">v{{ appVersion }}</div>
-
-      @if (universeLogin()) {
-        <p style="margin: 8px 0; opacity:0.8;">
-          {{
-            'universe.loginSubtitle'
-              | translate: { name: universeName(), owner: universeOwnerName() }
-          }}
-        </p>
-        <form (submit)="onInviteeSubmit($event)">
-          <label for="invitee-username" style="display:block; margin: 12px 0 6px;">
-            {{ 'universe.inviteeUsername' | translate }}
-          </label>
-          <input
-            id="invitee-username"
-            #inviteeUsernameInput
-            type="text"
-            [value]="username()"
-            (input)="username.set(inviteeUsernameInput.value)"
-            style="width:100%; padding:10px;"
-          />
-
-          <label for="invitee-password" style="display:block; margin: 12px 0 6px;">
-            {{ 'universe.inviteePassword' | translate }}
-          </label>
-          <input
-            id="invitee-password"
-            #inviteePasswordInput
-            type="password"
-            [value]="password()"
-            (input)="password.set(inviteePasswordInput.value)"
-            style="width:100%; padding:10px;"
-          />
-
-          @if (error()) {
-            <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
-          }
-
-          <button type="submit" style="margin-top: 16px; padding: 10px 14px;">
-            {{ 'auth.signIn' | translate }}
-          </button>
-          <p style="margin-top: 10px; font-size:12px; opacity:0.7;">
-            {{ 'auth.lockoutWarning' | translate }}
-          </p>
-        </form>
-
-        @if (allowUniverseGuest()) {
-          <input
-            type="password"
-            [value]="guestPassword()"
-            (input)="guestPassword.set($any($event.target).value)"
-            style="width:100%; padding:10px; margin-top:8px;"
-            [placeholder]="'universe.guestPassword' | translate"
-          />
-          <button
-            type="button"
-            style="margin-top: 12px; padding: 8px 12px; font-size:16px;"
-            (click)="continueAsUniverseGuest()"
-          >
-            {{ 'universe.continueGuest' | translate }}
-          </button>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label
-            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
-          >
-            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
-            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-          </label>
-        }
-
-        @if (allowUniverseObserver()) {
-          <input
-            type="password"
-            [value]="observerPassword()"
-            (input)="observerPassword.set($any($event.target).value)"
-            style="width:100%; padding:10px; margin-top:12px;"
-            [placeholder]="'universe.observerPassword' | translate"
-          />
-          <button
-            type="button"
-            style="margin-top: 12px; padding: 8px 12px;"
-            (click)="continueAsUniverseObserver()"
-          >
-            {{ 'universe.continueObserver' | translate }}
-          </button>
-        }
-
-        <button
-          type="button"
-          style="margin-top: 16px; padding: 8px 12px;"
-          (click)="returnToMainLogin()"
-        >
-          {{ 'universe.returnToMainLogin' | translate }}
-        </button>
-      } @else if (guestModeOnlyFlag()) {
-        @if (allowGuest()) {
-          <button
-            type="button"
-            style="margin-top: 58px; padding: 8px 12px; font-size:16px;"
-            (click)="continueAsGuest()"
-          >
-            {{ 'auth.guest' | translate }}
-          </button>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label
-            style="display:flex; gap:8px; align-items:center; margin-top: 11px; margin-bottom:28px; font-size:14px;"
-          >
-            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
-            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-          </label>
-        }
-      } @else {
-        @if (externalAuthEnabled()) {
-          <button
-            type="button"
-            style="margin-top: 20px; padding: 10px 14px;"
-            (click)="startSecureSignIn()"
-          >
-            {{ 'auth.signIn' | translate }}
-          </button>
-        } @else {
-          <form (submit)="onSubmit($event)">
-            <label for="login-username" style="display:block; margin: 12px 0 6px;">
-              {{ 'auth.username' | translate }}
-            </label>
-            <input
-              id="login-username"
-              #usernameInput
-              type="text"
-              [value]="username()"
-              (input)="username.set(usernameInput.value)"
-              style="width:100%; padding:10px;"
-            />
-
-            <label for="login-password" style="display:block; margin: 12px 0 6px;">
-              {{ 'auth.password' | translate }}
-            </label>
-            <input
-              id="login-password"
-              #passwordInput
-              type="password"
-              [value]="password()"
-              (input)="password.set(passwordInput.value)"
-              style="width:100%; padding:10px;"
-            />
-
-            @if (error()) {
-              <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
-            }
-
-            <button type="submit" style="margin-top: 16px; padding: 10px 14px;">
-              {{ 'auth.signIn' | translate }}
-            </button>
-            <p style="margin-top: 10px; font-size:12px; opacity:0.7;">
-              {{ 'auth.lockoutWarning' | translate }}
-            </p>
-          </form>
-        }
-
-        @if (allowGuest()) {
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 13px;">
-            <input type="checkbox" [checked]="phoneMode()" (change)="togglePhoneMode($event)" />
-            <span>{{ 'phone.modeLabel' | translate }}</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
-            <input type="checkbox" [checked]="resetGuest()" (change)="toggleResetGuest($event)" />
-            <span style="padding-left:5px;">{{ 'auth.resetGuest' | translate }}</span>
-          </label>
-          <button
-            type="button"
-            style="margin-top: 12px; padding: 8px 12px;"
-            (click)="continueAsGuest()"
-          >
-            {{ 'auth.guest' | translate }}
-          </button>
-        }
-      }
-
-      @if (loggedOutMessage()) {
-        <div style="margin-top: 8px; color: var(--color-accent); font-size:13px;">
-          {{ loggedOutMessage() }}
-        </div>
-      }
-
-      <div style="display:flex; gap:8px; margin-top: 16px; flex-wrap:wrap;">
-        <button type="button" (click)="licenseOpen.set(true)">
-          {{ 'nav.license' | translate }}
-        </button>
-        <a
-          href="https://github.com/roybz/operator-app"
-          target="_blank"
-          rel="noreferrer"
-          style="padding: 8px 12px; border:1px solid var(--color-border); border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; font-size:15px;"
-          (click)="openGithub($event)"
-        >
-          {{ 'auth.github' | translate }}
-        </a>
-      </div>
-
-      @if (confirmResetOpen()) {
-        <app-confirm-dialog
-          [message]="'auth.resetGuestConfirm' | translate"
-          [confirmLabel]="'auth.resetGuestConfirmButton' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="confirmGuestReset()"
-          (canceled)="confirmResetOpen.set(false)"
-        />
-      }
-
-      @if (licenseOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2000;"
-          (pointerdown)="licenseOpen.set(false)"
-          role="button"
-          tabindex="0"
-          (keydown.enter)="licenseOpen.set(false)"
-          (keydown.space)="licenseOpen.set(false)"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:12px;"
-            (pointerdown)="$event.stopPropagation()"
-          >
-            <app-license (closed)="licenseOpen.set(false)" />
-          </div>
-        </div>
-      }
-    </main>
-  `,
-  styles: [
-    `
-      :host {
-        display: block;
-      }
-      @media (max-width: 1024px) {
-        :host {
-          display: block;
-          padding-left: 44px;
-        }
-      }
-    `,
+  imports: [
+    CommonModule,
+    TranslateModule,
+    LicenseComponent,
+    ConfirmDialogComponent,
+    DeviceModeToggleComponent,
+    ModalShellComponent,
   ],
+  templateUrl: './login.component.html',
+  styleUrls: ['./login.component.scss'],
 })
 export class LoginComponent {
   private auth = inject(AuthService);
@@ -286,6 +42,8 @@ export class LoginComponent {
   guestModeOnlyFlag = computed(() => this.auth.guestModeOnly());
   allowGuest = computed(() => this.guestModeOnlyFlag() || this.auth.orgSettings().allowGuestLogin);
   externalAuthEnabled = computed(() => this.auth.usesExternalAuth() && !this.universeLogin());
+  publicSignupPrepared = computed(() => this.auth.isPublicSignupPrepared());
+  publicSignupEnabled = computed(() => this.auth.isPublicSignupEnabled());
   universeLogin = computed(() => Boolean(this.auth.universeContext()));
   universeName = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
@@ -363,6 +121,16 @@ export class LoginComponent {
   async startSecureSignIn() {
     this.error.set(null);
     await this.auth.startExternalLogin();
+  }
+
+  async startSecureSignup() {
+    this.error.set(null);
+    const result = await this.auth.startExternalSignup();
+    if (!result.ok) {
+      this.error.set(
+        result.message ? this.translate.instant(result.message) : 'Unable to sign up.',
+      );
+    }
   }
 
   async onInviteeSubmit(event: Event) {

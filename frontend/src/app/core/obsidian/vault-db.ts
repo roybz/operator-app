@@ -11,7 +11,9 @@ import {
 import { parseObsidianMarkdown, resolveObsidianLinkTarget } from './obsidian-parse';
 import { StorageService } from '../storage/storage.service';
 import { AuthService } from '../auth.service';
-import { getOpConfig } from '../op-config';
+import { getOpCapabilities, getOpConfig } from '../op-config';
+import { EntitlementService } from '../billing/entitlement.service';
+import { UsageQuotaService } from '../quotas/usage-quota.service';
 
 const DB_NAME = 'operator-obsidian-vaults';
 const DB_VERSION = 3;
@@ -75,6 +77,8 @@ export class VaultDbService {
   private assetUrlCache = new Map<string, string>();
   private storage = inject(StorageService);
   private auth = inject(AuthService);
+  private entitlements = inject(EntitlementService);
+  private quotas = inject(UsageQuotaService);
   private cloudSyncInflight = new Map<string, Promise<void>>();
 
   private openDb() {
@@ -185,12 +189,11 @@ export class VaultDbService {
 
   canUseCloudVaultSyncBeta() {
     const config = getOpConfig();
+    const capabilities = getOpCapabilities(config);
     if (config.storageMode !== 'remote') return false;
-    if (this.auth.guestModeOnly()) return false;
+    if (!capabilities.cloudVault) return false;
+    if (this.entitlements.canUseCloudVaultBeta().status !== 'granted') return false;
     if (!this.auth.usesExternalAuth()) return false;
-    if (!this.auth.isLoggedIn()) return false;
-    if (this.auth.session().userId === 'u_guest') return false;
-    if (this.auth.orgSettings().testModeEnabled) return false;
     return true;
   }
 
@@ -1003,16 +1006,10 @@ export class VaultDbService {
 
   private buildAttachmentCloudUploadPlan(vault: VaultRecord, assets: AssetRecord[]) {
     const requested = Boolean(vault.cloudBeta?.attachmentsCloudRequested);
-    const cfg = getOpConfig();
     const enabled = this.canUseCloudVaultAttachmentSyncBeta();
-    const maxTotalBytes = Math.max(
-      64 * 1024,
-      Number(cfg.cloudVaultAttachmentUploadMaxTotalBytes ?? 0) || 0,
-    );
-    const maxAssetBytes = Math.max(
-      32 * 1024,
-      Number(cfg.cloudVaultAttachmentUploadMaxAssetBytes ?? 0) || 0,
-    );
+    const limits = this.quotas.getLimits();
+    const maxTotalBytes = Math.max(64 * 1024, limits.vaultAttachmentTotalBytes);
+    const maxAssetBytes = Math.max(32 * 1024, limits.vaultAttachmentAssetBytes);
     const totalBytes = assets.reduce((sum, a) => sum + (a.size || 0), 0);
     const eligibleAssets = assets.filter(
       (a) => (a.size || 0) > 0 && (a.size || 0) <= maxAssetBytes,
@@ -1082,11 +1079,7 @@ export class VaultDbService {
       return;
     }
 
-    const cfg = getOpConfig();
-    const maxAssetBytes = Math.max(
-      32 * 1024,
-      Number(cfg.cloudVaultAttachmentUploadMaxAssetBytes ?? 0) || 0,
-    );
+    const maxAssetBytes = Math.max(32 * 1024, this.quotas.getLimits().vaultAttachmentAssetBytes);
     const indexRows: {
       id: string;
       path: string;

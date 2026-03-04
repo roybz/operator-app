@@ -23,7 +23,6 @@ import {
 } from './core/auth.service';
 import { DialogInstance, DialogService } from './core/dialog.service';
 import { DialogComponent } from './shared/dialog/dialog.component';
-import { AppGroup } from './layout/shared/app-list/app-list.component';
 import { ConfirmDialogComponent } from './shared/confirm-dialog/confirm-dialog.component';
 import { TodoPageComponent } from './features/applications/default-applications/todo/todo.component';
 import { CalculatorComponent } from './features/applications/default-applications/calculator/calculator.component';
@@ -41,8 +40,9 @@ import { PhoneShellComponent } from './layout/phone/phone-shell.component';
 import { DesktopShellComponent } from './layout/desktop/desktop-shell.component';
 import { TopBarComponent, UniverseItem } from './layout/shared/top-bar.component';
 import { LongPressDirective } from './shared/long-press/long-press.directive';
+import { ModalShellComponent } from './shared/modal-shell/modal-shell.component';
 import { SettingsDraftService } from './features/settings/settings-draft.service';
-import { APP_LIST, APP_REGISTRY } from './features/dependencies/app-registry';
+import { APP_REGISTRY } from './features/dependencies/app-registry';
 import { AppId } from './features/dependencies/app-types';
 import { cloneCalculatorState } from './features/applications/default-applications/calculator/calculator.component';
 import { cloneNavigatorState } from './features/applications/default-applications/navigator/navigator.component';
@@ -72,34 +72,20 @@ import { StorageService } from './core/storage/storage.service';
 import { DebugPerfService } from './core/debug-perf.service';
 import { RealtimeSyncService } from './core/realtime/realtime-sync.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
-
-type CanvasMode = 'repeat' | 'center' | 'stretch';
-
-const RESERVED_SIDEBAR_WIDTH = 267;
-const RESERVED_TOPBAR_HEIGHT = 48;
-const RESERVED_WORKSPACE_HEIGHT = 72;
-const PHONE_MODE_BOOT_KEY = 'op_phone_mode_boot';
-
-const createFallbackRect = (width: number, height: number): DOMRect => {
-  if (typeof DOMRect !== 'undefined') return new DOMRect(0, 0, width, height);
-  return {
-    x: 0,
-    y: 0,
-    width,
-    height,
-    top: 0,
-    left: 0,
-    right: width,
-    bottom: height,
-    toJSON: () => ({}),
-  } as DOMRect;
-};
-
-const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
-  id,
-  labelKey,
-  icon,
-}));
+import { RemoteApplyPipeline } from './core/realtime/remote-apply-pipeline';
+import { EventOutboxService } from './core/events/event-outbox.service';
+import { ContextFieldStoreService } from './core/events/context-field-store.service';
+import { ClientObservabilityService } from './core/observability/client-observability.service';
+import { getOpCapabilities, getOpConfig } from './core/op-config';
+import {
+  APP_GROUPS,
+  PHONE_MODE_BOOT_KEY,
+  RESERVED_SIDEBAR_WIDTH,
+  RESERVED_TOPBAR_HEIGHT,
+  RESERVED_WORKSPACE_HEIGHT,
+  CanvasMode,
+  createFallbackRect,
+} from './app-shell.constants';
 
 @Component({
   selector: 'app-root',
@@ -126,6 +112,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
     SettingsComponent,
     LicenseComponent,
     LongPressDirective,
+    ModalShellComponent,
   ],
   styles: [
     `
@@ -166,6 +153,35 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
         display: flex;
         gap: 8px;
         justify-content: flex-end;
+      }
+
+      .accessibility-prompt {
+        box-sizing: border-box;
+        padding: 20px 22px;
+        width: min(460px, calc(100vw - 48px));
+      }
+
+      .accessibility-prompt__title {
+        margin: 0 0 12px;
+      }
+
+      .accessibility-prompt__body {
+        margin: 0;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .accessibility-prompt__toggle {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .accessibility-prompt__actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 18px;
       }
 
       .workspace-chip {
@@ -346,799 +362,7 @@ const APP_GROUPS: AppGroup[] = APP_LIST.map(({ id, labelKey, icon }) => ({
       }
     `,
   ],
-  template: `
-    @if (loadingVisible()) {
-      <div
-        id="loading-screen"
-        style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:4000; transition:opacity 120ms ease;"
-        [style.opacity]="loadingFading() ? 0 : 1"
-      >
-        <div style="font-size:18px; letter-spacing:0.04em;">{{ 'loading' | translate }}</div>
-      </div>
-    }
-
-    @if (auth.ready() && (!auth.isLoggedIn() || forceLoggedOut())) {
-      @if (loginLoadingVisible()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-bg); display:flex; align-items:center; justify-content:center; z-index:3500; transition:opacity 120ms ease;"
-          [style.opacity]="loginLoadingFading() ? 0 : 1"
-        >
-          <div style="font-size:18px; letter-spacing:0.04em;">{{ 'loading' | translate }}</div>
-        </div>
-      }
-      <router-outlet />
-    } @else if (auth.isLoggedIn() && !forceLoggedOut()) {
-      <div
-        class="app-shell"
-        [class.phone-mode]="phoneMode()"
-        style="position:relative; display:flex; flex-direction:column;"
-      >
-        @if (remoteConflictBannerVisible() && remoteConflictPending()) {
-          <div class="remote-conflict-banner" role="status" aria-live="polite">
-            <div style="font-weight:600;">Remote changes are waiting</div>
-            <div style="font-size:12px; line-height:1.35;">
-              {{
-                remoteConflictPending()?.reason === 'dirty'
-                  ? 'A live update arrived while you were editing locally.'
-                  : 'A remote change arrived right after a local save.'
-              }}
-              Review and reload when you are ready.
-            </div>
-            <div style="font-size:12px; opacity:0.85;">
-              Keys: {{ remoteConflictPending()?.keys?.length ?? 0 }}
-            </div>
-            <div class="remote-conflict-banner__actions">
-              <button (click)="dismissRemoteConflict()">Dismiss</button>
-              <button (click)="applyPendingRemoteConflict()">Reload Remote Changes</button>
-            </div>
-          </div>
-        }
-        @if (phoneMode() && !topBarOpen()) {
-          <div
-            id="phone-collapsed-bar"
-            style="position:sticky; top:0; z-index:1300; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:6px 10px; display:flex; align-items:center; justify-content:space-between;"
-          >
-            <button class="square-btn" (click)="toggleNav()" style="font-size:22px;">☰</button>
-            <button class="square-btn" (click)="toggleTopBar()">
-              {{ 'topbar.expand' | translate }}
-            </button>
-          </div>
-        }
-        @if (topBarOpen()) {
-          <div
-            id="workspace-bar"
-            [style.maxHeight.px]="workspaceMenuOpen() ? (phoneMode() ? 180 : 72) : 0"
-            [style.opacity]="workspaceMenuOpen() ? 1 : 0"
-            [style.borderBottom]="workspaceMenuOpen() ? '1px solid var(--color-border)' : 'none'"
-            [style.overflowY]="phoneMode() ? 'auto' : 'hidden'"
-            style="overflow-x:hidden; background:var(--color-bg); transition:max-height 200ms ease, opacity 200ms ease;"
-          >
-            <div
-              style="display:flex; gap:12px; align-items:center; padding:12px 16px;"
-              [style.justifyContent]="phoneMode() ? 'flex-start' : 'center'"
-              [style.flexWrap]="phoneMode() ? 'wrap' : 'nowrap'"
-            >
-              @for (ws of dialogService.getWorkspaces(); track ws.id) {
-                <div
-                  style="position:relative;"
-                  [class.workspace-shell]="true"
-                  [attr.data-workspace-id]="ws.id"
-                >
-                  @if (editingWorkspaceId() !== ws.id) {
-                    <button
-                      draggable="false"
-                      (pointerdown)="onWorkspacePointerDown(ws.id, $event)"
-                      (dblclick)="startWorkspaceRename(ws); $event.stopPropagation()"
-                      appLongPress
-                      [longPressEnabled]="phoneMode()"
-                      (longPress)="startWorkspaceRename(ws)"
-                      (click)="onWorkspaceClick(ws.id)"
-                      [class.workspace-chip]="true"
-                      [class.dragging]="workspaceDragId() === ws.id"
-                      [style.boxShadow]="
-                        dialogService.getActiveWorkspaceId() === ws.id
-                          ? '0 0 0 2px #00c2d1'
-                          : 'none'
-                      "
-                      style="position:relative; padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
-                    >
-                      @if (hoverWorkspaceId() === ws.id && hoverWorkspaceSide() === 'left') {
-                        <span class="workspace-drop-line left"></span>
-                      }
-                      @if (hoverWorkspaceId() === ws.id && hoverWorkspaceSide() === 'right') {
-                        <span class="workspace-drop-line right"></span>
-                      }
-                      <span draggable="false">
-                        {{ ws.name }}
-                      </span>
-                    </button>
-                  } @else {
-                    <input
-                      #workspaceRenameInput
-                      [value]="editingWorkspaceName()"
-                      (input)="editingWorkspaceName.set($any($event.target).value)"
-                      (blur)="finishWorkspaceRename(ws)"
-                      (keydown.enter)="finishWorkspaceRename(ws)"
-                      (keydown.escape)="cancelWorkspaceRename()"
-                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); width:140px;"
-                    />
-                  }
-                  <button
-                    (click)="closeWorkspace(ws)"
-                    [disabled]="dialogService.getWorkspaces().length <= 1"
-                    style="position:absolute; top:-6px; left:-6px; width:18px; height:18px; border-radius:999px; border:1px solid var(--color-border); background:var(--color-surface); display:flex; align-items:center; justify-content:center; font-size:11px; cursor:pointer;"
-                    title="Close workspace"
-                  >
-                    ✕
-                  </button>
-                </div>
-              }
-              @if (dialogService.getWorkspaces().length < workspaceLimit() && canEdit()) {
-                <button (click)="dialogService.addWorkspace()" style="padding:8px 12px;">+</button>
-              }
-            </div>
-          </div>
-
-          <app-top-bar
-            [phoneMode]="phoneMode()"
-            [siteLogoEmoji]="siteLogoEmoji()"
-            [siteTitle]="siteTitle()"
-            [loggedInLabel]="auth.currentUser() ? loggedInAsLabel() : ''"
-            [mockLabel]="isMockMode()"
-            [previewLabel]="auth.isPreviewing() ? previewUserLabel() : ''"
-            [previewPersist]="auth.previewPersist()"
-            [canSwitchUniverse]="canSwitchUniverse()"
-            [currentUniverseName]="currentUniverseName()"
-            [universeMenuOpen]="universeMenuOpen()"
-            [universes]="universesList()"
-            [activeUniverseId]="auth.getActiveUniverseId(currentUserId() || '')"
-            [city]="auth.preferences().city"
-            [showTime]="showTime()"
-            [timeLabel]="timeLabel()"
-            [workspaceMenuOpen]="workspaceMenuOpen()"
-            (toggleNav)="toggleNav()"
-            (toggleWorkspaceMenu)="toggleWorkspaceMenu()"
-            (toggleTopBar)="toggleTopBar()"
-            (toggleUniverseMenu)="toggleUniverseMenu()"
-            (closeUniverseMenu)="universeMenuOpen.set(false)"
-            (switchUniverse)="switchUniverse($event)"
-          />
-        }
-      </div>
-
-      <main class="app-main" style="display:flex; overflow:hidden;">
-        @if (phoneMode()) {
-          <app-phone-shell
-            [navOpen]="navOpen"
-            [apps]="visibleAppGroups()"
-            [instancesByApp]="instancesByApp()"
-            [deleteTargetActive]="!!deleteTargetId()"
-            [actionsDisabled]="settingsOpen() || !canEdit()"
-            [activeInstanceId]="phoneActiveDialogId()"
-            (toggleNav)="toggleNav()"
-            (openApp)="openApp($event)"
-            (restore)="restoreInstance($event)"
-            (duplicate)="duplicateInstance($event)"
-            (toggleLock)="toggleDeleteLock($event)"
-            (archive)="confirmArchive($event)"
-            (unarchive)="unarchiveInstance($event)"
-            (switchToDesktopMode)="requestSwitchToDesktopMode()"
-            (toggleSettings)="toggleSettings()"
-            (openLicense)="openLicense()"
-            (logout)="logout()"
-          />
-        } @else {
-          <app-desktop-shell
-            [navOpen]="navOpen"
-            [dialogsHidden]="dialogsHidden()"
-            [resetMenuOpen]="resetMenuOpen()"
-            [settingsOpen]="settingsOpen()"
-            [canEdit]="canEdit()"
-            [deleteTargetActive]="!!deleteTargetId()"
-            [apps]="visibleAppGroups()"
-            [instancesByApp]="instancesByApp()"
-            [phoneMode]="phoneMode()"
-            [showViewportSizingControls]="showViewportSizingControls()"
-            [isCanvasLocked]="isCanvasLocked()"
-            [canvasMode]="isCanvasLocked() ? 'locked' : 'follow'"
-            [canvasDraftWidth]="canvasDraftWidth()"
-            [canvasDraftHeight]="canvasDraftHeight()"
-            [canvasDraftDirty]="canvasDraftDirty()"
-            [showZoomControls]="showZoomControls()"
-            [showCanvasDivider]="showCanvasDivider()"
-            [canOpenSettings]="canOpenSettings()"
-            (toggleNav)="toggleNav()"
-            (toggleDialogsHidden)="toggleDialogsHidden()"
-            (toggleResetMenu)="toggleResetMenu()"
-            (resetLeft)="resetDialogs('left')"
-            (resetMiddle)="resetDialogs('middle')"
-            (openApp)="openApp($event)"
-            (restore)="restoreInstance($event)"
-            (duplicate)="duplicateInstance($event)"
-            (toggleLock)="toggleDeleteLock($event)"
-            (archive)="confirmArchive($event)"
-            (unarchive)="unarchiveInstance($event)"
-            (phoneModeToggle)="requestPhoneModeToggle($event)"
-            (canvasModeChange)="setCanvasMode($event)"
-            (canvasDraftWidthChange)="canvasDraftWidth.set($event)"
-            (canvasDraftHeightChange)="canvasDraftHeight.set($event)"
-            (applyCanvasSize)="applyCanvasSize()"
-            (resetZoom)="resetZoom()"
-            (zoomOut)="zoomOut()"
-            (zoomIn)="zoomIn()"
-            (toggleSettings)="toggleSettings()"
-            (openLicense)="openLicense()"
-            (logout)="logout()"
-          />
-        }
-
-        <section
-          id="app-viewport"
-          style="flex:1; position:relative; display:flex; align-items:center; justify-content:center; overflow:auto;"
-          [style.overflow]="
-            phoneMode() || isOverlayActive() || (!phoneMode() && canvasScale() < 1)
-              ? 'hidden'
-              : 'auto'
-          "
-          [style.alignItems]="!phoneMode() && canvasScale() < 1 ? 'flex-start' : 'center'"
-          [style.justifyContent]="!phoneMode() && canvasScale() < 1 ? 'flex-start' : 'center'"
-          [style.background]="!phoneMode() && canvasScale() < 1 ? 'var(--color-bg)' : 'transparent'"
-          [style.borderLeft]="navOpen && !phoneMode() ? '1px solid var(--color-border)' : 'none'"
-        >
-          @if (!topBarOpen()) {
-            <button
-              (click)="toggleTopBar()"
-              class="floating-control square-btn"
-              style="right:12px;"
-              [style.top.px]="floatingTopBarToggleTop()"
-            >
-              {{ 'topbar.expand' | translate }}
-            </button>
-          }
-          @if (!navOpen && !phoneMode()) {
-            <button
-              (click)="toggleNav()"
-              class="floating-control square-btn"
-              style="left:12px;"
-              [style.top.px]="floatingSidebarToggleTop()"
-            >
-              {{ 'nav.expand' | translate }}
-            </button>
-            <button
-              (click)="toggleDialogsHidden()"
-              class="floating-control square-btn"
-              style="left:92px;"
-              [style.top.px]="floatingSidebarToggleTop()"
-              [disabled]="settingsOpen() || !canEdit()"
-              [style.opacity]="settingsOpen() || !canEdit() ? 0.5 : 1"
-            >
-              {{
-                dialogsHidden() ? ('dialogs.showAll' | translate) : ('dialogs.hideAll' | translate)
-              }}
-            </button>
-          }
-          @if (phoneMode() && !topBarOpen()) {
-            <button
-              (click)="toggleNav()"
-              class="floating-control square-btn"
-              style="left:12px;"
-              [style.top.px]="floatingTopBarToggleTop()"
-            >
-              &#9776;
-            </button>
-          }
-          <div
-            id="app-canvas"
-            [ngStyle]="canvasStyle()"
-            [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
-            [style.width.px]="effectiveCanvasWidth()"
-            [style.height.px]="effectiveCanvasHeight()"
-            [style.minWidth.px]="phoneMode() ? 0 : 1024"
-            [style.minHeight.px]="phoneMode() ? 0 : 768"
-            [style.margin]="!phoneMode() && canvasScale() < 1 ? '0' : '0 auto'"
-            style="position:relative; flex:0 0 auto; max-width:20000px; max-height:20000px; background-color:var(--color-bg); transform-origin: top left;"
-            [style.transform]="'scale(' + effectiveCanvasScale() + ')'"
-            [style.cursor]="phoneMode() ? 'default' : isPanning() ? 'grabbing' : 'default'"
-            (pointerdown)="startCanvasPan($event)"
-          >
-            @for (instance of stashedDialogs(); track instance.id) {
-              @if (instance.tileRect) {
-                <div
-                  data-tile="true"
-                  style="position:absolute; background:var(--color-surface); border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15); touch-action:none;"
-                  [style.left.px]="instance.tileRect.x"
-                  [style.top.px]="instance.tileRect.y"
-                  [style.width.px]="instance.tileRect.width"
-                  [style.height.px]="instance.tileRect.height"
-                  [style.zIndex]="1"
-                  [style.pointerEvents]="isOverlayActive() ? 'none' : 'auto'"
-                  [style.cursor]="tileDragState?.id === instance.id ? 'grabbing' : 'grab'"
-                  (pointerdown)="
-                    $event.stopPropagation();
-                    $event.preventDefault();
-                    startTileDrag(instance, $event)
-                  "
-                >
-                  <div style="flex:1; min-width:0;">
-                    @if (editingTileId() === instance.id) {
-                      <input
-                        [attr.data-tile-input]="instance.id"
-                        [value]="editingTitle()"
-                        (input)="editingTitle.set($any($event.target).value)"
-                        (blur)="finishRename(instance)"
-                        (keydown.enter)="finishRename(instance)"
-                        style="width:100%; padding:4px;"
-                      />
-                    } @else {
-                      <div
-                        style="text-align:left; font-size:13px; width:100%; cursor:text;"
-                        (dblclick)="startRename(instance)"
-                        appLongPress
-                        [longPressEnabled]="phoneMode()"
-                        (longPress)="startRename(instance)"
-                      >
-                        {{ instanceLabel(instance) }}
-                      </div>
-                    }
-                  </div>
-                  <button
-                    (click)="restoreFromStash(instance)"
-                    title="{{ 'dialogs.unstash' | translate }}"
-                  >
-                    📤
-                  </button>
-                </div>
-              }
-            }
-
-            @for (instance of visibleDialogs(); track instance.id) {
-              @if (phoneMode() || !instance.minimized) {
-                <app-dialog
-                  [instance]="renderInstance(instance)"
-                  [bounds]="phoneMode() ? viewportBounds() : canvasBounds()"
-                  [disabled]="isOverlayActive() || !canEdit()"
-                  [title]="instanceLabel(instance)"
-                  [icon]="instanceIcon(instance.appId)"
-                  [trashDisabled]="!!instance.deleteLocked"
-                  [hasSettings]="instanceHasSettings(instance.appId)"
-                  [canMoveWorkspace]="dialogService.getWorkspaces().length > 1"
-                  [phoneMode]="phoneMode()"
-                  [scale]="effectiveCanvasScale()"
-                  (moved)="onDialogMove(instance.id, $event)"
-                  (resized)="onDialogResize(instance.id, $event)"
-                  (stash)="stashInstance(instance.id)"
-                  (minimize)="minimizeInstance(instance.id)"
-                  (maximize)="toggleMaximize(instance.id)"
-                  (closed)="minimizeInstance(instance.id)"
-                  (trash)="confirmDelete(instance.id)"
-                  (titleEdited)="renameInstance(instance.id, $event)"
-                  (bringToFront)="dialogService.bringToFront(instance.id)"
-                  (settings)="toggleInstanceSettings(instance.id)"
-                  (moveWorkspace)="openMoveWorkspace(instance.id)"
-                >
-                  @if (instance.appId === 'todo') {
-                    <app-todo-page
-                      [instanceId]="instance.id"
-                      (transformToKanbanRequest)="transformTodoToKanban(instance.id)"
-                    />
-                  }
-                  @if (instance.appId === 'kanban') {
-                    <app-kanban
-                      [instanceId]="instance.id"
-                      (transformToTodoRequest)="transformKanbanToTodo(instance.id)"
-                      (transformColumnsToTodosRequest)="transformKanbanColumnsToTodos(instance.id)"
-                    />
-                  }
-                  @if (instance.appId === 'calculator') {
-                    <app-calculator [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'timer') {
-                    <app-timer [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'navigator') {
-                    <app-navigator [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'notes') {
-                    <app-notes [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'stickyNotes') {
-                    <app-sticky-notes [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'calendar') {
-                    <app-calendar [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'clock') {
-                    <app-clock [instanceId]="instance.id" />
-                  }
-                  @if (instance.appId === 'dataTable') {
-                    <app-data-table [instanceId]="instance.id" />
-                  }
-                </app-dialog>
-              }
-            }
-          </div>
-
-          @if (settingsOpen()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
-              (pointerdown)="requestCloseSettings()"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="requestCloseSettings()"
-              (keydown.space)="requestCloseSettings()"
-            >
-              <div
-                style="background:var(--color-surface); padding:20px; border-radius:12px; height:85vh; overflow:auto; width:min(920px, 92vw); position:relative;"
-                [style.width]="phoneMode() ? '100%' : null"
-                [style.height]="phoneMode() ? '100%' : null"
-                [style.borderRadius]="phoneMode() ? '0' : '12px'"
-                (pointerdown)="$event.stopPropagation()"
-              >
-                <button
-                  (click)="requestCloseSettings()"
-                  style="position:sticky; top:24px; float:right; border-radius:999px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; margin-bottom:8px;"
-                  title="{{ 'dialogs.close' | translate }}"
-                >
-                  &#215;
-                </button>
-                <div
-                  style="position:sticky; top:24px; display:flex; justify-content:flex-end; gap:8px; padding:0 48px 8px 0; background:var(--color-surface); z-index:5;"
-                >
-                  <button
-                    (click)="settingsDraft.apply()"
-                    [disabled]="!settingsDraft.dirty()"
-                    [style.opacity]="settingsDraft.dirty() ? 1 : 0.6"
-                    style="height:28px;"
-                  >
-                    {{ 'settings.apply' | translate }}
-                  </button>
-                  @if (settingsDraft.dirty()) {
-                    <button (click)="settingsDraft.cancel()" style="height:28px;">
-                      {{ 'settings.cancelChanges' | translate }}
-                    </button>
-                  }
-                </div>
-                <app-settings [showControls]="false" />
-              </div>
-            </div>
-          }
-          @if (licenseOpen()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2400;"
-              (pointerdown)="licenseOpen.set(false)"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="licenseOpen.set(false)"
-              (keydown.space)="licenseOpen.set(false)"
-            >
-              <div
-                style="background:var(--color-surface); padding:20px; border-radius:12px; max-height:85vh; overflow:auto; width:min(920px, 92vw);"
-                [style.width]="phoneMode() ? '100%' : null"
-                [style.height]="phoneMode() ? '100%' : null"
-                [style.maxHeight]="phoneMode() ? '100%' : '85vh'"
-                [style.borderRadius]="phoneMode() ? '0' : '12px'"
-                (pointerdown)="$event.stopPropagation()"
-              >
-                <app-license (closed)="licenseOpen.set(false)" />
-              </div>
-            </div>
-          }
-          @if (moveWorkspaceTargetId()) {
-            <div
-              style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:2100;"
-              (pointerdown)="closeMoveWorkspace()"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="closeMoveWorkspace()"
-              (keydown.space)="closeMoveWorkspace()"
-            >
-              <div
-                style="background:var(--color-surface); padding:24px; border-radius:12px; width:min(640px, 92vw);"
-                (pointerdown)="$event.stopPropagation()"
-              >
-                <h3 style="margin:0 0 16px;">
-                  {{ 'dialogs.moveWorkspaceTitle' | translate: { name: moveWorkspaceLabel() } }}
-                </h3>
-                <div
-                  style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px;"
-                >
-                  @for (ws of dialogService.getWorkspaces(); track ws.id) {
-                    <button
-                      (click)="moveInstanceToWorkspace(ws.id)"
-                      [disabled]="ws.id === moveWorkspaceCurrentId()"
-                      style="padding:10px 18px; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface);"
-                      [style.opacity]="ws.id === moveWorkspaceCurrentId() ? 0.5 : 1"
-                      [style.boxShadow]="
-                        ws.id === moveWorkspaceCurrentId() ? 'none' : '0 0 0 rgba(0,0,0,0)'
-                      "
-                      (mouseenter)="
-                        $any($event.target).style.boxShadow = '0 0 8px rgba(0, 194, 209, 0.6)'
-                      "
-                      (mouseleave)="$any($event.target).style.boxShadow = 'none'"
-                    >
-                      {{ ws.name }}
-                    </button>
-                  }
-                </div>
-                <div style="display:flex; justify-content:flex-end; margin-top:16px;">
-                  <button (click)="closeMoveWorkspace()">{{ 'dialogs.cancel' | translate }}</button>
-                </div>
-              </div>
-            </div>
-          }
-          @if (universeSwitchConfirmOpen()) {
-            <app-confirm-dialog
-              [message]="'universe.switchWarning' | translate"
-              [confirmLabel]="'universe.switchConfirm' | translate"
-              [cancelLabel]="'dialogs.cancel' | translate"
-              (confirmed)="confirmUniverseMenuOpen()"
-              (canceled)="cancelUniverseMenuConfirm()"
-            />
-          }
-          @if (phoneModeUniversePromptOpen()) {
-            <app-confirm-dialog
-              [message]="'universe.phoneModePrompt' | translate"
-              [confirmLabel]="'dialogs.confirm' | translate"
-              [cancelLabel]="'dialogs.cancel' | translate"
-              (confirmed)="confirmPhoneModeUniverseSwitch()"
-              (canceled)="cancelPhoneModeUniverseSwitch()"
-            />
-          }
-        </section>
-      </main>
-
-      @if (showUniverseBar()) {
-        @if (universeBarOpen()) {
-          <div
-            class="universe-bar"
-            [style.left.px]="universeBarLeft()"
-            [style.flexDirection]="phoneMode() ? 'column' : 'row'"
-            [style.maxHeight]="phoneMode() ? '18vh' : null"
-            [style.padding]="phoneMode() ? '8px 10px' : null"
-          >
-            @if (phoneMode() && !inviteesOnline().length) {
-              <div
-                style="width:100%; flex:0 0 auto; text-align:center; font-size:12px; opacity:0.7; white-space:normal; word-break:break-word; margin-bottom:4px;"
-              >
-                {{ 'universe.noInvitees' | translate }}
-              </div>
-            }
-            <div
-              class="universe-invitees"
-              [style.display]="phoneMode() ? 'none' : 'flex'"
-              style="align-items:center; gap:8px; flex:1; min-width:0;"
-            >
-              @if (inviteesOnline().length) {
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                  @for (invitee of inviteesOnline(); track invitee.id) {
-                    <div
-                      class="universe-chip"
-                      [class.universe-chip--active]="universeEditHolder()?.id === invitee.id"
-                    >
-                      <span>{{ invitee.username }}</span>
-                      @if (isUniverseOwner()) {
-                        <button
-                          (click)="grantEdit(invitee)"
-                          title="{{ 'universe.grantEdit' | translate }}"
-                        >
-                          ✏️
-                        </button>
-                      }
-                    </div>
-                  }
-                </div>
-              } @else if (!phoneMode()) {
-                <div
-                  style="flex:1; text-align:center; font-size:12px; opacity:0.7; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-                >
-                  {{ 'universe.noInvitees' | translate }}
-                </div>
-              }
-            </div>
-            <div
-              class="universe-actions"
-              [style.width]="phoneMode() ? '100%' : null"
-              [style.justifyContent]="phoneMode() ? 'space-between' : null"
-              style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto;"
-            >
-              <div class="universe-chip">
-                {{
-                  (isMainGuest() ? 'universe.guestsCountOwned' : 'universe.guestsCount')
-                    | translate: { count: guestCount() }
-                }}
-              </div>
-              <div class="universe-chip">
-                {{
-                  (isMainGuest() ? 'universe.observersCountOwned' : 'universe.observersCount')
-                    | translate: { count: observerCount() }
-                }}
-              </div>
-              @if (universeEditHolder()) {
-                <div class="universe-chip universe-chip--active">
-                  {{ 'universe.editingAs' | translate: { name: universeEditHolder()?.username } }}
-                </div>
-              }
-              @if (isUniverseOwner() && universeEditHolder()?.id !== auth.session().userId) {
-                <button class="square-btn" (click)="takeBackEditPermissions()">
-                  {{ 'universe.takeBackEdit' | translate }}
-                </button>
-              }
-              @if (allowUniverseChat()) {
-                <button class="square-btn" (click)="toggleUniverseChat()">
-                  {{ 'universe.openChat' | translate }}
-                  @if (universeChatUnread() > 0) {
-                    <span>({{ universeChatUnread() }})</span>
-                  }
-                </button>
-              }
-              <button class="square-btn" (click)="toggleUniverseBar()" style="margin-left:auto;">
-                {{ 'universe.collapseBar' | translate }}
-              </button>
-            </div>
-          </div>
-        } @else {
-          <button
-            class="floating-control square-btn"
-            style="right:12px; bottom:12px;"
-            (click)="toggleUniverseBar()"
-          >
-            {{ 'universe.expandBar' | translate }}
-          </button>
-        }
-      }
-
-      @if (universeChatOpen() && !settingsOpen()) {
-        <div class="universe-chat" [style.bottom.px]="universeBarOpen() ? 64 : 16">
-          <div
-            style="display:flex; justify-content:space-between; align-items:center; padding:12px 12px 0;"
-          >
-            <h4 style="margin:0;">{{ 'universe.chatTitle' | translate }}</h4>
-            <button class="square-btn" (click)="universeChatOpen.set(false)">&#9866;</button>
-          </div>
-          <div
-            class="universe-chat__messages"
-            #universeChatScroll
-            (scroll)="onUniverseChatScroll($event)"
-          >
-            @for (msg of universeChatMessages(); track msg.id) {
-              <div style="border:1px solid var(--color-border); border-radius:8px; padding:8px;">
-                <div style="font-size:12px; opacity:0.7; margin-bottom:4px;">
-                  {{ msg.author }}
-                </div>
-                <div style="white-space:pre-wrap;">{{ msg.content }}</div>
-              </div>
-            }
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px; padding:12px;">
-            <textarea
-              #universeChatInput
-              class="universe-chat__input"
-              [value]="universeChatDraft()"
-              (input)="universeChatDraft.set($any($event.target)?.value || '')"
-              (keydown.enter)="onUniverseChatKeydown($event)"
-              [placeholder]="'universe.chatPlaceholder' | translate"
-            ></textarea>
-            <div style="display:flex; justify-content:space-between; gap:8px;">
-              @if (isUniverseOwner()) {
-                <button
-                  class="square-btn"
-                  (click)="requestClearUniverseChat()"
-                  [disabled]="!universeChatMessages().length"
-                  [style.opacity]="universeChatMessages().length ? 1 : 0.5"
-                >
-                  {{ 'universe.chatClear' | translate }}
-                </button>
-              }
-              <button class="square-btn universe-chat__send" (click)="sendUniverseChat()">
-                {{ 'universe.chatSend' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
-      @if (clearUniverseChatConfirmOpen()) {
-        <app-confirm-dialog
-          [message]="'universe.chatClearConfirm' | translate"
-          [confirmLabel]="'universe.chatClear' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="confirmClearUniverseChat()"
-          (canceled)="clearUniverseChatConfirmOpen.set(false)"
-        />
-      }
-
-      @if (deleteTargetId()) {
-        <app-confirm-dialog
-          [message]="'dialogs.confirmDelete' | translate"
-          [confirmLabel]="'dialogs.confirm' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="deleteConfirmed()"
-          (canceled)="deleteTargetId.set(null)"
-        />
-      }
-
-      @if (cloneTargetId()) {
-        <app-confirm-dialog
-          [message]="'dialogs.cloneConfirm' | translate"
-          [confirmLabel]="'dialogs.confirm' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="confirmClone()"
-          (canceled)="cancelClone()"
-        />
-      }
-
-      @if (phoneModeConfirmOpen()) {
-        <app-confirm-dialog
-          [message]="'phone.modeConfirm' | translate"
-          [confirmLabel]="'dialogs.confirm' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="confirmPhoneModeToggle()"
-          (canceled)="cancelPhoneModeToggle()"
-        />
-      }
-
-      @if (archiveTargetId()) {
-        <app-confirm-dialog
-          [message]="'dialogs.confirmArchive' | translate"
-          [confirmLabel]="'dialogs.archive' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="archiveConfirmed()"
-          (canceled)="archiveTargetId.set(null)"
-        />
-      }
-
-      @if (settingsCloseConfirmOpen()) {
-        <app-confirm-dialog
-          [message]="'settings.closeConfirm' | translate"
-          [confirmLabel]="'settings.discard' | translate"
-          [cancelLabel]="'dialogs.cancel' | translate"
-          (confirmed)="confirmCloseSettings()"
-          (canceled)="cancelCloseSettings()"
-        />
-      }
-
-      @if (guestBlocked()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3200;"
-        >
-          <div
-            style="background:var(--color-surface); padding:24px; border-radius:12px; width:360px; text-align:center;"
-          >
-            <p>{{ 'auth.guestDisabled' | translate }}</p>
-            <div style="display:flex; gap:8px; justify-content:center; margin-top:16px;">
-              <button (click)="logout()">{{ 'auth.signIn' | translate }}</button>
-            </div>
-          </div>
-        </div>
-      }
-
-      @if (accessibilityPromptOpen()) {
-        <div
-          style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:1200;"
-        >
-          <div
-            style="background:var(--color-surface); padding:20px; border-radius:8px; width:360px;"
-          >
-            <h3 style="margin-top:0;">{{ 'accessibility.title' | translate }}</h3>
-            <p>{{ 'accessibility.body' | translate }}</p>
-            <label style="display:flex; gap:8px; align-items:center; margin-top: 12px;">
-              <input
-                type="checkbox"
-                [checked]="accessibilityPromptEnabled()"
-                (change)="toggleAccessibilityPrompt()"
-              />
-              {{ 'accessibility.toggle' | translate }}
-            </label>
-            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
-              <button (click)="applyAccessibilityPrompt()">
-                {{ 'accessibility.confirm' | translate }}
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-    }
-  `,
+  templateUrl: './app.component.html',
 })
 export class AppComponent implements OnInit, OnDestroy {
   readonly auth = inject(AuthService);
@@ -1149,6 +373,9 @@ export class AppComponent implements OnInit, OnDestroy {
   private readonly debugPerf = inject(DebugPerfService);
   private readonly realtimeSync = inject(RealtimeSyncService);
   private readonly remoteConflict = inject(RemoteConflictService);
+  private readonly eventOutbox = inject(EventOutboxService);
+  private readonly contextFields = inject(ContextFieldStoreService);
+  private readonly observability = inject(ClientObservabilityService);
   private router = inject(Router);
   isMockMode = computed(() => {
     const backendConnected = this.auth.isBackendConnected();
@@ -1240,6 +467,26 @@ export class AppComponent implements OnInit, OnDestroy {
   private deferredRemoteApplyBannerTimer?: number;
   private suppressRemoteChangeSignature: string | null = null;
   private suppressRemoteChangeUntil = 0;
+  private readonly remoteApplyPipeline = new RemoteApplyPipeline({
+    flush: async (keys) => {
+      await this.applyRemoteStorageChange(keys);
+    },
+    onFlushStart: (keys) => {
+      this.remoteSyncApplyPending = true;
+      this.observability.logInfo('remote.apply.flush_started', { keyCount: keys.length });
+    },
+    onFlushComplete: (keys) => {
+      this.remoteSyncApplyPending = false;
+      this.observability.logInfo('remote.apply.flush_completed', { keyCount: keys.length });
+    },
+    onError: (error, keys) => {
+      this.remoteSyncApplyPending = false;
+      this.observability.logWarn('remote.apply.flush_error', {
+        keyCount: keys.length,
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
+    },
+  });
   workspaceRenameInput = viewChild<ElementRef<HTMLInputElement>>('workspaceRenameInput');
   universeChatScroll = viewChild<ElementRef<HTMLDivElement>>('universeChatScroll');
   universeChatInput = viewChild<ElementRef<HTMLTextAreaElement>>('universeChatInput');
@@ -1391,10 +638,11 @@ export class AppComponent implements OnInit, OnDestroy {
   isLimitedRole = computed(() => ['guest', 'observer', 'invitee'].includes(this.sessionRole()));
   canOpenSettings = computed(() => !this.isLimitedRole());
   canEdit = computed(() => {
-    if (!this.multiUserEnabled()) return true;
-    const holder = this.universeEditHolder();
-    if (!holder) return this.isUniverseOwner();
-    return holder.id === this.auth.session().userId;
+    return this.auth.canEditUniverse({
+      universeOwnerId: this.universeOwnerId(),
+      multiUserEnabled: this.multiUserEnabled(),
+      universeEditHolderId: this.universeEditHolder()?.id ?? null,
+    });
   });
   inviteesOnline = computed(() =>
     this.universePresence().filter((entry) => entry.role === 'invitee'),
@@ -1421,7 +669,16 @@ export class AppComponent implements OnInit, OnDestroy {
   siteTitle = computed(() => this.auth.orgSettings().siteTitle || 'Operator App');
   siteLogoEmoji = computed(() => this.auth.orgSettings().siteLogoEmoji ?? '🌎');
   disabledApps = computed(() => new Set(this.auth.preferences().disabledApps ?? []));
-  visibleAppGroups = computed(() => APP_GROUPS.filter((app) => !this.disabledApps().has(app.id)));
+  visibleAppGroups = computed(() => {
+    const hiddenByConfig = new Set<string>();
+    const capabilities = getOpCapabilities(getOpConfig());
+    if (!capabilities.navigatorApp) {
+      hiddenByConfig.add('navigator');
+    }
+    return APP_GROUPS.filter(
+      (app) => !this.disabledApps().has(app.id) && !hiddenByConfig.has(app.id),
+    );
+  });
   instancesByApp = computed(() => ({
     kanban: this.dialogService.getAppInstances('kanban', { includeArchived: true }),
     todo: this.dialogService.getAppInstances('todo', { includeArchived: true }),
@@ -1504,6 +761,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private viewportReflowRaf: number | null = null;
 
   constructor() {
+    this.eventOutbox.ensureStarted();
     this.translate.setDefaultLang('en');
     const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
     const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
@@ -1689,7 +947,8 @@ export class AppComponent implements OnInit, OnDestroy {
 
     effect(() => {
       if (typeof window === 'undefined') return;
-      const shouldSync = this.auth.isLoggedIn() && this.auth.usesExternalAuth();
+      const shouldSync =
+        this.auth.isLoggedIn() && this.auth.usesExternalAuth() && !this.isMockMode();
       if (!shouldSync) {
         if (this.remoteSyncInterval) {
           window.clearInterval(this.remoteSyncInterval);
@@ -1700,6 +959,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.clearDeferredRemoteApplyTimers();
         this.remoteConflict.clearPending();
         this.remoteConflictBannerVisible.set(false);
+        this.remoteApplyPipeline.clear();
         this.realtimeSync.stop();
         return;
       }
@@ -1754,7 +1014,7 @@ export class AppComponent implements OnInit, OnDestroy {
         this.remoteSyncApplyPending = false;
         return;
       }
-      void this.applyRemoteStorageChange(shellKeys);
+      this.remoteApplyPipeline.schedule(shellKeys);
     });
 
     effect(() => {
@@ -1818,6 +1078,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
     if (this.remoteSyncInterval) window.clearInterval(this.remoteSyncInterval);
     this.clearDeferredRemoteApplyTimers();
+    this.remoteApplyPipeline.destroy();
     this.realtimeSync.stop();
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.scheduleCanvasBoundsUpdate);
@@ -1844,9 +1105,12 @@ export class AppComponent implements OnInit, OnDestroy {
       if (shellKeys.length === 0) return;
       const recentLocalWrite = Date.now() - this.storage.getLastLocalMutationAt() < 5000;
       if (recentLocalWrite) return;
-      this.remoteSyncApplyPending = true;
-    } catch {
+      this.remoteApplyPipeline.schedule(shellKeys);
+    } catch (error) {
       // Ignore transient network/auth issues and retry on next interval.
+      this.observability.logWarn('remote.poll.failed', {
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
     } finally {
       this.remoteSyncInFlight = false;
     }
@@ -1883,6 +1147,16 @@ export class AppComponent implements OnInit, OnDestroy {
       if (shouldRefreshDialogs || shouldRefreshAuth) {
         await this.dialogService.hydrate();
       }
+      this.observability.logInfo('remote.apply.completed', {
+        keyCount: changedKeys.length,
+        force: Boolean(options?.force),
+      });
+    } catch (error) {
+      this.observability.logWarn('remote.apply.failed', {
+        keyCount: changedKeys.length,
+        force: Boolean(options?.force),
+        message: error instanceof Error ? error.message : 'unknown_error',
+      });
     } finally {
       this.remoteSyncApplyPending = false;
     }
@@ -2524,7 +1798,13 @@ export class AppComponent implements OnInit, OnDestroy {
       if (this.phoneMode()) {
         this.setPhoneActiveInstance(result.instance.id, true);
       }
+      this.publishFocusContext(result.instance.id, 'inspect');
     }
+  }
+
+  onDialogBringToFront(instance: DialogInstance) {
+    this.dialogService.bringToFront(instance.id);
+    this.publishFocusContext(instance.id, 'inspect');
   }
 
   restoreInstance(instanceId: string) {
@@ -2539,6 +1819,7 @@ export class AppComponent implements OnInit, OnDestroy {
       this.dialogService.restoreInstance(instanceId);
     }
     this.dialogService.bringToFront(instanceId);
+    this.publishFocusContext(instanceId, 'inspect');
     if (this.phoneMode()) {
       this.setPhoneActiveInstance(instanceId);
     }
@@ -3104,6 +2385,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!universeId) return;
     const session = this.auth.session();
     if (!session.userId) return;
+    const focus = this.contextFields.focus(universeId);
     const username =
       this.auth.actualUser()?.username ??
       session.sessionUsername ??
@@ -3114,6 +2396,9 @@ export class AppComponent implements OnInit, OnDestroy {
       role: this.sessionRole(),
       ownerId: this.universeOwnerId() ?? '',
       lastSeen: Date.now(),
+      activeInstanceId: focus?.activeInstanceId ?? null,
+      activeObjectId: focus?.activeObjectRef?.id ?? null,
+      activeMode: focus?.focusMode ?? 'inspect',
     };
     this.auth.touchUniversePresence(universeId, entry);
     this.universePresence.set(this.auth.getUniversePresence(universeId));
@@ -3229,7 +2514,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   grantEdit(invitee: UniversePresenceEntry) {
-    if (!this.isUniverseOwner()) return;
+    if (
+      !this.auth.canGrantPencil({
+        universeOwnerId: this.universeOwnerId(),
+        multiUserEnabled: this.multiUserEnabled(),
+        universeEditHolderId: this.universeEditHolder()?.id ?? null,
+      })
+    ) {
+      return;
+    }
     const universeId = this.universeId();
     if (!universeId) return;
     const holder: UniverseEditHolder = {
@@ -3242,7 +2535,15 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   takeBackEditPermissions() {
-    if (!this.isUniverseOwner()) return;
+    if (
+      !this.auth.canGrantPencil({
+        universeOwnerId: this.universeOwnerId(),
+        multiUserEnabled: this.multiUserEnabled(),
+        universeEditHolderId: this.universeEditHolder()?.id ?? null,
+      })
+    ) {
+      return;
+    }
     const universeId = this.universeId();
     if (!universeId) return;
     const ownerName = this.auth.actualUser()?.username ?? 'Owner';
@@ -3270,10 +2571,11 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   forceLogoutToMain() {
-    this.auth.logout();
     if (typeof window !== 'undefined') {
-      window.location.href = '/';
+      window.location.href = '/logout';
+      return;
     }
+    void this.router.navigateByUrl('/logout');
   }
 
   startRename(instance: { id: string; titleOverride?: string; titleKey: string; appId: AppId }) {
@@ -3537,14 +2839,30 @@ export class AppComponent implements OnInit, OnDestroy {
     if (typeof window === 'undefined') return;
     if (this.logoutRedirectInProgress) return;
     this.logoutRedirectInProgress = true;
-    const externalAuth = this.auth.usesExternalAuth();
-    this.auth.logout();
+    const logoutMode = this.auth.logoutEverywhere();
     void this.storage.removeItem('op_session');
     this.forceLoggedOut.set(true);
-    if (externalAuth) {
-      this.auth.startExternalLogout();
+    if (logoutMode === 'external') {
       return;
     }
     void this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
+  }
+
+  private currentUniverseId() {
+    const key = this.auth.storageUserKey();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  private publishFocusContext(instanceId: string, mode: 'edit' | 'inspect' | 'search' | 'present') {
+    const universeId = this.currentUniverseId();
+    if (!universeId) return;
+    this.contextFields.setFocus(
+      universeId,
+      {
+        activeInstanceId: instanceId,
+      },
+      { mode, sourceInstanceId: instanceId },
+    );
   }
 }

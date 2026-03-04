@@ -75,4 +75,30 @@ describe('StorageService', () => {
     await service.removeItem('k');
     expect(service.getLastLocalMutationAt()).toBeGreaterThanOrEqual(afterSet);
   });
+
+  it('applies built-in storage migrations during hydrate', async () => {
+    adapter.store.set('op_org_settings', '{not-json');
+    adapter.store.set('op_login_phone_mode', '1');
+
+    await service.hydrate();
+
+    expect(adapter.store.has('op_org_settings')).toBe(false);
+    expect(adapter.store.get('op_login_phone_mode')).toBe('true');
+    expect(adapter.store.has('op_storage_migrations_v1')).toBe(true);
+  });
+
+  it('returns fallback for invalid validated json payloads', async () => {
+    adapter.store.set('contract_key', JSON.stringify({ ok: false }));
+    await service.hydrate();
+
+    const value = service.getJsonSyncValidated(
+      'contract_key',
+      { ok: true },
+      (raw): raw is { ok: true } => {
+        return !!raw && typeof raw === 'object' && (raw as { ok?: unknown }).ok === true;
+      },
+    );
+
+    expect(value).toEqual({ ok: true });
+  });
 });

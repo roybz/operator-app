@@ -1,14 +1,21 @@
-import { Component, Input, OnInit, effect, inject, signal } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { TranslateModule } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
+import { getOpCapabilities, getOpConfig } from '../../../../core/op-config';
 
 interface NavigatorTab {
   id: string;
@@ -23,10 +30,150 @@ interface NavigatorState {
   activeTabId: string;
 }
 
+interface NavigatorBookmark {
+  id: string;
+  labelKey: string;
+  url: string;
+}
+
 const stateStore = new Map<string, NavigatorState>();
 const STORAGE_PREFIX = 'op_app_state:navigator';
-// Temporarily disabled to prevent iframe navigation misuse.
-const NAVIGATION_DISABLED = true;
+const ABOUT_BLANK = 'about:blank';
+const DEFAULT_BOOKMARKS: NavigatorBookmark[] = [
+  { id: 'example', labelKey: 'navigator.bookmarkExample', url: 'https://example.com' },
+  { id: 'httpbin', labelKey: 'navigator.bookmarkHttpbin', url: 'https://httpbin.org' },
+  {
+    id: 'openstreetmap',
+    labelKey: 'navigator.bookmarkOpenStreetMap',
+    url: 'https://www.openstreetmap.org/export/embed.html?bbox=-0.15%2C51.5%2C-0.1%2C51.52&layer=mapnik',
+  },
+  {
+    id: 'youtubeEmbed',
+    labelKey: 'navigator.bookmarkYouTubeEmbed',
+    url: 'https://www.youtube-nocookie.com/embed/M7lc1UVf-VE',
+  },
+  {
+    id: 'vimeoEmbed',
+    labelKey: 'navigator.bookmarkVimeoEmbed',
+    url: 'https://player.vimeo.com/video/76979871',
+  },
+];
+
+const getNavigatorPolicy = () => {
+  const config = getOpConfig();
+  const capabilities = getOpCapabilities(config);
+  const allowedOrigins = (config.navigatorAllowedOrigins ?? [])
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length > 0);
+  const enabled = capabilities.navigatorApp && Boolean(config.navigatorEnabled);
+  return { enabled, allowedOrigins };
+};
+
+const isAllowedNavigatorUrl = (value: string, allowedOrigins: string[]) => {
+  if (value === ABOUT_BLANK) return true;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') return false;
+    if (!allowedOrigins.length) return false;
+    const origin = parsed.origin.toLowerCase();
+    return allowedOrigins.some((allowed) => allowed.toLowerCase() === origin);
+  } catch {
+    return false;
+  }
+};
+
+const isTrustedBookmarkUrl = (value: string) => {
+  if (value === ABOUT_BLANK) return true;
+  return DEFAULT_BOOKMARKS.some((bookmark) => bookmark.url === value);
+};
+
+const normalizeTab = (candidate: Partial<NavigatorTab> | null | undefined): NavigatorTab | null => {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : null;
+  if (!id) return null;
+  const history = Array.isArray(candidate.history)
+    ? candidate.history.filter(
+        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+      )
+    : [];
+  const fallbackUrl =
+    typeof candidate.url === 'string' && candidate.url.trim().length > 0
+      ? candidate.url
+      : ABOUT_BLANK;
+  const safeHistory = history.length ? history : [fallbackUrl];
+  const index =
+    typeof candidate.historyIndex === 'number' && Number.isFinite(candidate.historyIndex)
+      ? Math.max(0, Math.min(safeHistory.length - 1, Math.floor(candidate.historyIndex)))
+      : safeHistory.length - 1;
+  const url = safeHistory[index] ?? safeHistory[safeHistory.length - 1] ?? ABOUT_BLANK;
+  return {
+    id,
+    url,
+    title:
+      typeof candidate.title === 'string' && candidate.title.trim().length > 0
+        ? candidate.title
+        : formatTitle(url),
+    history: safeHistory,
+    historyIndex: index,
+  };
+};
+
+const normalizeNavigatorState = (
+  candidate: Partial<NavigatorState> | null | undefined,
+): NavigatorState => {
+  const tabs = Array.isArray(candidate?.tabs)
+    ? candidate.tabs
+        .map((tab) => normalizeTab(tab))
+        .filter((tab): tab is NavigatorTab => Boolean(tab))
+    : [];
+  if (!tabs.length) {
+    const fallback = createTab(ABOUT_BLANK);
+    return { tabs: [fallback], activeTabId: fallback.id };
+  }
+  const activeTabId =
+    typeof candidate?.activeTabId === 'string' &&
+    tabs.some((tab) => tab.id === candidate.activeTabId)
+      ? candidate.activeTabId
+      : tabs[0].id;
+  return { tabs, activeTabId };
+};
+
+export const mergeNavigatorStatesForSync = (
+  remoteState: NavigatorState,
+  localState: NavigatorState,
+): NavigatorState => {
+  const tabs = new Map<string, NavigatorTab>();
+  for (const remote of remoteState.tabs) {
+    tabs.set(remote.id, remote);
+  }
+  for (const local of localState.tabs) {
+    const existing = tabs.get(local.id);
+    if (!existing) {
+      tabs.set(local.id, local);
+      continue;
+    }
+    const history = [...existing.history];
+    for (const entry of local.history) {
+      if (history[history.length - 1] === entry) continue;
+      history.push(entry);
+    }
+    const clampedIndex = Math.max(0, Math.min(history.length - 1, local.historyIndex));
+    const url = history[clampedIndex] ?? local.url;
+    tabs.set(local.id, {
+      ...existing,
+      ...local,
+      history,
+      historyIndex: clampedIndex,
+      url,
+      title: local.title || formatTitle(url),
+    });
+  }
+  const mergedTabs = Array.from(tabs.values());
+  const activeTabId = mergedTabs.some((tab) => tab.id === localState.activeTabId)
+    ? localState.activeTabId
+    : (mergedTabs[0]?.id ?? '');
+  return { tabs: mergedTabs, activeTabId };
+};
 
 export function clearNavigatorState(instanceId: string, storage: StorageService) {
   clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
@@ -59,7 +206,7 @@ const formatTitle = (url: string) => {
 @Component({
   selector: 'app-navigator',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   styles: [
     `
       :host {
@@ -86,37 +233,84 @@ const formatTitle = (url: string) => {
   template: `
     <div class="navigator-shell">
       <div class="navigator-toolbar" style="display:flex; gap:8px; align-items:center;">
-        <button (click)="goBack()" [disabled]="navigationDisabled">←</button>
-        <button (click)="goForward()" [disabled]="navigationDisabled">→</button>
-        <button (click)="refresh()" [disabled]="navigationDisabled">⟳</button>
+        <button type="button" (click)="goBack()" [disabled]="navigationDisabled" aria-label="Go back">
+          &larr;
+        </button>
+        <button
+          type="button"
+          (click)="goForward()"
+          [disabled]="navigationDisabled"
+          aria-label="Go forward"
+        >
+          &rarr;
+        </button>
+        <button type="button" (click)="refresh()" [disabled]="navigationDisabled" aria-label="Refresh tab">
+          &#x27f3;
+        </button>
         <input
           type="text"
           [value]="activeTab()?.url"
           (change)="navigate($event)"
           [disabled]="navigationDisabled"
+          aria-label="Navigator URL input"
           style="flex:1; padding:6px;"
         />
-        <button (click)="addTab()" [disabled]="navigationDisabled">+</button>
+        <button type="button" (click)="addTab()" [disabled]="navigationDisabled" aria-label="Add tab">+</button>
+        <button type="button" (click)="toggleBookmarks()" [disabled]="navigationDisabled">
+          {{ 'navigator.bookmarks' | translate }}
+        </button>
       </div>
+
+      @if (showBookmarks() && !navigationDisabled) {
+        <div
+          style="display:flex; gap:8px; flex-wrap:wrap; border:1px solid var(--color-border); border-radius:6px; padding:8px;"
+        >
+          @for (bookmark of bookmarks; track bookmark.id) {
+            <button type="button" (click)="openBookmark(bookmark.url)">
+              {{ bookmark.labelKey | translate }}
+            </button>
+          }
+        </div>
+      }
 
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
         @for (tab of state().tabs; track tab.id) {
           <div style="display:flex; align-items:center; gap:4px;">
             <button
+              type="button"
               (click)="activateTab(tab.id)"
               [style.fontWeight]="tab.id === state().activeTabId ? '600' : '400'"
+              [attr.aria-label]="'Activate tab: ' + tab.title"
             >
               {{ tab.title }}
             </button>
-            <button (click)="closeTab(tab.id)">✕</button>
+            <button type="button" (click)="closeTab(tab.id)" [attr.aria-label]="'Close tab: ' + tab.title">
+              &times;
+            </button>
           </div>
         }
       </div>
 
       <div style="flex:1; border:1px solid #ccc; border-radius:6px; overflow:hidden;">
-        @if (activeTab()) {
+        @if (activeTab() && activeTabBlocked()) {
+          <div
+            style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:8px; padding:16px;"
+          >
+            <strong>{{ 'navigator.blockedTitle' | translate }}</strong>
+            <p style="margin:0;">
+              {{ 'navigator.blockedMessage' | translate }}
+            </p>
+            <p style="margin:0; opacity:0.8; word-break:break-all;">
+              {{ activeTab()?.url }}
+            </p>
+            <button type="button" (click)="openActiveInNewTab()">
+              {{ 'navigator.openExternal' | translate }}
+            </button>
+          </div>
+        } @else if (activeTab()) {
           <iframe
             [attr.lang]="language()"
+            [attr.title]="activeTab()?.title || 'Navigator content'"
             [src]="safeUrl(activeTab()?.url)"
             style="width:100%; height:100%; border:0;"
           ></iframe>
@@ -125,31 +319,46 @@ const formatTitle = (url: string) => {
     </div>
   `,
 })
-export class NavigatorComponent implements OnInit {
+export class NavigatorComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
   private prefs = inject(AppPreferencesService);
   private sanitizer = inject(DomSanitizer);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   state = signal<NavigatorState>({ tabs: [], activeTabId: '' });
   language = signal('en');
-  navigationDisabled = NAVIGATION_DISABLED;
+  showBookmarks = signal(true);
+  bookmarks = DEFAULT_BOOKMARKS;
+  private readonly navigatorPolicy = getNavigatorPolicy();
+  navigationDisabled = !this.navigatorPolicy.enabled;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
       const fallback = typeof navigator !== 'undefined' ? navigator.language.split('-')[0] : 'en';
       this.language.set(this.prefs.language() || fallback);
     });
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
   }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as NavigatorState;
+        const parsed = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
         this.state.set(parsed);
         stateStore.set(this.instanceId, parsed);
         return;
@@ -159,15 +368,19 @@ export class NavigatorComponent implements OnInit {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...stored, tabs: stored.tabs.map((tab) => ({ ...tab })) });
+      this.state.set(normalizeNavigatorState(stored));
       return;
     }
-    const initialUrl = 'about:blank';
+    const initialUrl = ABOUT_BLANK;
     const tab = createTab(initialUrl);
     const next = { tabs: [tab], activeTabId: tab.id };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
-    this.persistState();
+    this.persistState({ immediate: true });
+  }
+
+  ngOnDestroy() {
+    this.persistQueue.destroy();
   }
 
   private commit(next: NavigatorState) {
@@ -195,7 +408,7 @@ export class NavigatorComponent implements OnInit {
   closeTab(id: string) {
     const tabs = this.state().tabs.filter((tab) => tab.id !== id);
     if (!tabs.length) {
-      const fallback = createTab('about:blank');
+      const fallback = createTab(ABOUT_BLANK);
       this.commit({ tabs: [fallback], activeTabId: fallback.id });
       return;
     }
@@ -204,7 +417,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   navigate(event: Event) {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const input = (event.target as HTMLInputElement).value.trim();
     if (!input) return;
     const url = input.includes('://') ? input : `https://${input}`;
@@ -222,8 +435,28 @@ export class NavigatorComponent implements OnInit {
     this.updateTab(nextTab);
   }
 
+  toggleBookmarks() {
+    this.showBookmarks.set(!this.showBookmarks());
+  }
+
+  openBookmark(url: string) {
+    if (this.navigationDisabled) return;
+    const active = this.activeTab();
+    if (!active) return;
+    const history = active.history.slice(0, active.historyIndex + 1);
+    history.push(url);
+    const nextTab = {
+      ...active,
+      url,
+      title: formatTitle(url),
+      history,
+      historyIndex: history.length - 1,
+    };
+    this.updateTab(nextTab);
+  }
+
   goBack() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active || active.historyIndex === 0) return;
     const nextIndex = active.historyIndex - 1;
@@ -232,7 +465,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   goForward() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active || active.historyIndex >= active.history.length - 1) return;
     const nextIndex = active.historyIndex + 1;
@@ -241,7 +474,7 @@ export class NavigatorComponent implements OnInit {
   }
 
   refresh() {
-    if (NAVIGATION_DISABLED) return;
+    if (this.navigationDisabled) return;
     const active = this.activeTab();
     if (!active) return;
     this.updateTab({ ...active });
@@ -252,13 +485,74 @@ export class NavigatorComponent implements OnInit {
     this.commit({ ...this.state(), tabs });
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const next = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      let remoteState: NavigatorState | null = null;
+      try {
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeNavigatorState(JSON.parse(raw) as NavigatorState);
+        }
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeNavigatorStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState({ immediate: true });
+        return 'handled' as const;
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
+  }
+
+  activeTabBlocked() {
+    const tab = this.activeTab();
+    if (!tab || this.navigationDisabled) return false;
+    return this.resolveNavigableUrl(tab.url) === ABOUT_BLANK && tab.url !== ABOUT_BLANK;
+  }
+
+  openActiveInNewTab() {
+    const tab = this.activeTab();
+    if (!tab || !tab.url || tab.url === ABOUT_BLANK || typeof window === 'undefined') return;
+    window.open(tab.url, '_blank', 'noopener,noreferrer');
+  }
+
+  private resolveNavigableUrl(value: string) {
+    if (isTrustedBookmarkUrl(value)) return value;
+    if (isAllowedNavigatorUrl(value, this.navigatorPolicy.allowedOrigins)) return value;
+    return ABOUT_BLANK;
   }
 
   safeUrl(url?: string): SafeResourceUrl {
-    const next = NAVIGATION_DISABLED ? 'about:blank' : (url ?? 'about:blank');
+    const candidate = this.navigationDisabled ? ABOUT_BLANK : (url ?? ABOUT_BLANK);
+    const next = this.resolveNavigableUrl(candidate);
     return this.sanitizer.bypassSecurityTrustResourceUrl(next);
   }
 }

@@ -15,10 +15,15 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 interface ClockEntry {
   id: string;
@@ -57,6 +62,58 @@ const fallbackZones = [
 
 const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeClockState = (
+  raw: unknown,
+  fallbackZone: string,
+  fallbackFormat: '12h' | '24h',
+): ClockState => {
+  const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const formatValue = rawObj['format'];
+  const format =
+    formatValue === '24h' || formatValue === '12h'
+      ? (formatValue as '12h' | '24h')
+      : fallbackFormat;
+  const clocksValue = rawObj['clocks'];
+  if (Array.isArray(clocksValue) && clocksValue.length) {
+    const clocks = clocksValue.map((clock) => {
+      const clockObj = clock && typeof clock === 'object' ? (clock as Record<string, unknown>) : {};
+      const idValue = clockObj['id'];
+      const timeZoneValue = clockObj['timeZone'];
+      return {
+        id: typeof idValue === 'string' && idValue.trim() ? idValue : uid('clock'),
+        timeZone:
+          typeof timeZoneValue === 'string' && timeZoneValue.trim() ? timeZoneValue : fallbackZone,
+      };
+    });
+    return { clocks, format };
+  }
+  const timeZoneValue = rawObj['timeZone'];
+  if (typeof timeZoneValue === 'string' && timeZoneValue.trim()) {
+    return { clocks: [{ id: uid('clock'), timeZone: timeZoneValue }], format };
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return { clocks: [{ id: uid('clock'), timeZone: raw }], format };
+  }
+  return { clocks: [{ id: uid('clock'), timeZone: fallbackZone }], format };
+};
+
+export const mergeClockStatesForSync = (
+  remoteState: ClockState,
+  localState: ClockState,
+): ClockState => {
+  const byZone = new Map<string, ClockEntry>();
+  for (const clock of remoteState.clocks) {
+    byZone.set(clock.timeZone, clock);
+  }
+  for (const clock of localState.clocks) {
+    byZone.set(clock.timeZone, clock);
+  }
+  return {
+    clocks: Array.from(byZone.values()),
+    format: localState.format,
+  };
+};
 
 @Component({
   selector: 'app-clock',
@@ -161,6 +218,7 @@ export class ClockComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   private interval?: number;
   private now = signal(new Date());
   state = signal<ClockState>({
@@ -169,6 +227,13 @@ export class ClockComponent implements OnInit, OnDestroy {
   });
   timeZoneOptions = signal<{ id: string; label: string }[]>([]);
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
 
   constructor() {
     effect(() => {
@@ -176,13 +241,17 @@ export class ClockComponent implements OnInit, OnDestroy {
       const language = this.prefs.language() || fallback || 'en';
       this.translate.use(language);
     });
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
   }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as unknown;
@@ -212,7 +281,7 @@ export class ClockComponent implements OnInit, OnDestroy {
       this.state.set(next);
       stateStore.set(this.instanceId, next);
       this.initializeOptions(tz);
-      this.persistState();
+      this.persistState({ immediate: true });
     }
 
     this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
@@ -220,6 +289,7 @@ export class ClockComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.interval) window.clearInterval(this.interval);
+    this.persistQueue.destroy();
   }
 
   closeSettings() {
@@ -339,39 +409,59 @@ export class ClockComponent implements OnInit, OnDestroy {
     return [preferred, ...filtered];
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const normalized = this.normalizeState(parsed);
+      this.state.set(normalized);
+      stateStore.set(this.instanceId, normalized);
+      this.initializeOptions(normalized.clocks[0]?.timeZone || this.prefs.timeZone());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      let remoteState: ClockState | null = null;
+      try {
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = this.normalizeState(JSON.parse(raw) as unknown);
+        }
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeClockStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.initializeOptions(merged.clocks[0]?.timeZone || this.prefs.timeZone());
+        this.persistState({ immediate: true });
+        return 'handled' as const;
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   private normalizeState(raw: unknown): ClockState {
     const fallbackZone = this.prefs.timeZone() || 'UTC';
     const prefFormat = this.prefs.timeFormat() === '24h' ? '24h' : '12h';
-    const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-    const formatValue = rawObj['format'];
-    const format =
-      formatValue === '24h' || formatValue === '12h' ? (formatValue as '12h' | '24h') : prefFormat;
-    const clocksValue = rawObj['clocks'];
-    if (Array.isArray(clocksValue) && clocksValue.length) {
-      const clocks = clocksValue.map((clock) => {
-        const clockObj =
-          clock && typeof clock === 'object' ? (clock as Record<string, unknown>) : {};
-        const idValue = clockObj['id'];
-        const timeZoneValue = clockObj['timeZone'];
-        return {
-          id: typeof idValue === 'string' ? idValue : uid('clock'),
-          timeZone: typeof timeZoneValue === 'string' ? timeZoneValue : fallbackZone,
-        };
-      });
-      return { clocks, format };
-    }
-    const timeZoneValue = rawObj['timeZone'];
-    if (typeof timeZoneValue === 'string') {
-      return { clocks: [{ id: uid('clock'), timeZone: timeZoneValue }], format };
-    }
-    if (typeof raw === 'string') {
-      return { clocks: [{ id: uid('clock'), timeZone: raw }], format };
-    }
-    return { clocks: [{ id: uid('clock'), timeZone: fallbackZone }], format };
+    return normalizeClockState(raw, fallbackZone, prefFormat);
   }
 }

@@ -25,9 +25,16 @@ describe('InstancePersistQueue', () => {
 
   it('retries with backoff on 429', async () => {
     let calls = 0;
+    let firstAt = 0;
+    let secondAt = 0;
     const queue = new InstancePersistQueue({
       flush: async () => {
         calls += 1;
+        if (calls === 1) {
+          firstAt = Date.now();
+        } else if (calls === 2) {
+          secondAt = Date.now();
+        }
         if (calls === 1) {
           throw Object.assign(new Error('Too Many Requests'), { status: 429 });
         }
@@ -38,12 +45,34 @@ describe('InstancePersistQueue', () => {
     });
 
     queue.schedule({ immediate: true });
-    await sleep(5);
+    await sleep(70);
+    expect(calls).toBe(2);
+    expect(secondAt - firstAt).toBeGreaterThanOrEqual(30);
+    queue.destroy();
+  });
+
+  it('respects retry-after delay when present on 429 errors', async () => {
+    let calls = 0;
+    const queue = new InstancePersistQueue({
+      flush: async () => {
+        calls += 1;
+        if (calls === 1) {
+          throw Object.assign(new Error('Too Many Requests'), { status: 429, retryAfterMs: 80 });
+        }
+      },
+      minDelayMs: 5,
+      baseBackoffMs: 10,
+      maxBackoffMs: 200,
+    });
+
+    queue.schedule({ immediate: true });
+    await sleep(20);
     expect(calls).toBe(1);
 
-    await sleep(10);
+    await sleep(40);
     expect(calls).toBe(1);
-    await sleep(45);
+
+    await sleep(50);
     expect(calls).toBe(2);
     queue.destroy();
   });

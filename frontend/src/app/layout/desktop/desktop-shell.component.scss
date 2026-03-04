@@ -1,0 +1,114 @@
+.desktop-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: width 180ms ease;
+  box-sizing: border-box;
+  height: 100%;
+  max-height: 100%;
+  overflow-x: hidden;
+}
+
+.desktop-shell__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.desktop-shell__btn {
+  margin-bottom: 8px;
+  padding: 5px 6px;
+  border-radius: 3px;
+}
+
+.desktop-shell__btn--full {
+  width: 100%;
+}
+
+.desktop-shell__btn--dimmed {
+  opacity: 0.5;
+}
+
+.desktop-shell__reset {
+  margin-bottom: 12px;
+}
+
+.desktop-shell__reset-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.desktop-shell__divider {
+  border-top: 1px solid var(--color-border);
+  margin: 12px 0;
+  opacity: 0.6;
+}
+
+.desktop-shell__apps {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.desktop-shell__footer {
+  margin-top: 12px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.desktop-shell__display-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.desktop-shell__display-label {
+  margin-left: 4px;
+  font-size: 14px;
+}
+
+.desktop-shell__gear {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.desktop-shell__mode-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.desktop-shell__canvas-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-shell__size-input {
+  width: 90px;
+  padding: 4px;
+}
+
+.desktop-shell__zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-shell__zoom-controls--divider {
+  border-top: 1px solid var(--color-border);
+  padding-top: 8px;
+  margin-top: 8px;
+}

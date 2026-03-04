@@ -1,3 +1,19 @@
+## Cognitive Principles
+
+Operator follows eight cognitive primitives:
+
+- Salience
+- Visual Permanence
+- Retrieval Latency
+- Context Bandwidth
+- Structural Coherence
+- Feedback Loops
+- Cognitive Momentum
+- Collective Intelligence
+
+All contributions should reinforce at least one of these primitives.
+Features that increase informational entropy should be avoided.
+
 # Operator App - AI Contributor Notes
 
 This repository contains a standalone Angular frontend in `frontend/`.
@@ -25,6 +41,7 @@ This repository contains a standalone Angular frontend in `frontend/`.
 
 ## Conventions
 
+- Repository coding/testing/style conventions live in `docs/conventions.md`.
 - Any new UI string goes into all i18n files (English text is acceptable).
 - New application types must be added to:
   - `features/dependencies/app-types.ts`
@@ -70,6 +87,7 @@ Runtime config lives in `frontend/src/assets/op-config.js`.
 - Unit tests: `npm run test:unit`
 - Lint: `npm run lint`
 - E2E: `npm run test:e2e`
+- Security audit: `npm run test:security`
 - "Run checks and report results" should run `test:unit`, `lint`, and `build`, then summarize
   pass/fail and notable warnings/errors.
 - Add or update focused tests when changing cross-cutting state logic:

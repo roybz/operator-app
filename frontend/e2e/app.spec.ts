@@ -146,3 +146,30 @@ test('can add and delete a todo in mock mode', async ({ page }) => {
   });
   await expect(page.getByText('Buy milk')).toHaveCount(0);
 });
+
+test('can open all app types from the registry', async ({ page }) => {
+  await enterApp(page);
+
+  const appOpenPlan: Array<{ id: string; selector: string }> = [
+    { id: 'kanban', selector: 'app-kanban' },
+    { id: 'todo', selector: 'app-todo-page' },
+    { id: 'calculator', selector: 'app-calculator' },
+    { id: 'timer', selector: 'app-timer' },
+    { id: 'navigator', selector: 'app-navigator' },
+    { id: 'notes', selector: 'app-notes' },
+    { id: 'stickyNotes', selector: 'app-sticky-notes' },
+    { id: 'calendar', selector: 'app-calendar' },
+    { id: 'clock', selector: 'app-clock' },
+    { id: 'dataTable', selector: 'app-data-table' },
+  ];
+
+  for (const plan of appOpenPlan) {
+    await page.evaluate((appId: string) => {
+      const ng = (window as any).ng;
+      const root = document.querySelector('app-root');
+      const component = ng?.getComponent?.(root);
+      component?.openApp?.(appId);
+    }, plan.id);
+    await expect(page.locator(plan.selector).first()).toBeVisible();
+  }
+});

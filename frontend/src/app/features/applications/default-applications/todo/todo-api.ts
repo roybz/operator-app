@@ -165,6 +165,102 @@ export function serializeTodoState(state: TodoState) {
   return JSON.stringify(normalizeState(state));
 }
 
+export function parseTodoState(raw: string): TodoState | null {
+  try {
+    return normalizeState(JSON.parse(raw) as Partial<TodoState>);
+  } catch {
+    return null;
+  }
+}
+
+function mergeSubtasks(
+  remote: TodoSubtask[] | undefined,
+  local: TodoSubtask[] | undefined,
+): TodoSubtask[] {
+  const remoteList = Array.isArray(remote) ? remote : [];
+  const localList = Array.isArray(local) ? local : [];
+  const remoteMap = new Map(remoteList.map((item) => [item.id, item] as const));
+  const localMap = new Map(localList.map((item) => [item.id, item] as const));
+  const merged: TodoSubtask[] = [];
+  for (const sub of remoteList) {
+    merged.push(localMap.get(sub.id) ?? sub);
+  }
+  for (const sub of localList) {
+    if (!remoteMap.has(sub.id)) merged.push(sub);
+  }
+  return merged;
+}
+
+function mergeTodos(remote: Todo[] | undefined, local: Todo[] | undefined): Todo[] {
+  const remoteList = Array.isArray(remote) ? remote : [];
+  const localList = Array.isArray(local) ? local : [];
+  const remoteMap = new Map(remoteList.map((item) => [item.id, item] as const));
+  const localMap = new Map(localList.map((item) => [item.id, item] as const));
+  const merged: Todo[] = [];
+  for (const todo of remoteList) {
+    const localTodo = localMap.get(todo.id);
+    if (!localTodo) {
+      merged.push(todo);
+      continue;
+    }
+    merged.push({
+      ...todo,
+      ...localTodo,
+      subtasks: mergeSubtasks(todo.subtasks, localTodo.subtasks),
+    });
+  }
+  for (const todo of localList) {
+    if (!remoteMap.has(todo.id)) merged.push(todo);
+  }
+  return merged;
+}
+
+export function mergeTodoStates(remoteState: TodoState, localState: TodoState): TodoState {
+  const remote = normalizeState(remoteState);
+  const local = normalizeState(localState);
+  const localProjectsById = new Map(
+    local.projects.map((project) => [project.id, project] as const),
+  );
+  const remoteProjectsById = new Map(
+    remote.projects.map((project) => [project.id, project] as const),
+  );
+
+  const mergedProjects: TodoProject[] = [];
+  for (const remoteProject of remote.projects) {
+    const localProject = localProjectsById.get(remoteProject.id);
+    if (!localProject) {
+      mergedProjects.push(remoteProject);
+      continue;
+    }
+    mergedProjects.push({
+      ...remoteProject,
+      ...localProject,
+      todos: mergeTodos(remoteProject.todos, localProject.todos),
+    });
+  }
+  for (const localProject of local.projects) {
+    if (!remoteProjectsById.has(localProject.id)) mergedProjects.push(localProject);
+  }
+
+  const ensuredProjects = mergedProjects.length ? mergedProjects : [defaultProject()];
+  const activeProjectId = ensuredProjects.some((project) => project.id === local.activeProjectId)
+    ? local.activeProjectId
+    : ensuredProjects.some((project) => project.id === remote.activeProjectId)
+      ? remote.activeProjectId
+      : ensuredProjects[0].id;
+
+  return normalizeState({
+    version: 2,
+    projectsEnabled: remote.projectsEnabled || local.projectsEnabled,
+    projects: ensuredProjects,
+    activeProjectId,
+    subtaskCollapsed: {
+      ...(remote.subtaskCollapsed ?? {}),
+      ...(local.subtaskCollapsed ?? {}),
+    },
+  });
+}
+
 export function cloneTodoState(
   storage: StorageLike,
   fromInstanceId: string,

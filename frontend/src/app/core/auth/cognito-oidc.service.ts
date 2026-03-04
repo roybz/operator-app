@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { getOpConfig, type OpCognitoConfig } from '../op-config';
+import { getOpCapabilities, getOpConfig, type OpCognitoConfig } from '../op-config';
 
 interface StoredCognitoSession {
   accessToken: string;
@@ -25,7 +25,8 @@ interface OidcProfile {
 
 const SESSION_STORAGE_STATE_KEY = 'op_cognito_oauth_state';
 const SESSION_STORAGE_VERIFIER_KEY = 'op_cognito_oauth_verifier';
-const LOCAL_SESSION_KEY = 'op_cognito_session_v1';
+const SESSION_KEY = 'op_cognito_session_v1';
+const LOGOUT_MARKER_KEY = 'op_cognito_logged_out_v1';
 
 @Injectable({ providedIn: 'root' })
 export class CognitoOidcService {
@@ -33,7 +34,12 @@ export class CognitoOidcService {
   readonly authenticated = signal(Boolean(this.sessionSignal()));
 
   isEnabled() {
-    return this.authProvider() === 'cognito' && Boolean(this.config().enabled !== false);
+    const capabilities = getOpCapabilities();
+    return (
+      capabilities.auth &&
+      this.authProvider() === 'cognito' &&
+      Boolean(this.config().enabled !== false)
+    );
   }
 
   authProvider() {
@@ -81,6 +87,7 @@ export class CognitoOidcService {
   }
 
   hasSession() {
+    if (this.wasExplicitlyLoggedOut()) return false;
     this.syncStoredSession();
     return Boolean(this.sessionSignal());
   }
@@ -102,7 +109,17 @@ export class CognitoOidcService {
   }
 
   async startLogin() {
+    await this.startAuthorizeFlow();
+  }
+
+  async startSignup() {
+    if (!getOpCapabilities().publicSignupEnabled) return;
+    await this.startAuthorizeFlow({ screenHint: 'signup' });
+  }
+
+  private async startAuthorizeFlow(options?: { screenHint?: 'signup' }) {
     if (!this.isEnabled() || !this.isConfigured() || typeof window === 'undefined') return;
+    this.clearLogoutMarker();
     const state = this.randomString(32);
     const verifier = this.randomString(64);
     const challenge = await this.pkceChallenge(verifier);
@@ -118,12 +135,16 @@ export class CognitoOidcService {
     authorize.searchParams.set('code_challenge_method', 'S256');
     authorize.searchParams.set('code_challenge', challenge);
     authorize.searchParams.set('prompt', 'login');
+    if (options?.screenHint === 'signup') {
+      authorize.searchParams.set('screen_hint', 'signup');
+    }
     window.location.assign(authorize.toString());
   }
 
   startLogout() {
     const logoutRedirectUri = this.logoutRedirectUri();
     const clientId = this.config().clientId;
+    this.markLoggedOut();
     this.clearSession();
     if (!this.isEnabled() || !this.isConfigured() || typeof window === 'undefined') return;
     if (!logoutRedirectUri || !clientId) return;
@@ -136,9 +157,7 @@ export class CognitoOidcService {
   clearSession() {
     this.sessionSignal.set(null);
     this.authenticated.set(false);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(LOCAL_SESSION_KEY);
-    }
+    this.removePersistedSessions();
   }
 
   private syncStoredSession() {
@@ -148,17 +167,20 @@ export class CognitoOidcService {
   }
 
   private readStoredSession(): StoredCognitoSession | null {
-    if (typeof localStorage === 'undefined') return null;
-    const raw = localStorage.getItem(LOCAL_SESSION_KEY);
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw) as StoredCognitoSession;
-      if (!parsed?.accessToken || !parsed?.idToken || !parsed?.expiresAt) return null;
-      if (Date.now() >= parsed.expiresAt && !parsed.refreshToken) return null;
-      return parsed;
-    } catch {
-      return null;
+    const preferred = this.readSessionFromStorage(this.sessionStorage());
+    if (preferred) return preferred;
+
+    const fallbackLocal = this.readSessionFromStorage(this.localStorageRef());
+    if (!fallbackLocal) return null;
+    const storage = this.sessionStorage();
+    if (storage) {
+      try {
+        storage.setItem(SESSION_KEY, JSON.stringify(fallbackLocal));
+      } catch {
+        // Ignore write failures and keep fallback session in-memory.
+      }
     }
+    return fallbackLocal;
   }
 
   private setSession(tokens: CognitoTokenResponse) {
@@ -171,12 +193,19 @@ export class CognitoOidcService {
     };
     this.sessionSignal.set(next);
     this.authenticated.set(true);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(next));
+    this.clearLogoutMarker();
+    const storage = this.sessionStorage();
+    if (storage) {
+      storage.setItem(SESSION_KEY, JSON.stringify(next));
     }
+    this.removeLegacyLocalSession();
   }
 
   private async refreshIfNeeded() {
+    if (this.wasExplicitlyLoggedOut()) {
+      this.clearSession();
+      return;
+    }
     const current = this.sessionSignal() ?? this.readStoredSession();
     if (!current) {
       this.clearSession();
@@ -275,6 +304,85 @@ export class CognitoOidcService {
     } catch {
       return null;
     }
+  }
+
+  private readSessionFromStorage(storage: Storage | null): StoredCognitoSession | null {
+    if (!storage) return null;
+    const raw = storage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as StoredCognitoSession;
+      if (!parsed?.accessToken || !parsed?.idToken || !parsed?.expiresAt) return null;
+      const now = Date.now();
+      const idTokenExp = this.jwtExpiryTimestamp(parsed.idToken);
+      const accessTokenExp = this.jwtExpiryTimestamp(parsed.accessToken);
+      const maxExpiry = Math.min(
+        parsed.expiresAt,
+        idTokenExp ?? parsed.expiresAt,
+        accessTokenExp ?? parsed.expiresAt,
+      );
+      if (now >= maxExpiry && !parsed.refreshToken) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private jwtExpiryTimestamp(token: string): number | null {
+    const claims = this.parseJwt(token);
+    const exp = claims?.['exp'];
+    if (typeof exp !== 'number' || !Number.isFinite(exp)) return null;
+    return exp * 1000;
+  }
+
+  private sessionStorage(): Storage | null {
+    if (this.config().sessionPersistence === 'localStorage') {
+      return this.safeStorage('localStorage');
+    }
+    return this.safeStorage('sessionStorage');
+  }
+
+  private localStorageRef(): Storage | null {
+    return this.safeStorage('localStorage');
+  }
+
+  private safeStorage(type: 'localStorage' | 'sessionStorage'): Storage | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window[type];
+    } catch {
+      return null;
+    }
+  }
+
+  private removePersistedSessions() {
+    const local = this.localStorageRef();
+    const session = this.safeStorage('sessionStorage');
+    local?.removeItem(SESSION_KEY);
+    session?.removeItem(SESSION_KEY);
+  }
+
+  private removeLegacyLocalSession() {
+    const local = this.localStorageRef();
+    const active = this.sessionStorage();
+    if (local && active !== local) {
+      local.removeItem(SESSION_KEY);
+    }
+  }
+
+  private markLoggedOut() {
+    const session = this.safeStorage('sessionStorage');
+    session?.setItem(LOGOUT_MARKER_KEY, '1');
+  }
+
+  private clearLogoutMarker() {
+    const session = this.safeStorage('sessionStorage');
+    session?.removeItem(LOGOUT_MARKER_KEY);
+  }
+
+  private wasExplicitlyLoggedOut(): boolean {
+    const session = this.safeStorage('sessionStorage');
+    return session?.getItem(LOGOUT_MARKER_KEY) === '1';
   }
 
   private randomString(length: number) {

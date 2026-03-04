@@ -1,20 +1,30 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { ModalShellComponent } from '../modal-shell/modal-shell.component';
 
 @Component({
   selector: 'app-confirm-dialog',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, ModalShellComponent],
   styles: [
     `
       .confirm-dialog__panel {
         width: min(420px, 92vw);
         box-sizing: border-box;
+        background: var(--color-surface);
+        padding: var(--space-5);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
       }
 
       :host-context(.phone-mode) .confirm-dialog__panel {
         width: min(420px, calc(96vw - 12px));
+      }
+
+      .confirm-dialog__header {
+        display: flex;
+        justify-content: flex-end;
       }
 
       .confirm-dialog__close {
@@ -31,24 +41,36 @@ import { TranslateModule } from '@ngx-translate/core';
         padding: 5px 6px;
         border-radius: 3px;
       }
+
+      .confirm-dialog__title {
+        margin: 0 0 var(--space-3);
+      }
+
+      .confirm-dialog__message {
+        margin: 5px 0;
+        line-height: 24px;
+        white-space: pre-line;
+      }
+
+      .confirm-dialog__actions {
+        display: flex;
+        gap: var(--space-2);
+        justify-content: flex-end;
+        margin-top: var(--space-4);
+      }
     `,
   ],
   template: `
-    <div
-      style="position:fixed; inset:0; background:var(--color-overlay); display:flex; align-items:center; justify-content:center; z-index:3500;"
-      (pointerdown)="canceled.emit()"
-      role="button"
-      tabindex="0"
-      (keydown.enter)="canceled.emit()"
-      (keydown.space)="canceled.emit()"
+    <app-modal-shell
+      [zIndex]="3500"
+      [ariaLabel]="title || 'Confirmation dialog'"
+      maxWidth="min(420px, calc(100vw - 24px))"
+      (closed)="canceled.emit()"
     >
-      <div
-        class="confirm-dialog__panel"
-        style="background:var(--color-surface); padding:20px; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,0.2);"
-        (pointerdown)="$event.stopPropagation()"
-      >
-        <div style="display:flex; justify-content:flex-end;">
+      <div class="confirm-dialog__panel">
+        <div class="confirm-dialog__header">
           <button
+            type="button"
             class="confirm-dialog__close"
             (click)="canceled.emit()"
             title="{{ 'dialogs.close' | translate }}"
@@ -57,23 +79,20 @@ import { TranslateModule } from '@ngx-translate/core';
           </button>
         </div>
         @if (title) {
-          <h3 style="margin:0 0 12px;">{{ title }}</h3>
+          <h3 class="confirm-dialog__title">{{ title }}</h3>
         }
         @if (message) {
-          <p style="margin:5px 0; line-height:24px; white-space:pre-line;">{{ message }}</p>
+          <p class="confirm-dialog__message">{{ message }}</p>
         }
         <ng-content />
-        <div
-          class="confirm-dialog__actions"
-          style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;"
-        >
+        <div class="confirm-dialog__actions">
           @if (showCancel) {
-            <button (click)="canceled.emit()">{{ cancelLabel }}</button>
+            <button type="button" (click)="canceled.emit()">{{ cancelLabel }}</button>
           }
-          <button (click)="confirmed.emit()">{{ confirmLabel }}</button>
+          <button type="button" (click)="confirmed.emit()">{{ confirmLabel }}</button>
         </div>
       </div>
-    </div>
+    </app-modal-shell>
   `,
 })
 export class ConfirmDialogComponent {

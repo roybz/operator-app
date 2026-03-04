@@ -1,4 +1,4 @@
-import { Component, Input, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnDestroy, OnInit, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -6,9 +6,14 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 type TimerMode = 'stopwatch' | 'countdown' | 'pomodoro';
 type PomodoroPhase = 'work' | 'break' | 'longBreak';
@@ -51,6 +56,76 @@ const defaultState = (): TimerState => ({
   pomodoroCycles: 0,
   pomodoroPhase: 'work',
 });
+
+const normalizeTimerState = (
+  candidate: Partial<TimerState> | null | undefined,
+  fallback: TimerState,
+): TimerState => ({
+  mode:
+    candidate?.mode === 'countdown' ||
+    candidate?.mode === 'pomodoro' ||
+    candidate?.mode === 'stopwatch'
+      ? candidate.mode
+      : fallback.mode,
+  running: typeof candidate?.running === 'boolean' ? candidate.running : fallback.running,
+  elapsedSeconds:
+    typeof candidate?.elapsedSeconds === 'number' && Number.isFinite(candidate.elapsedSeconds)
+      ? Math.max(0, Math.floor(candidate.elapsedSeconds))
+      : fallback.elapsedSeconds,
+  remainingSeconds:
+    typeof candidate?.remainingSeconds === 'number' && Number.isFinite(candidate.remainingSeconds)
+      ? Math.max(0, Math.floor(candidate.remainingSeconds))
+      : fallback.remainingSeconds,
+  countdownSeconds:
+    typeof candidate?.countdownSeconds === 'number' && Number.isFinite(candidate.countdownSeconds)
+      ? Math.max(0, Math.floor(candidate.countdownSeconds))
+      : fallback.countdownSeconds,
+  pomodoroWork:
+    typeof candidate?.pomodoroWork === 'number' && Number.isFinite(candidate.pomodoroWork)
+      ? Math.max(60, Math.floor(candidate.pomodoroWork))
+      : fallback.pomodoroWork,
+  pomodoroBreak:
+    typeof candidate?.pomodoroBreak === 'number' && Number.isFinite(candidate.pomodoroBreak)
+      ? Math.max(60, Math.floor(candidate.pomodoroBreak))
+      : fallback.pomodoroBreak,
+  pomodoroLongBreak:
+    typeof candidate?.pomodoroLongBreak === 'number' && Number.isFinite(candidate.pomodoroLongBreak)
+      ? Math.max(60, Math.floor(candidate.pomodoroLongBreak))
+      : fallback.pomodoroLongBreak,
+  pomodoroCycles:
+    typeof candidate?.pomodoroCycles === 'number' && Number.isFinite(candidate.pomodoroCycles)
+      ? Math.max(0, Math.floor(candidate.pomodoroCycles))
+      : fallback.pomodoroCycles,
+  pomodoroPhase:
+    candidate?.pomodoroPhase === 'break' ||
+    candidate?.pomodoroPhase === 'longBreak' ||
+    candidate?.pomodoroPhase === 'work'
+      ? candidate.pomodoroPhase
+      : fallback.pomodoroPhase,
+});
+
+export const mergeTimerStatesForSync = (
+  remoteState: Partial<TimerState> | null | undefined,
+  localState: TimerState,
+  fallback: TimerState,
+): TimerState => {
+  const remote = normalizeTimerState(remoteState, fallback);
+  const local = normalizeTimerState(localState, fallback);
+  return {
+    ...remote,
+    ...local,
+    mode: local.mode,
+    running: local.running || remote.running,
+    elapsedSeconds: Math.max(remote.elapsedSeconds, local.elapsedSeconds),
+    countdownSeconds: local.countdownSeconds,
+    remainingSeconds: local.remainingSeconds,
+    pomodoroWork: local.pomodoroWork,
+    pomodoroBreak: local.pomodoroBreak,
+    pomodoroLongBreak: local.pomodoroLongBreak,
+    pomodoroCycles: Math.max(remote.pomodoroCycles, local.pomodoroCycles),
+    pomodoroPhase: local.pomodoroPhase,
+  };
+};
 
 @Component({
   selector: 'app-timer',
@@ -195,17 +270,33 @@ export class TimerComponent implements OnInit, OnDestroy {
 
   private prefs = inject(AppPreferencesService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   state = signal<TimerState>(defaultState());
   private tickId?: number;
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const fallback = defaultState();
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as TimerState;
+        const parsed = normalizeTimerState(JSON.parse(raw) as TimerState, fallback);
         this.state.set(parsed);
         stateStore.set(this.instanceId, parsed);
         return;
@@ -215,15 +306,16 @@ export class TimerComponent implements OnInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...stored });
+      this.state.set(normalizeTimerState(stored, fallback));
     } else {
       stateStore.set(this.instanceId, this.state());
     }
-    this.persistState();
+    this.persistState({ immediate: true });
   }
 
   ngOnDestroy() {
     if (this.tickId) window.clearInterval(this.tickId);
+    this.persistQueue.destroy();
   }
 
   private commit(next: TimerState) {
@@ -232,9 +324,53 @@ export class TimerComponent implements OnInit, OnDestroy {
     this.persistState();
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const fallback = defaultState();
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const parsed = normalizeTimerState(JSON.parse(raw) as TimerState, fallback);
+      this.state.set(parsed);
+      stateStore.set(this.instanceId, parsed);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState();
+      let remoteState: TimerState | null = null;
+      try {
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeTimerState(JSON.parse(raw) as TimerState, fallback);
+        }
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeTimerStatesForSync(remoteState, this.state(), fallback);
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState({ immediate: true });
+        return 'handled' as const;
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   setMode(mode: TimerMode) {

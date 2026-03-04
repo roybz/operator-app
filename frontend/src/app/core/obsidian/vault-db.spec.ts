@@ -7,26 +7,33 @@ import { LocalStorageAdapter } from '../storage/local-storage.adapter';
 import { AuthService } from '../auth.service';
 
 class MockAuthService {
+  guestModeOnlyFlag = false;
+  usesExternalAuthFlag = true;
+  isLoggedInFlag = true;
+  userId = 'u_test';
+  testModeEnabled = false;
+
   guestModeOnly() {
-    return false;
+    return this.guestModeOnlyFlag;
   }
   usesExternalAuth() {
-    return true;
+    return this.usesExternalAuthFlag;
   }
   isLoggedIn() {
-    return true;
+    return this.isLoggedInFlag;
   }
   session() {
-    return { userId: 'u_test' };
+    return { userId: this.userId };
   }
   orgSettings() {
-    return { testModeEnabled: false };
+    return { testModeEnabled: this.testModeEnabled };
   }
 }
 
 describe('VaultDbService', () => {
   let service: VaultDbService;
   let storage: StorageService;
+  let auth: MockAuthService;
 
   beforeEach(async () => {
     await new Promise<void>((resolve) => {
@@ -47,6 +54,7 @@ describe('VaultDbService', () => {
 
     service = TestBed.inject(VaultDbService);
     storage = TestBed.inject(StorageService);
+    auth = TestBed.inject(AuthService) as unknown as MockAuthService;
     await storage.hydrate();
     (globalThis as { window?: { __OP_CONFIG__?: unknown } }).window ??= {};
     (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
@@ -186,5 +194,35 @@ describe('VaultDbService', () => {
       expect(attachmentIndex[0]?.id).toBe('a1');
       expect((attachmentIndex[0]?.chunkCount ?? 0) > 0).toBe(true);
     }
+  });
+
+  it('disables cloud vault beta for guest mode sessions', () => {
+    (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
+      storageMode: 'remote',
+      cloudVaultAttachmentUploadBetaEnabled: true,
+    };
+    auth.guestModeOnlyFlag = true;
+    auth.testModeEnabled = false;
+    auth.usesExternalAuthFlag = true;
+    auth.isLoggedInFlag = true;
+    auth.userId = 'u_test';
+
+    expect(service.canUseCloudVaultSyncBeta()).toBe(false);
+    expect(service.canUseCloudVaultAttachmentSyncBeta()).toBe(false);
+  });
+
+  it('disables cloud vault beta when admin test mode is enabled', () => {
+    (globalThis as { window: { __OP_CONFIG__?: unknown } }).window.__OP_CONFIG__ = {
+      storageMode: 'remote',
+      cloudVaultAttachmentUploadBetaEnabled: true,
+    };
+    auth.guestModeOnlyFlag = false;
+    auth.testModeEnabled = true;
+    auth.usesExternalAuthFlag = true;
+    auth.isLoggedInFlag = true;
+    auth.userId = 'u_test';
+
+    expect(service.canUseCloudVaultSyncBeta()).toBe(false);
+    expect(service.canUseCloudVaultAttachmentSyncBeta()).toBe(false);
   });
 });

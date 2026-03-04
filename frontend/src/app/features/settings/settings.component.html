@@ -1,0 +1,108 @@
+<section>
+  @if (showControls) {
+    <div class="settings-controls">
+      <button
+        type="button"
+        (click)="apply()"
+        [disabled]="!draft.dirty()"
+        [class.dimmed]="!draft.dirty()"
+      >
+        {{ 'settings.apply' | translate }}
+      </button>
+      @if (draft.dirty()) {
+        <button type="button" (click)="cancel()">{{ 'settings.cancelChanges' | translate }}</button>
+      }
+    </div>
+  }
+
+  <h2 class="settings-title">{{ 'settings.title' | translate }}</h2>
+
+  <nav class="settings-nav" aria-label="Settings sections">
+    @if (auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
+      <button type="button" (click)="selectTab('admin')">
+        {{ 'settings.adminLink' | translate }}
+      </button>
+    }
+    <button
+      type="button"
+      (click)="selectTab('users')"
+      [disabled]="auth.guestModeOnly() || isGuestUser()"
+      [class.dimmed]="auth.guestModeOnly() || isGuestUser()"
+    >
+      {{ 'settings.usersLink' | translate }}
+    </button>
+    <button
+      type="button"
+      (click)="selectTab('multiUser')"
+      [disabled]="isGuestUser()"
+      [class.dimmed]="isGuestUser()"
+    >
+      {{ 'settings.multiUserLink' | translate }}
+    </button>
+    <button type="button" (click)="selectTab('interface')">
+      {{ 'settings.preferencesLink' | translate }}
+    </button>
+    <button type="button" (click)="selectTab('applications')">
+      {{ 'settings.applicationsLink' | translate }}
+    </button>
+    <button
+      type="button"
+      (click)="selectTab('credentials')"
+      [disabled]="isGuestUser()"
+      [class.dimmed]="isGuestUser()"
+    >
+      {{ 'settings.credentialsLink' | translate }}
+    </button>
+    <span class="settings-nav__divider" aria-hidden="true"></span>
+    <button
+      type="button"
+      (click)="selectTab('universe')"
+      [disabled]="isGuestUser()"
+      [class.dimmed]="isGuestUser()"
+    >
+      {{ 'settings.universeLink' | translate }}
+    </button>
+    <button
+      type="button"
+      (click)="selectTab('account')"
+      [disabled]="isGuestUser()"
+      [class.dimmed]="isGuestUser()"
+    >
+      {{ 'settings.accountLink' | translate }}
+    </button>
+  </nav>
+
+  @if (tab() === 'admin' && auth.isAdmin() && !auth.guestModeOnly() && !isGuestUser()) {
+    <app-admin-settings />
+  }
+  @if (tab() === 'interface') {
+    <app-preferences-settings />
+  }
+  @if (tab() === 'applications') {
+    <app-applications-settings />
+  }
+  @if (tab() === 'multiUser' && !isGuestUser()) {
+    <app-multi-user-settings />
+  }
+  @if (tab() === 'users' && !auth.guestModeOnly() && !isGuestUser()) {
+    <app-users-settings />
+  }
+  @if (tab() === 'credentials' && !isGuestUser()) {
+    <app-credentials-settings />
+  }
+  @if (tab() === 'account' && !isGuestUser()) {
+    <app-account-settings />
+  }
+  @if (tab() === 'universe' && !isGuestUser()) {
+    <app-universe-settings />
+  }
+
+  <div class="settings-about">
+    <button type="button" (click)="aboutOpen.set(!aboutOpen())">
+      {{ 'nav.about' | translate }}
+    </button>
+    <div class="settings-about__content" [class.settings-about__content--open]="aboutOpen()">
+      <app-about />
+    </div>
+  </div>
+</section>

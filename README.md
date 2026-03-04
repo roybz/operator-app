@@ -10,6 +10,7 @@ The app supports:
 - guest/local mode (`localStorage`, no cloud writes)
 - authenticated cloud mode (Cognito + remote storage API)
 - realtime invalidation (WebSocket) with polling fallback
+- LLM residents (beta): credential references, universe policy, resident roster, pencil lease, and action log
 
 All persistence goes through an async storage adapter, so backend storage is pluggable.
 
@@ -71,10 +72,32 @@ Realtime sync uses WebSocket invalidation when available and polling fallback wh
 - WebSocket failures should not block app usage.
 - App-instance persistence uses debounce/coalescing and `409`/`429` handling to reduce thrash.
 
+## LLM residents (beta)
+
+LLM residents are intentionally guarded:
+
+- disabled in guest mode
+- disabled when org test mode is enabled
+- metadata-only credential references are persisted; secret key material is session-scoped by default
+- policy + resident changes require universe invite/admin permissions
+- actions are rate-limited and audit logged with payload redaction
+
+Current settings surfaces:
+
+- `Settings > Credentials`: LLM credential references + session secret assignment
+- `Settings > Multi-user`: LLM policy, resident roster, pencil lease controls, action log viewer
+
 ## Docs
 
-- `docs/aws-setup.md` - current AWS resources and deployment notes
-- `docs/backend-setup.md` - provider-agnostic backend contract
+- `Docs/conventions.md` - coding, styling, unit/e2e, and security coding conventions
+- `Docs/aws-setup.md` - current AWS resources and deployment notes
+- `Docs/backend-setup.md` - provider-agnostic backend contract
+- `Docs/observability-runbook.md` - correlation IDs, alert taxonomy, and incident triage flow
+- `Docs/compliance-prep.md` - data classification, retention, and access-control prep artifacts
+- `Docs/qa-matrix.md` - pre-launch scenario matrix and evidence worksheet
+- `Docs/release-checklist.md` - pre-launch matrix and ship checklist
+- `Docs/security-pass-2026-03-04.md` - latest security audit and hardening summary
+- `Docs/llm-spec-delta-2026-03-04.md` - LLM resident scope/status against spec
 
 ## License
 

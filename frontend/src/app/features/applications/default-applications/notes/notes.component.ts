@@ -27,6 +27,7 @@ import {
   isRemoteStorageTooManyRequests,
   isRemoteStorageVersionConflict,
 } from '../../../../core/realtime/instance-persist-queue';
+import { notesTextCollabAdapter } from '../../../../core/realtime/notes-text-collab';
 import { ObsidianImportService } from '../../../../core/obsidian/obsidian-import.service';
 import { VaultDbService } from '../../../../core/obsidian/vault-db';
 import {
@@ -36,6 +37,8 @@ import {
   VaultFileTreeNode,
 } from '../../../../core/obsidian/vault-types';
 import { DialogService } from '../../../../core/dialog.service';
+import { ContextFieldStoreService } from '../../../../core/events/context-field-store.service';
+import { ObjectRef } from '../../../../core/events/context-fields.types';
 
 type NodeType = 'folder' | 'note';
 type EditorMode = 'rich' | 'markdown' | 'visual';
@@ -82,6 +85,81 @@ interface VaultTreeFlatRow {
 
 const stateStore = new Map<string, NotesState>();
 const STORAGE_PREFIX = 'op_app_state:notes';
+
+const cloneNoteTree = (node: NoteNode, parentId?: string): NoteNode => {
+  const copy: NoteNode = { ...node, parentId };
+  if (node.type === 'folder') {
+    copy.children = (node.children ?? []).map((child) => cloneNoteTree(child, copy.id));
+  }
+  return copy;
+};
+
+const mergeNoteTreesForSync = (
+  remoteNode: NoteNode,
+  localNode: NoteNode,
+  parentId?: string,
+): NoteNode => {
+  const remote = cloneNoteTree(remoteNode, parentId);
+  const local = cloneNoteTree(localNode, parentId);
+  if (remote.type === 'note' && local.type === 'note') {
+    const textMerge = notesTextCollabAdapter.merge({
+      localText: local.content ?? '',
+      remoteText: remote.content ?? '',
+    });
+    return {
+      ...remote,
+      ...local,
+      parentId,
+      type: 'note',
+      content: textMerge.text,
+    };
+  }
+  if (remote.type !== 'folder' || local.type !== 'folder') {
+    return {
+      ...remote,
+      ...local,
+      parentId,
+      type: local.type,
+    };
+  }
+  const mergedChildren = new Map<string, NoteNode>();
+  for (const child of remote.children ?? []) {
+    mergedChildren.set(child.id, cloneNoteTree(child, remote.id));
+  }
+  for (const child of local.children ?? []) {
+    const existing = mergedChildren.get(child.id);
+    if (!existing) {
+      mergedChildren.set(child.id, cloneNoteTree(child, local.id));
+      continue;
+    }
+    mergedChildren.set(child.id, mergeNoteTreesForSync(existing, child, local.id));
+  }
+  return {
+    ...remote,
+    ...local,
+    parentId,
+    type: 'folder',
+    children: Array.from(mergedChildren.values()),
+  };
+};
+
+export const mergeNotesStatesForSync = (
+  remoteState: NotesState,
+  localState: NotesState,
+): NotesState => ({
+  ...remoteState,
+  ...localState,
+  root: mergeNoteTreesForSync(remoteState.root, localState.root),
+  archiveRoot: mergeNoteTreesForSync(remoteState.archiveRoot, localState.archiveRoot),
+  selectedId: localState.selectedId ?? remoteState.selectedId,
+  selectedIds: Array.from(
+    new Set([...(remoteState.selectedIds ?? []), ...(localState.selectedIds ?? [])]),
+  ),
+  view: localState.view,
+  listCollapsed: localState.listCollapsed,
+  sidebarOpenDesktop: localState.sidebarOpenDesktop,
+  sidebarOpenPhone: localState.sidebarOpenPhone,
+});
 
 export function clearNotesState(instanceId: string, storage: StorageService) {
   clearInstanceScopedState(stateStore, STORAGE_PREFIX, instanceId, storage);
@@ -199,6 +277,18 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
   ],
   template: `
     <div class="notes-shell">
+      @if (!settingsOpen() && externalContextRef()) {
+        <div
+          style="position:absolute; top:8px; right:8px; z-index:4; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); padding:8px; display:flex; gap:8px; align-items:center;"
+        >
+          <span style="font-size:12px; opacity:0.8;">
+            Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+          </span>
+          <button type="button" (click)="createNoteFromExternalContext()">
+            {{ 'notes.addNote' | translate }}
+          </button>
+        </div>
+      }
       @if (settingsOpen()) {
         <div
           style="position:absolute; inset:0; background:var(--color-surface); padding:16px; z-index:2; display:flex; flex-direction:column; gap:12px;"
@@ -862,6 +952,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   private exportGuard = inject(ExportGuardService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
+  private contextFields = inject(ContextFieldStoreService);
   private obsidianImport = inject(ObsidianImportService);
   private vaultDb = inject(VaultDbService);
   private dialog = inject(DialogService);
@@ -956,6 +1047,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     });
   });
   vaultUnresolvedPanelOpen = signal(false);
+  externalContextRef = signal<ObjectRef | null>(null);
   vaultTreeScrollTop = signal(0);
   vaultTreeViewportHeight = signal(320);
   readonly vaultTreeRowHeight = 26;
@@ -982,6 +1074,24 @@ export class NotesComponent implements OnInit, OnDestroy {
         return;
       }
       this.reloadFromStorage({ persistNormalized: false });
+    });
+    effect(() => {
+      const universeId = this.currentUniverseId();
+      if (!universeId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      const selection = this.contextFields.selection(universeId);
+      const primary = selection?.primaryRef ?? null;
+      if (!primary || primary.instanceId === this.instanceId) {
+        this.externalContextRef.set(null);
+        return;
+      }
+      if (primary.kind === 'todo' || primary.kind === 'kanbanCard' || primary.kind === 'sticky') {
+        this.externalContextRef.set(primary);
+        return;
+      }
+      this.externalContextRef.set(null);
     });
   }
 
@@ -1119,6 +1229,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   selectNode(id: string) {
     if (id === this.activeRoot().id) return;
     this.commit({ ...this.state(), selectedId: id });
+    this.publishSelectionContext(id);
     this.syncRichSnapshot();
   }
 
@@ -1848,6 +1959,42 @@ export class NotesComponent implements OnInit, OnDestroy {
     return buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId || '');
   }
 
+  private currentUniverseId() {
+    const key = this.prefs.userId();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
+  }
+
+  private publishSelectionContext(primaryNodeId?: string | null) {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const state = this.state();
+    const selectedIds = new Set<string>(state.selectedIds);
+    if (state.selectedId) selectedIds.add(state.selectedId);
+    if (primaryNodeId) selectedIds.add(primaryNodeId);
+    const refs = Array.from(selectedIds)
+      .map((id) => this.findNode(this.activeRoot(), id))
+      .filter((node): node is NoteNode => Boolean(node))
+      .map(
+        (node): ObjectRef => ({
+          universeId,
+          instanceId: this.instanceId,
+          kind: node.type === 'note' ? 'note' : 'noteFolder',
+          id: node.id,
+        }),
+      );
+    const primaryRef =
+      refs.find((ref) => ref.id === primaryNodeId) ??
+      refs.find((ref) => ref.id === state.selectedId) ??
+      refs[0] ??
+      null;
+    this.contextFields.setSelection(universeId, refs, {
+      primaryRef,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
+  }
+
   onRichInput(event: Event) {
     const note = this.selectedNode();
     if (!note || note.type !== 'note' || note.locked) return;
@@ -1867,10 +2014,21 @@ export class NotesComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      let remoteState: NotesState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = JSON.parse(raw) as NotesState;
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState && !this.isLocallyEditing()) {
+        const merged = mergeNotesStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState();
+        return 'handled' as const;
       }
       if (!this.isLocallyEditing()) {
         this.reloadFromStorage({ persistNormalized: false });
@@ -1911,6 +2069,7 @@ export class NotesComponent implements OnInit, OnDestroy {
       }
     }
     this.commit({ ...this.state(), selectedIds: Array.from(next) });
+    this.publishSelectionContext(this.state().selectedId ?? node.id);
   }
 
   isSelected(id: string) {
@@ -1935,10 +2094,22 @@ export class NotesComponent implements OnInit, OnDestroy {
     };
     walk(this.activeRoot());
     this.commit({ ...this.state(), selectedIds: Array.from(ids) });
+    this.publishSelectionContext(this.state().selectedId);
   }
 
   deselectAll() {
     this.commit({ ...this.state(), selectedIds: [] });
+    this.publishSelectionContext(null);
+  }
+
+  createNoteFromExternalContext() {
+    const ref = this.externalContextRef();
+    if (!ref) return;
+    const parent = this.selectedFolder() ?? this.state().root;
+    const note = createNote(`[${ref.kind}] ${ref.id}`, parent.id);
+    parent.children?.push(note);
+    this.commit({ ...this.state(), selectedId: note.id });
+    this.publishSelectionContext(note.id);
   }
 
   duplicateSelected() {

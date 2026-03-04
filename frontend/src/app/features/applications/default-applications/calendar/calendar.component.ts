@@ -1,4 +1,13 @@
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnDestroy,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
@@ -6,11 +15,16 @@ import {
   buildInstanceStorageKey,
   clearInstanceScopedState,
   cloneInstanceScopedState,
-  persistInstanceState,
 } from '../../../dependencies/instance-state-storage';
 import { ConfirmDialogComponent } from '../../../../shared/confirm-dialog/confirm-dialog.component';
 import { ImportGuardService } from '../../../../core/import-guard.service';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import {
+  InstancePersistQueue,
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from '../../../../core/realtime/instance-persist-queue';
 
 interface CalendarEvent {
   id: string;
@@ -63,6 +77,134 @@ const defaultState = (): CalendarState => ({
   showSettingsPhone: false,
   selectedCalendarId: null,
 });
+
+const normalizeCalendarEvent = (
+  event: Partial<CalendarEvent> | null | undefined,
+): CalendarEvent | null => {
+  if (!event || typeof event !== 'object') return null;
+  const id = typeof event.id === 'string' && event.id.trim() ? event.id : null;
+  const title = typeof event.title === 'string' && event.title.trim() ? event.title : null;
+  const start = typeof event.start === 'string' && event.start.trim() ? event.start : null;
+  if (!id || !title || !start) return null;
+  return {
+    id,
+    title,
+    start,
+    end: typeof event.end === 'string' && event.end.trim() ? event.end : start,
+  };
+};
+
+const normalizeCalendar = (
+  calendar: Partial<ExternalCalendar> | null | undefined,
+): ExternalCalendar | null => {
+  if (!calendar || typeof calendar !== 'object') return null;
+  const id = typeof calendar.id === 'string' && calendar.id.trim() ? calendar.id : null;
+  const name = typeof calendar.name === 'string' && calendar.name.trim() ? calendar.name : null;
+  if (!id || !name) return null;
+  const events = Array.isArray(calendar.events)
+    ? calendar.events
+        .map((event) => normalizeCalendarEvent(event))
+        .filter((event): event is CalendarEvent => Boolean(event))
+    : [];
+  return {
+    id,
+    name,
+    color: typeof calendar.color === 'string' && calendar.color.trim() ? calendar.color : '#60a5fa',
+    visible: typeof calendar.visible === 'boolean' ? calendar.visible : true,
+    sourceUrl: typeof calendar.sourceUrl === 'string' ? calendar.sourceUrl : '',
+    events,
+  };
+};
+
+const normalizeCalendarState = (
+  candidate: Partial<CalendarState & { showSettings?: boolean }> | null | undefined,
+  fallback: CalendarState,
+  isPhoneMode: boolean,
+): CalendarState => {
+  const calendars = Array.isArray(candidate?.calendars)
+    ? candidate.calendars
+        .map((calendar) => normalizeCalendar(calendar))
+        .filter((calendar): calendar is ExternalCalendar => Boolean(calendar))
+    : fallback.calendars;
+  const legacyShowSettings = candidate?.showSettings;
+  const showSettingsDesktop =
+    typeof candidate?.showSettingsDesktop === 'boolean'
+      ? candidate.showSettingsDesktop
+      : typeof legacyShowSettings === 'boolean'
+        ? legacyShowSettings
+        : fallback.showSettingsDesktop;
+  const showSettingsPhone =
+    typeof candidate?.showSettingsPhone === 'boolean'
+      ? candidate.showSettingsPhone
+      : isPhoneMode && !candidate?.phoneSidebarInit
+        ? false
+        : typeof legacyShowSettings === 'boolean'
+          ? legacyShowSettings
+          : fallback.showSettingsPhone;
+  const selectedCalendarId =
+    typeof candidate?.selectedCalendarId === 'string' &&
+    calendars.some((calendar) => calendar.id === candidate.selectedCalendarId)
+      ? candidate.selectedCalendarId
+      : null;
+  return {
+    viewDate:
+      typeof candidate?.viewDate === 'string' && candidate.viewDate.trim()
+        ? candidate.viewDate
+        : fallback.viewDate,
+    viewMode:
+      candidate?.viewMode === 'week' ||
+      candidate?.viewMode === 'day' ||
+      candidate?.viewMode === 'month'
+        ? candidate.viewMode
+        : fallback.viewMode,
+    calendars,
+    showSettingsDesktop,
+    showSettingsPhone,
+    selectedCalendarId,
+    phoneSidebarInit: isPhoneMode ? true : candidate?.phoneSidebarInit,
+  };
+};
+
+const mergeEventsForSync = (remoteEvents: CalendarEvent[], localEvents: CalendarEvent[]) => {
+  const events = new Map<string, CalendarEvent>();
+  for (const event of remoteEvents) {
+    events.set(event.id, event);
+  }
+  for (const event of localEvents) {
+    events.set(event.id, event);
+  }
+  return Array.from(events.values());
+};
+
+export const mergeCalendarStatesForSync = (
+  remoteState: CalendarState,
+  localState: CalendarState,
+): CalendarState => {
+  const calendars = new Map<string, ExternalCalendar>();
+  for (const calendar of remoteState.calendars) {
+    calendars.set(calendar.id, calendar);
+  }
+  for (const calendar of localState.calendars) {
+    const existing = calendars.get(calendar.id);
+    if (!existing) {
+      calendars.set(calendar.id, calendar);
+      continue;
+    }
+    calendars.set(calendar.id, {
+      ...existing,
+      ...calendar,
+      events: mergeEventsForSync(existing.events, calendar.events),
+    });
+  }
+  return {
+    ...remoteState,
+    ...localState,
+    calendars: Array.from(calendars.values()),
+    selectedCalendarId: localState.selectedCalendarId,
+    showSettingsDesktop: localState.showSettingsDesktop,
+    showSettingsPhone: localState.showSettingsPhone,
+  };
+};
 
 @Component({
   selector: 'app-calendar',
@@ -371,13 +513,14 @@ const defaultState = (): CalendarState => ({
     }
   `,
 })
-export class CalendarComponent implements OnInit {
+export class CalendarComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
   private translate = inject(TranslateService);
   private prefs = inject(AppPreferencesService);
   private importGuard = inject(ImportGuardService);
   private storage = inject(StorageService);
+  private remoteConflict = inject(RemoteConflictService);
   isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
   state = signal<CalendarState>(defaultState());
   newName = signal('');
@@ -388,31 +531,38 @@ export class CalendarComponent implements OnInit {
   importStatus = signal<'idle' | 'loading' | 'success' | 'error'>('idle');
   importMessage = signal<string | null>(null);
   importLimitOpen = signal(false);
+  private readonly persistQueue = new InstancePersistQueue({
+    flush: async () => {
+      await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
+    },
+    onError: async (error) => this.handlePersistError(error),
+    isTooManyRequests: isRemoteStorageTooManyRequests,
+  });
+
+  constructor() {
+    effect(() => {
+      const event = this.storage.lastRemoteChange();
+      if (!event || !this.instanceId) return;
+      const key = this.instanceStorageKey();
+      if (!event.keys.includes(key)) return;
+      this.reloadFromStorage();
+    });
+  }
 
   ngOnInit() {
-    const userId = this.prefs.userId();
-    const raw = this.storage.getItemSync(
-      buildInstanceStorageKey(STORAGE_PREFIX, userId, this.instanceId),
-    );
+    const fallback = defaultState();
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as CalendarState & { showSettings?: boolean };
-        const showDesktop =
-          parsed.showSettingsDesktop ?? parsed.showSettings ?? this.state().showSettingsDesktop;
-        const showPhone =
-          parsed.showSettingsPhone ??
-          (this.isPhoneMode() && !parsed.phoneSidebarInit
-            ? false
-            : (parsed.showSettings ?? this.state().showSettingsPhone));
-        const next = {
-          ...parsed,
-          showSettingsDesktop: showDesktop,
-          showSettingsPhone: showPhone,
-          phoneSidebarInit: this.isPhoneMode() ? true : parsed.phoneSidebarInit,
-        };
+        const parsed = normalizeCalendarState(
+          JSON.parse(raw) as CalendarState & { showSettings?: boolean },
+          fallback,
+          this.isPhoneMode(),
+        );
+        const next = parsed;
         this.state.set(next);
         stateStore.set(this.instanceId, next);
-        this.persistState();
+        this.persistState({ immediate: true });
         return;
       } catch {
         // ignore malformed stored data
@@ -420,30 +570,10 @@ export class CalendarComponent implements OnInit {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      const nextStored = {
-        ...stored,
-        calendars: stored.calendars.map((cal) => ({
-          ...cal,
-          events: cal.events.map((event) => ({ ...event })),
-        })),
-      };
-      const legacyShowSettings = (nextStored as { showSettings?: boolean }).showSettings;
-      const showDesktop =
-        nextStored.showSettingsDesktop ?? legacyShowSettings ?? this.state().showSettingsDesktop;
-      const showPhone =
-        nextStored.showSettingsPhone ??
-        (this.isPhoneMode() && !nextStored.phoneSidebarInit
-          ? false
-          : (legacyShowSettings ?? this.state().showSettingsPhone));
-      const next = {
-        ...nextStored,
-        showSettingsDesktop: showDesktop,
-        showSettingsPhone: showPhone,
-        phoneSidebarInit: this.isPhoneMode() ? true : nextStored.phoneSidebarInit,
-      };
+      const next = normalizeCalendarState(stored, fallback, this.isPhoneMode());
       this.state.set(next);
       stateStore.set(this.instanceId, next);
-      this.persistState();
+      this.persistState({ immediate: true });
       return;
     }
     const next: CalendarState = {
@@ -454,7 +584,11 @@ export class CalendarComponent implements OnInit {
     };
     this.state.set(next);
     stateStore.set(this.instanceId, next);
-    this.persistState();
+    this.persistState({ immediate: true });
+  }
+
+  ngOnDestroy() {
+    this.persistQueue.destroy();
   }
 
   private commit(next: CalendarState) {
@@ -463,9 +597,61 @@ export class CalendarComponent implements OnInit {
     this.persistState();
   }
 
-  private persistState() {
-    const userId = this.prefs.userId();
-    persistInstanceState(STORAGE_PREFIX, userId, this.instanceId, this.state(), this.storage);
+  private persistState(options?: { immediate?: boolean }) {
+    this.persistQueue.schedule(options);
+  }
+
+  private instanceStorageKey() {
+    return buildInstanceStorageKey(STORAGE_PREFIX, this.prefs.userId(), this.instanceId || '');
+  }
+
+  private reloadFromStorage() {
+    const fallback = defaultState();
+    const raw = this.storage.getItemSync(this.instanceStorageKey());
+    if (!raw) return false;
+    try {
+      const next = normalizeCalendarState(
+        JSON.parse(raw) as CalendarState & { showSettings?: boolean },
+        fallback,
+        this.isPhoneMode(),
+      );
+      this.state.set(next);
+      stateStore.set(this.instanceId, next);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async handlePersistError(error: unknown) {
+    const key = this.instanceStorageKey();
+    if (isRemoteStorageVersionConflict(error)) {
+      this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState();
+      let remoteState: CalendarState | null = null;
+      try {
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeCalendarState(
+            JSON.parse(raw) as CalendarState & { showSettings?: boolean },
+            fallback,
+            this.isPhoneMode(),
+          );
+        }
+      } catch {
+        // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeCalendarStatesForSync(remoteState, this.state());
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.persistState({ immediate: true });
+        return 'handled' as const;
+      }
+      this.reloadFromStorage();
+      return 'handled' as const;
+    }
+    return undefined;
   }
 
   periodLabel() {

@@ -1,5 +1,10 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { StorageAdapter, STORAGE_ADAPTER } from './storage-adapter';
+import {
+  applyBuiltInStorageMigrations,
+  parseAppliedStorageMigrations,
+  STORAGE_MIGRATION_STATE_KEY,
+} from './storage-migrations';
 
 @Injectable({ providedIn: 'root' })
 export class StorageService {
@@ -19,6 +24,7 @@ export class StorageService {
         const value = values[key] ?? null;
         if (value !== null) this.cache.set(key, value);
       }
+      await this.applyMigrations();
       this.hydrated = true;
       return;
     }
@@ -28,6 +34,7 @@ export class StorageService {
         this.cache.set(key, value);
       }
     }
+    await this.applyMigrations();
     this.hydrated = true;
   }
 
@@ -81,6 +88,21 @@ export class StorageService {
     }
   }
 
+  async getJsonValidated<T>(
+    key: string,
+    fallback: T,
+    validator: (value: unknown) => value is T,
+  ): Promise<T> {
+    const raw = await this.getItem(key);
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return validator(parsed) ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   async setJson<T>(key: string, value: T): Promise<void> {
     await this.setItem(key, JSON.stringify(value));
   }
@@ -90,6 +112,17 @@ export class StorageService {
     if (!raw) return fallback;
     try {
       return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  getJsonSyncValidated<T>(key: string, fallback: T, validator: (value: unknown) => value is T): T {
+    const raw = this.getItemSync(key);
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return validator(parsed) ? parsed : fallback;
     } catch {
       return fallback;
     }
@@ -128,5 +161,30 @@ export class StorageService {
       if (!before.has(key) || before.get(key) !== value) changed.add(key);
     }
     return Array.from(changed).sort();
+  }
+
+  private async applyMigrations() {
+    const applied = parseAppliedStorageMigrations(
+      this.cache.get(STORAGE_MIGRATION_STATE_KEY) ?? null,
+    );
+    const { touchedKeys, newlyApplied } = applyBuiltInStorageMigrations(this.cache, applied);
+    if (touchedKeys.length === 0 && newlyApplied.length === 0) return;
+
+    for (const key of touchedKeys) {
+      if (key === STORAGE_MIGRATION_STATE_KEY) continue;
+      const nextValue = this.cache.get(key);
+      if (nextValue === undefined) {
+        await this.adapter.removeItem(key);
+      } else {
+        await this.adapter.setItem(key, nextValue);
+      }
+    }
+
+    if (newlyApplied.length > 0) {
+      const nextApplied = new Set([...applied, ...newlyApplied]);
+      const serialized = JSON.stringify(Array.from(nextApplied).sort());
+      this.cache.set(STORAGE_MIGRATION_STATE_KEY, serialized);
+      await this.adapter.setItem(STORAGE_MIGRATION_STATE_KEY, serialized);
+    }
   }
 }

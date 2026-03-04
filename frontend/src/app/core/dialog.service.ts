@@ -3,6 +3,12 @@ import { AuthService } from './auth.service';
 import { APP_REGISTRY } from '../features/dependencies/app-registry';
 import { AppId, DialogRect } from '../features/dependencies/app-types';
 import { StorageService } from './storage/storage.service';
+import { UniverseEventHubService } from './events/universe-event-hub.service';
+import {
+  isRemoteStorageTooManyRequests,
+  isRemoteStorageVersionConflict,
+} from './storage/remote-write-utils';
+import { getKeySpaceConflictPolicy } from './realtime/key-space-conflict-strategy';
 
 export interface DialogInstance {
   id: string;
@@ -56,10 +62,12 @@ export class DialogService {
 
   private auth = inject(AuthService);
   private storage = inject(StorageService);
+  private eventHub = inject(UniverseEventHubService);
   private persistFlushTimer: number | null = null;
   private persistInFlight = false;
   private persistQueued = false;
   private persistBackoffMs = 0;
+  private persistConflictStreak = 0;
 
   constructor() {
     effect(() => {
@@ -706,26 +714,63 @@ export class DialogService {
         this.persistQueued = false;
         const userKey = this.userStorageKey();
         const payload = JSON.stringify(this.serializableState(this.state()));
+        this.emitSystemEvent('PersistFlushStarted', {
+          key: userKey,
+          queued: this.persistQueued,
+          backoffMs: this.persistBackoffMs,
+        });
         try {
           await this.storage.setItem(userKey, payload);
+          this.emitSystemEvent('PersistFlushCompleted', { key: userKey });
           this.persistBackoffMs = 0;
+          this.persistConflictStreak = 0;
         } catch (error) {
-          if (this.isTooManyRequests(error)) {
+          if (isRemoteStorageTooManyRequests(error)) {
             // API Gateway throttling during long drags: back off and coalesce the latest state.
             this.persistBackoffMs = Math.min(Math.max(this.persistBackoffMs || 200, 200) * 2, 2000);
+            this.emitSystemEvent('PersistFlushThrottled', {
+              key: userKey,
+              nextBackoffMs: this.persistBackoffMs,
+            });
             this.persistQueued = true;
             this.schedulePersistFlush(this.persistBackoffMs);
             break;
           }
-          if (this.isVersionConflict(error)) {
-            // Refresh adapter version cache and retry a little later with latest local state.
+          if (isRemoteStorageVersionConflict(error)) {
+            const conflictPolicy = getKeySpaceConflictPolicy(userKey);
+            if (conflictPolicy.ignoreVersionConflict) {
+              this.emitSystemEvent('ConflictIgnored', {
+                key: userKey,
+                strategy: conflictPolicy.strategy,
+              });
+              break;
+            }
+            this.persistConflictStreak += 1;
+            if (this.persistConflictStreak > conflictPolicy.maxRetries) {
+              this.emitSystemEvent('ConflictDeferred', {
+                key: userKey,
+                strategy: conflictPolicy.strategy,
+                attempts: this.persistConflictStreak,
+              });
+              this.persistConflictStreak = 0;
+              break;
+            }
+            // Refresh adapter version cache and retry with bounded backoff.
+            this.emitSystemEvent('ConflictResolved', {
+              key: userKey,
+              strategy: conflictPolicy.strategy,
+            });
             try {
               await this.storage.getItem(userKey);
             } catch {
               // Ignore refresh failures; polling/realtime may catch up.
             }
             this.persistQueued = true;
-            this.schedulePersistFlush(120);
+            const delay = Math.max(
+              conflictPolicy.baseRetryDelayMs,
+              conflictPolicy.baseRetryDelayMs * this.persistConflictStreak,
+            );
+            this.schedulePersistFlush(delay);
             break;
           }
           // Avoid unhandled rejections from async persistence; keep app usable.
@@ -782,25 +827,20 @@ export class DialogService {
     void this.storage.removeItem(key);
   }
 
-  private isVersionConflict(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    return code === 'version_conflict' || String(error.message || '').includes('version_conflict');
-  }
-
-  private isTooManyRequests(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const maybeStatus = (error as Error & { status?: unknown }).status;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const status = typeof maybeStatus === 'number' ? maybeStatus : null;
-    const message = String(error.message || '');
-    return status === 429 || code === 'too_many_requests' || message.includes('Too Many Requests');
-  }
-
   private keys() {
     return this.storage.keysSync();
+  }
+
+  private emitSystemEvent(type: string, payload: unknown) {
+    const universeId = this.currentUniverseId();
+    if (!universeId) return;
+    this.eventHub.publishSystem(universeId, type, payload, { agent: 'dialog-service' });
+  }
+
+  private currentUniverseId() {
+    const key = this.auth.storageUserKey();
+    const parts = key.split(':');
+    return parts.length >= 2 ? parts[1] : null;
   }
 
   private defaultState(): DialogState {

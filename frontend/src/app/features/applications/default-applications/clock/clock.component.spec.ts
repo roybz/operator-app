@@ -7,7 +7,7 @@ import {
 } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
-import { ClockComponent } from './clock.component';
+import { ClockComponent, mergeClockStatesForSync } from './clock.component';
 import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
 import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
 import { StorageService } from '../../../../core/storage/storage.service';
@@ -59,5 +59,31 @@ describe('ClockComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('select')).toBeTruthy();
     expect(compiled.textContent).toContain('Clock settings');
+  });
+
+  it('merges clock conflict by keeping unique zones and local format', () => {
+    const merged = mergeClockStatesForSync(
+      {
+        format: '12h',
+        clocks: [
+          { id: 'a', timeZone: 'UTC' },
+          { id: 'b', timeZone: 'America/New_York' },
+        ],
+      },
+      {
+        format: '24h',
+        clocks: [
+          { id: 'c', timeZone: 'UTC' },
+          { id: 'd', timeZone: 'Asia/Tokyo' },
+        ],
+      },
+    );
+
+    expect(merged.format).toBe('24h');
+    expect(merged.clocks.map((clock) => clock.timeZone)).toEqual([
+      'UTC',
+      'America/New_York',
+      'Asia/Tokyo',
+    ]);
   });
 });

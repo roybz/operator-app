@@ -5,6 +5,16 @@ import { AppId, DialogRect } from '../features/dependencies/app-types';
 import packageJson from '../../../package.json';
 import { StorageService } from './storage/storage.service';
 import { CognitoOidcService } from './auth/cognito-oidc.service';
+import { writeWithConflictRetry } from './storage/remote-write-utils';
+import { getOpCapabilities } from './op-config';
+import {
+  UniverseAccessContext,
+  canEditUniverse,
+  canGrantUniversePencil,
+  canInviteToUniverse,
+  getUniversePermissionSet,
+  isUniverseViewOnly,
+} from './authz/universe-role-policy';
 
 export type UserRole = 'admin' | 'user' | 'guest' | 'observer' | 'invitee';
 
@@ -29,6 +39,10 @@ export interface UniversePresenceEntry {
   role: UserRole;
   ownerId: string;
   lastSeen: number;
+  activeInstanceId?: string | null;
+  activeObjectId?: string | null;
+  activeMode?: 'edit' | 'inspect' | 'search' | 'present';
+  activeUpdatedAt?: number;
 }
 
 export interface UniverseChatMessage {
@@ -134,6 +148,49 @@ interface DialogStateSnapshot {
   hiddenWorkspaces: Record<string, boolean>;
   zCounter: number;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+const isBoolean = (value: unknown): value is boolean => typeof value === 'boolean';
+const isString = (value: unknown): value is string => typeof value === 'string';
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === 'string';
+const isNullableUserRole = (value: unknown): value is UserRole | null =>
+  value === null ||
+  value === 'admin' ||
+  value === 'user' ||
+  value === 'guest' ||
+  value === 'observer' ||
+  value === 'invitee';
+
+const isSessionStateContract = (value: unknown): value is SessionState => {
+  if (!isRecord(value)) return false;
+  return (
+    isNullableString(value['userId']) &&
+    isNullableString(value['previewUserId']) &&
+    isBoolean(value['previewPersist']) &&
+    isNullableUserRole(value['sessionRole']) &&
+    isNullableString(value['sessionUsername']) &&
+    isNullableString(value['universeOwnerId']) &&
+    isNullableString(value['universeId'])
+  );
+};
+
+const isOrgSettingsContract = (value: unknown): value is OrgSettings => {
+  if (!isRecord(value)) return false;
+  return (
+    isString(value['siteTitle']) &&
+    isString(value['siteLogoEmoji']) &&
+    isBoolean(value['testModeEnabled']) &&
+    isBoolean(value['allowGuestLogin']) &&
+    typeof value['defaultViewportWidth'] === 'number' &&
+    typeof value['defaultViewportHeight'] === 'number' &&
+    isBoolean(value['disableViewportSizing']) &&
+    isBoolean(value['disableZoomControls']) &&
+    isBoolean(value['allowServerBackground'])
+  );
+};
 
 const USERS_KEY = 'op_users';
 const SESSION_KEY = 'op_session';
@@ -400,16 +457,107 @@ export class AuthService {
     }
   }
 
+  logoutEverywhere(): 'local' | 'external' {
+    const hadExternalAuth = this.usesExternalAuth();
+    this.logout();
+    if (hadExternalAuth) {
+      this.startExternalLogout();
+      return 'external';
+    }
+    return 'local';
+  }
+
   usesExternalAuth(): boolean {
-    return this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();
+    const capabilities = getOpCapabilities();
+    return capabilities.auth && this.cognitoOidc.isEnabled() && this.cognitoOidc.isConfigured();
   }
 
   canUsePasswordLogin(): boolean {
     return !this.usesExternalAuth();
   }
 
+  getUniverseAccessContext(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): UniverseAccessContext {
+    const session = this.sessionSignal();
+    const ownerId = input?.universeOwnerId ?? session.universeOwnerId ?? session.userId ?? null;
+    return {
+      sessionUserId: session.userId,
+      sessionRole:
+        session.sessionRole ?? this.actualUser()?.role ?? this.currentUser()?.role ?? 'user',
+      universeOwnerId: ownerId,
+      multiUserEnabled: Boolean(input?.multiUserEnabled ?? false),
+      universeEditHolderId: input?.universeEditHolderId ?? null,
+      viaShareLink: Boolean(input?.viaShareLink),
+    };
+  }
+
+  getUniversePermissionSet(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }) {
+    return getUniversePermissionSet(this.getUniverseAccessContext(input));
+  }
+
+  canEditUniverse(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canEditUniverse(this.getUniverseAccessContext(input));
+  }
+
+  canInvite(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canInviteToUniverse(this.getUniverseAccessContext(input));
+  }
+
+  canGrantPencil(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return canGrantUniversePencil(this.getUniverseAccessContext(input));
+  }
+
+  canViewOnly(input?: {
+    universeOwnerId?: string | null;
+    universeEditHolderId?: string | null;
+    multiUserEnabled?: boolean;
+    viaShareLink?: boolean;
+  }): boolean {
+    return isUniverseViewOnly(this.getUniverseAccessContext(input));
+  }
+
   async startExternalLogin() {
     await this.cognitoOidc.startLogin();
+  }
+
+  async startExternalSignup(): Promise<{ ok: boolean; message?: string }> {
+    if (!this.isPublicSignupEnabled()) {
+      return { ok: false, message: 'auth.error.generic' };
+    }
+    await this.cognitoOidc.startSignup();
+    return { ok: true };
+  }
+
+  isPublicSignupPrepared(): boolean {
+    return getOpCapabilities().publicSignupPrepared;
+  }
+
+  isPublicSignupEnabled(): boolean {
+    return getOpCapabilities().publicSignupEnabled;
   }
 
   startExternalLogout() {
@@ -1096,7 +1244,7 @@ export class AuthService {
     }
     const session = this.sessionSignal();
     const activeUniverseId = this.getActiveUniverseId(profile.sub);
-    this.sessionSignal.set({
+    const nextSession = this.normalizeSessionState({
       userId: profile.sub,
       previewUserId: null,
       previewPersist: false,
@@ -1105,7 +1253,10 @@ export class AuthService {
       universeOwnerId: null,
       universeId: activeUniverseId ?? session.universeId ?? null,
     });
-    this.persistSession();
+    if (!this.sessionStatesEqual(session, nextSession)) {
+      this.sessionSignal.set(nextSession);
+      this.persistSession();
+    }
     this.applyLoginPhoneModePreference();
   }
 
@@ -1186,7 +1337,13 @@ export class AuthService {
       session.sessionRole ??
       'user';
     if (actualRole !== 'admin') {
-      this.sessionSignal.set({ userId: validUserId, previewUserId: null, previewPersist: false });
+      this.sessionSignal.set(
+        this.normalizeSessionState({
+          userId: validUserId,
+          previewUserId: null,
+          previewPersist: false,
+        }),
+      );
     }
 
     if (guestOnly) {
@@ -1392,13 +1549,13 @@ export class AuthService {
     universes.forEach((universe) => {
       const key = `${DIALOG_STATE_KEY}:${GUEST_USER_ID}:${universe.id}`;
       if (this.getRaw(key)) return;
-      const workspaceId = `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const workspaceId = this.uid('ws', 6);
       const instances: DialogInstanceState[] = [];
       const addInstance = (appId: AppId, x: number, y: number, z: number) => {
         const def = APP_REGISTRY[appId];
         const rect = def?.defaultSize ?? { x: 0, y: 0, width: 480, height: 360 };
         instances.push({
-          id: `dlg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+          id: this.uid('dlg', 6),
           appId,
           titleKey: def?.labelKey ?? `apps.${appId}`,
           rect: { x, y, width: rect.width, height: rect.height },
@@ -1468,24 +1625,18 @@ export class AuthService {
     void this.persistSerialized(key, serialized);
   }
 
-  private async persistSerialized(key: string, serialized: string, attempt = 0) {
+  private async persistSerialized(key: string, serialized: string) {
     try {
-      await this.storage.setItem(key, serialized);
-      return;
+      await writeWithConflictRetry({
+        key,
+        serialized,
+        write: (payload) => this.storage.setItem(key, payload),
+        getCurrentSerialized: () => this.getRaw(key),
+        refresh: () => this.storage.getItem(key).then(() => undefined),
+        maxRetries: 1,
+        retryDelayMs: 120,
+      });
     } catch (error) {
-      if (this.shouldIgnorePersistConflict(key, error)) return;
-      if (this.isVersionConflict(error) && attempt < 1) {
-        try {
-          await this.storage.getItem(key);
-        } catch {
-          // Ignore cache refresh failures; retry once anyway.
-        }
-        if (this.getRaw(key) === serialized) return;
-        setTimeout(() => {
-          void this.persistSerialized(key, serialized, attempt + 1);
-        }, 120);
-        return;
-      }
       console.error(error);
     }
   }
@@ -1511,6 +1662,20 @@ export class AuthService {
   }
 
   private safeJson<T>(key: string, fallback: T): T {
+    if (key === SESSION_KEY) {
+      return this.storage.getJsonSyncValidated(
+        key,
+        fallback,
+        isSessionStateContract as (value: unknown) => value is T,
+      );
+    }
+    if (key === ORG_SETTINGS_KEY) {
+      return this.storage.getJsonSyncValidated(
+        key,
+        fallback,
+        isOrgSettingsContract as (value: unknown) => value is T,
+      );
+    }
     return this.storage.getJsonSync(key, fallback);
   }
 
@@ -1631,12 +1796,30 @@ export class AuthService {
     return 'en';
   }
 
-  private uid(prefix: string) {
-    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  private uid(prefix: string, randomLength = 8) {
+    const timestamp = Date.now().toString(36);
+    const random = this.secureRandomString(randomLength);
+    return `${prefix}_${timestamp}_${random}`;
   }
 
   private createUniverseId() {
-    return Math.random().toString(36).slice(2, 10);
+    return this.secureRandomString(8);
+  }
+
+  private secureRandomString(length: number) {
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const cryptoObj = globalThis.crypto;
+    if (cryptoObj?.getRandomValues) {
+      const bytes = new Uint8Array(length);
+      cryptoObj.getRandomValues(bytes);
+      let result = '';
+      for (const byte of bytes) {
+        result += chars[byte % chars.length];
+      }
+      return result;
+    }
+    const fallback = Date.now().toString(36);
+    return fallback.padEnd(length, '0').slice(0, length);
   }
 
   async hashPassword(raw: string) {
@@ -1810,6 +1993,9 @@ export class AuthService {
   }
 
   async createInvitee(ownerId: string, username: string, password: string) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return { ok: false, message: 'users.error.adminOnly' };
+    }
     const trimmed = username.trim();
     if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
     if (!password || !password.trim()) {
@@ -1839,6 +2025,9 @@ export class AuthService {
     inviteeId: string,
     updates: { username: string; password?: string },
   ) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return { ok: false, message: 'users.error.adminOnly' };
+    }
     const trimmed = updates.username.trim();
     if (!trimmed) return { ok: false, message: 'users.error.usernameRequired' };
     const list = this.getInviteesForOwner(ownerId);
@@ -1858,6 +2047,9 @@ export class AuthService {
   }
 
   deleteInvitee(ownerId: string, inviteeId: string) {
+    if (!this.canInvite({ universeOwnerId: ownerId })) {
+      return;
+    }
     const list = this.getInviteesForOwner(ownerId);
     const nextList = list.filter((u) => u.id !== inviteeId);
     this.inviteesSignal.set({ ...this.inviteesSignal(), [ownerId]: nextList });
@@ -1947,7 +2139,7 @@ export class AuthService {
       previewUserId: null,
       previewPersist: false,
       sessionRole: 'observer',
-      sessionUsername: 'Observer',
+      sessionUsername: this.createViewerUsername(observerId),
       universeOwnerId: ownerId,
       universeId: prefs.universeId,
     });
@@ -2004,7 +2196,13 @@ export class AuthService {
     const list = this.cleanupUniversePresence(universeId);
     const now = Date.now();
     const next = list.filter((item) => item.id !== entry.id);
-    next.push({ ...entry, lastSeen: now });
+    const hasActiveScope =
+      Boolean(entry.activeInstanceId) || Boolean(entry.activeObjectId) || Boolean(entry.activeMode);
+    next.push({
+      ...entry,
+      lastSeen: now,
+      activeUpdatedAt: hasActiveScope ? now : (entry.activeUpdatedAt ?? now),
+    });
     this.persist(this.universePresenceKey(universeId), next);
     return next;
   }
@@ -2083,6 +2281,10 @@ export class AuthService {
     return next;
   }
 
+  private createViewerUsername(observerId: string) {
+    return `Viewer (${observerId.slice(-4)})`;
+  }
+
   private universePresenceKey(universeId: string) {
     return `${UNIVERSE_PRESENCE_KEY}:${universeId}`;
   }
@@ -2099,28 +2301,31 @@ export class AuthService {
     return `${UNIVERSE_GUEST_COUNTER_KEY}:${universeId}`;
   }
 
-  private shouldIgnorePersistConflict(key: string, error: unknown) {
-    if (!this.isUniverseEphemeralKey(key)) return false;
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const message = String(error.message || '');
-    return code === 'version_conflict' || message.includes('version_conflict');
+  private normalizeSessionState(
+    value: Partial<SessionState> &
+      Pick<SessionState, 'userId' | 'previewUserId' | 'previewPersist'>,
+  ): SessionState {
+    return {
+      userId: value.userId ?? null,
+      previewUserId: value.previewUserId ?? null,
+      previewPersist: Boolean(value.previewPersist),
+      sessionRole: value.sessionRole ?? null,
+      sessionUsername: value.sessionUsername ?? null,
+      universeOwnerId: value.universeOwnerId ?? null,
+      universeId: value.universeId ?? null,
+    };
   }
 
-  private isUniverseEphemeralKey(key: string) {
+  private sessionStatesEqual(a: SessionState, b: SessionState): boolean {
     return (
-      key.startsWith(`${UNIVERSE_PRESENCE_KEY}:`) ||
-      key.startsWith(`${UNIVERSE_GUEST_COUNTER_KEY}:`)
+      a.userId === b.userId &&
+      a.previewUserId === b.previewUserId &&
+      a.previewPersist === b.previewPersist &&
+      (a.sessionRole ?? null) === (b.sessionRole ?? null) &&
+      (a.sessionUsername ?? null) === (b.sessionUsername ?? null) &&
+      (a.universeOwnerId ?? null) === (b.universeOwnerId ?? null) &&
+      (a.universeId ?? null) === (b.universeId ?? null)
     );
-  }
-
-  private isVersionConflict(error: unknown) {
-    if (!(error instanceof Error)) return false;
-    const maybeCode = (error as Error & { code?: unknown }).code;
-    const code = typeof maybeCode === 'string' ? maybeCode : '';
-    const message = String(error.message || '');
-    return code === 'version_conflict' || message.includes('version_conflict');
   }
 
   private mirrorOrgSettingsForRuntimeGuards(value: OrgSettings) {
