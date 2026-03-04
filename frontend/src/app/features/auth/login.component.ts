@@ -147,13 +147,27 @@ import packageJson from '../../../../package.json';
         }
       } @else {
         @if (externalAuthEnabled()) {
-          <button
-            type="button"
-            style="margin-top: 20px; padding: 10px 14px;"
-            (click)="startSecureSignIn()"
-          >
-            {{ 'auth.signIn' | translate }}
-          </button>
+          <div style="display:flex; gap:10px; margin-top: 20px; flex-wrap: wrap;">
+            <button type="button" style="padding: 10px 14px;" (click)="startSecureSignIn()">
+              {{ 'auth.signIn' | translate }}
+            </button>
+            @if (publicSignupPrepared()) {
+              <button
+                type="button"
+                style="padding: 10px 14px;"
+                [disabled]="!publicSignupEnabled()"
+                [style.opacity]="publicSignupEnabled() ? 1 : 0.6"
+                (click)="startSecureSignup()"
+              >
+                Create account
+              </button>
+            }
+          </div>
+          @if (publicSignupPrepared() && !publicSignupEnabled()) {
+            <div style="margin-top: 8px; opacity: 0.72; font-size: 13px;">
+              Public sign-up is not enabled yet.
+            </div>
+          }
         } @else {
           <form (submit)="onSubmit($event)">
             <label for="login-username" style="display:block; margin: 12px 0 6px;">
@@ -317,6 +331,8 @@ export class LoginComponent {
   guestModeOnlyFlag = computed(() => this.auth.guestModeOnly());
   allowGuest = computed(() => this.guestModeOnlyFlag() || this.auth.orgSettings().allowGuestLogin);
   externalAuthEnabled = computed(() => this.auth.usesExternalAuth() && !this.universeLogin());
+  publicSignupPrepared = computed(() => this.auth.isPublicSignupPrepared());
+  publicSignupEnabled = computed(() => this.auth.isPublicSignupEnabled());
   universeLogin = computed(() => Boolean(this.auth.universeContext()));
   universeName = computed(() => {
     const ownerId = this.auth.universeContext()?.ownerId;
@@ -394,6 +410,14 @@ export class LoginComponent {
   async startSecureSignIn() {
     this.error.set(null);
     await this.auth.startExternalLogin();
+  }
+
+  async startSecureSignup() {
+    this.error.set(null);
+    const result = await this.auth.startExternalSignup();
+    if (!result.ok) {
+      this.error.set(result.message ? this.translate.instant(result.message) : 'Unable to sign up.');
+    }
   }
 
   async onInviteeSubmit(event: Event) {
