@@ -77,6 +77,7 @@ Realtime sync uses WebSocket invalidation when available and polling fallback wh
 - `Docs/backend-setup.md` - provider-agnostic backend contract
 - `Docs/observability-runbook.md` - correlation IDs, alert taxonomy, and incident triage flow
 - `Docs/compliance-prep.md` - data classification, retention, and access-control prep artifacts
+- `Docs/qa-matrix.md` - pre-launch scenario matrix and evidence worksheet
 - `Docs/release-checklist.md` - pre-launch matrix and ship checklist
 
 ## License

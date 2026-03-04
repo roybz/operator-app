@@ -2,6 +2,8 @@
 
 ## Critical Scenarios Matrix
 
+Use `Docs/qa-matrix.md` as the execution sheet and evidence log for these scenarios.
+
 1. Same user, two devices:
    - edit same instance from desktop + mobile
    - verify convergence without data loss
@@ -25,9 +27,7 @@
 Run from `frontend/`:
 
 ```bash
-npm run lint
-npm run test:unit -- --watch=false
-npm run build
+npm run test:release-gates
 npm run test:e2e
 ```
 
@@ -58,4 +58,3 @@ Check `frontend/src/assets/op-config.js`:
 - [ ] No unresolved P0/P1 sync/auth regressions
 - [ ] Rollback commit identified
 - [ ] Release notes prepared
-
