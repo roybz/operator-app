@@ -70,6 +70,83 @@ const defaultState = (): CalculatorState => ({
   currencyFetching: false,
 });
 
+const normalizeCalculatorState = (
+  candidate: Partial<CalculatorState> | null | undefined,
+  fallback: CalculatorState,
+): CalculatorState => ({
+  display: typeof candidate?.display === 'string' && candidate.display.trim() ? candidate.display : fallback.display,
+  accumulator:
+    typeof candidate?.accumulator === 'number' && Number.isFinite(candidate.accumulator)
+      ? candidate.accumulator
+      : null,
+  pendingOp:
+    candidate?.pendingOp === '+' ||
+    candidate?.pendingOp === '-' ||
+    candidate?.pendingOp === 'Ã—' ||
+    candidate?.pendingOp === 'Ã·'
+      ? candidate.pendingOp
+      : null,
+  overwrite: typeof candidate?.overwrite === 'boolean' ? candidate.overwrite : fallback.overwrite,
+  scientific:
+    typeof candidate?.scientific === 'boolean' ? candidate.scientific : fallback.scientific,
+  currencyEnabled:
+    typeof candidate?.currencyEnabled === 'boolean'
+      ? candidate.currencyEnabled
+      : fallback.currencyEnabled,
+  currencyAmount:
+    typeof candidate?.currencyAmount === 'string' && candidate.currencyAmount.trim()
+      ? candidate.currencyAmount
+      : fallback.currencyAmount,
+  currencyFrom:
+    typeof candidate?.currencyFrom === 'string' && candidate.currencyFrom.trim()
+      ? candidate.currencyFrom
+      : fallback.currencyFrom,
+  currencyTo:
+    typeof candidate?.currencyTo === 'string' && candidate.currencyTo.trim()
+      ? candidate.currencyTo
+      : fallback.currencyTo,
+  currencyResult:
+    typeof candidate?.currencyResult === 'string' ? candidate.currencyResult : fallback.currencyResult,
+  currencyError:
+    typeof candidate?.currencyError === 'string' || candidate?.currencyError === null
+      ? candidate.currencyError
+      : fallback.currencyError,
+  currencyLastFetch:
+    typeof candidate?.currencyLastFetch === 'number' && Number.isFinite(candidate.currencyLastFetch)
+      ? candidate.currencyLastFetch
+      : fallback.currencyLastFetch,
+  currencyFetching:
+    typeof candidate?.currencyFetching === 'boolean'
+      ? candidate.currencyFetching
+      : fallback.currencyFetching,
+});
+
+export const mergeCalculatorStatesForSync = (
+  remoteState: Partial<CalculatorState> | null | undefined,
+  localState: CalculatorState,
+  fallback: CalculatorState,
+): CalculatorState => {
+  const remote = normalizeCalculatorState(remoteState, fallback);
+  const local = normalizeCalculatorState(localState, fallback);
+  return {
+    ...remote,
+    ...local,
+    display: local.display,
+    accumulator: local.accumulator,
+    pendingOp: local.pendingOp,
+    overwrite: local.overwrite,
+    scientific: local.scientific,
+    currencyEnabled: local.currencyEnabled,
+    currencyAmount: local.currencyAmount,
+    currencyFrom: local.currencyFrom,
+    currencyTo: local.currencyTo,
+    currencyResult: local.currencyResult || remote.currencyResult,
+    currencyError: local.currencyError ?? remote.currencyError,
+    currencyLastFetch: Math.max(local.currencyLastFetch, remote.currencyLastFetch),
+    currencyFetching: local.currencyFetching,
+  };
+};
+
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'BRL'];
 const USE_FRANKFURTER_API = true;
 const USE_DEMO_RATES_FALLBACK = true;
@@ -289,11 +366,12 @@ export class CalculatorComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    const fallback = defaultState();
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as CalculatorState;
-        this.state.set({ ...defaultState(), ...parsed });
+        const parsed = normalizeCalculatorState(JSON.parse(raw) as CalculatorState, fallback);
+        this.state.set(parsed);
         this.ensureDefaultCurrencyPair();
         stateStore.set(this.instanceId, this.state());
         return;
@@ -303,7 +381,7 @@ export class CalculatorComponent implements OnInit, OnDestroy {
     }
     const stored = stateStore.get(this.instanceId);
     if (stored) {
-      this.state.set({ ...defaultState(), ...stored });
+      this.state.set(normalizeCalculatorState(stored, fallback));
       this.ensureDefaultCurrencyPair();
     } else {
       stateStore.set(this.instanceId, this.state());
@@ -334,11 +412,12 @@ export class CalculatorComponent implements OnInit, OnDestroy {
   }
 
   private reloadFromStorage() {
+    const fallback = defaultState();
     const raw = this.storage.getItemSync(this.instanceStorageKey());
     if (!raw) return false;
     try {
-      const parsed = JSON.parse(raw) as CalculatorState;
-      this.state.set({ ...defaultState(), ...parsed });
+      const parsed = normalizeCalculatorState(JSON.parse(raw) as CalculatorState, fallback);
+      this.state.set(parsed);
       this.ensureDefaultCurrencyPair();
       stateStore.set(this.instanceId, this.state());
       return true;
@@ -351,10 +430,23 @@ export class CalculatorComponent implements OnInit, OnDestroy {
     const key = this.instanceStorageKey();
     if (isRemoteStorageVersionConflict(error)) {
       this.remoteConflict.queue([key], 'dirty');
+      const fallback = defaultState();
+      let remoteState: CalculatorState | null = null;
       try {
-        await this.storage.getItem(key);
+        const raw = await this.storage.getItem(key);
+        if (raw) {
+          remoteState = normalizeCalculatorState(JSON.parse(raw) as CalculatorState, fallback);
+        }
       } catch {
         // Ignore cache refresh failures; polling/realtime will retry.
+      }
+      if (remoteState) {
+        const merged = mergeCalculatorStatesForSync(remoteState, this.state(), fallback);
+        this.state.set(merged);
+        stateStore.set(this.instanceId, merged);
+        this.ensureDefaultCurrencyPair();
+        this.persistState({ immediate: true });
+        return 'handled' as const;
       }
       this.reloadFromStorage();
       return 'handled' as const;
