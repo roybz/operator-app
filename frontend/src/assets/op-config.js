@@ -10,6 +10,12 @@ window.__OP_CONFIG__ = {
   cloudVaultAttachmentUploadBetaEnabled: false,
   cloudVaultAttachmentUploadMaxTotalBytes: 1572864, // 1.5 MB beta cap
   cloudVaultAttachmentUploadMaxAssetBytes: 393216, // 384 KB per attachment beta cap
+  quotaStorageBytes: 25165824, // 24 MB total storage budget
+  quotaRequestsPerMinute: 240,
+  quotaRealtimeChannels: 6,
+  quotaVaultTotalBytes: 6291456, // 6 MB per vault budget
+  quotaVaultAttachmentTotalBytes: 1572864,
+  quotaVaultAttachmentAssetBytes: 393216,
   authProvider: 'cognito', // 'local' | 'cognito'
   publicSignupPrepared: true, // signup flow plumbing can exist
   publicSignupEnabled: false, // keep disabled until pricing/onboarding is ready

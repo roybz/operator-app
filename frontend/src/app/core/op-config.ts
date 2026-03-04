@@ -31,6 +31,12 @@ export interface OpRuntimeConfig {
   cloudVaultAttachmentUploadBetaEnabled?: boolean;
   cloudVaultAttachmentUploadMaxTotalBytes?: number;
   cloudVaultAttachmentUploadMaxAssetBytes?: number;
+  quotaStorageBytes?: number;
+  quotaRequestsPerMinute?: number;
+  quotaRealtimeChannels?: number;
+  quotaVaultTotalBytes?: number;
+  quotaVaultAttachmentTotalBytes?: number;
+  quotaVaultAttachmentAssetBytes?: number;
   authProvider?: 'local' | 'cognito';
   publicSignupPrepared?: boolean;
   publicSignupEnabled?: boolean;

@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { RemoteStorageAdapter } from './remote-storage.adapter';
+import { RemoteStorageAdapter, RemoteStorageError } from './remote-storage.adapter';
 import type { StorageAdapter } from './storage-adapter';
 
 class FakeLocalFallback implements StorageAdapter {
@@ -91,5 +91,41 @@ describe('RemoteStorageAdapter', () => {
 
     expect(value).toBe('remote-value');
     expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('adds correlation headers for remote requests when providers are configured', async () => {
+    const fetchSpy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/storage/item') && init?.method === 'PUT') {
+        return new Response(JSON.stringify({ version: 2 }), { status: 200 });
+      }
+      return new Response(null, { status: 404 });
+    });
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const adapter = new RemoteStorageAdapter('https://api.example.com', {
+      accessTokenProvider: async () => 'token-123',
+      requestIdProvider: () => 'api_req_1',
+      sessionIdProvider: () => 'sess_1',
+    });
+
+    await adapter.setItem('corr-key', 'corr-value');
+    const [, init] = fetchSpy.mock.calls[0] as [RequestInfo | URL, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers['X-Operator-Request-Id']).toBe('api_req_1');
+    expect(headers['X-Operator-Session-Id']).toBe('sess_1');
+  });
+
+  it('enforces request-per-minute quota when configured', async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ keys: [] }), { status: 200 }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const adapter = new RemoteStorageAdapter('https://api.example.com', {
+      accessTokenProvider: async () => 'token-123',
+      requestRateLimitPerMinute: 1,
+    });
+
+    await adapter.keys();
+    await expect(adapter.keys()).rejects.toBeInstanceOf(RemoteStorageError);
   });
 });
