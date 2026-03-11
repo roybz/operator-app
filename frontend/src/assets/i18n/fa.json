@@ -368,6 +368,7 @@
   "phone.modeLabel": "Phone mode?",
   "preferences": {
     "accessibilityMode": "Accessibility mode (high contrast)",
+    "contextSuggestionsEnabled": "Show contextual suggestions",
     "backgroundImageCenter": "وسط‌چين",
     "backgroundImageClear": "Clear background",
     "backgroundImageMode": "نمايش تصوير پس‌زمينه",

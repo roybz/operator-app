@@ -250,7 +250,7 @@ export const mergeStickyStatesForSync = (
           [style.color]="state().colorEnabled ? state().textColor : 'inherit'"
           style="flex:1; display:flex; flex-direction:column; gap:8px;"
         >
-          @if (externalContextRef()) {
+          @if (contextSuggestionsEnabled() && externalContextRef()) {
             <div
               style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
             >
@@ -309,6 +309,9 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   state = signal<StickyNoteState>(defaultState('rich'));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
   accessibilityMode = computed(() => this.prefs.preferences().accessibilityMode);
+  contextSuggestionsEnabled = computed(
+    () => this.prefs.preferences().contextSuggestionsEnabled ?? true,
+  );
   richFocused = signal(false);
   markdownFocused = signal(false);
   richSnapshot = signal('');

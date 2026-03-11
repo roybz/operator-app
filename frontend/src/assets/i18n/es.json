@@ -368,6 +368,7 @@
   "phone.modeLabel": "Phone mode?",
   "preferences": {
     "accessibilityMode": "Accessibility mode (high contrast)",
+    "contextSuggestionsEnabled": "Show contextual suggestions",
     "backgroundImageCenter": "Centrar",
     "backgroundImageClear": "Clear background",
     "backgroundImageMode": "Visualización de la imagen de fondo",

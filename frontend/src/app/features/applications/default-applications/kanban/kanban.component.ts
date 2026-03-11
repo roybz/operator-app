@@ -460,7 +460,7 @@ export function saveKanbanState(
             </button>
           }
         </div>
-        @if (externalContextRef()) {
+        @if (contextSuggestionsEnabled() && externalContextRef()) {
           <div
             style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
           >
@@ -781,6 +781,9 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   exportLimitOpen = signal(false);
   scrollShadows = signal({ left: false, right: false });
   externalContextRef = signal<ObjectRef | null>(null);
+  contextSuggestionsEnabled = computed(
+    () => this.prefs.preferences().contextSuggestionsEnabled ?? true,
+  );
   private suppressNextCardClick = false;
   private cardPanState: {
     pointerId: number;

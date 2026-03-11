@@ -7,6 +7,7 @@ import {
   OnDestroy,
   OnInit,
   Output,
+  computed,
   effect,
   inject,
   signal,
@@ -163,7 +164,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
             {{ 'todo.clearCompleted' | translate }}
           </button>
         </header>
-        @if (externalContextRef()) {
+        @if (contextSuggestionsEnabled() && externalContextRef()) {
           <div
             style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
           >
@@ -562,6 +563,9 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   draggingSubtask = signal<{ todoId: string; subtaskId: string } | null>(null);
   hoverSubtask = signal<{ todoId: string; subtaskId: string; side: 'above' | 'below' } | null>(
     null,
+  );
+  contextSuggestionsEnabled = computed(
+    () => this.prefs.preferences().contextSuggestionsEnabled ?? true,
   );
   private readonly translate = inject(TranslateService);
   private readonly prefs = inject(AppPreferencesService);

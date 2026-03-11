@@ -66,6 +66,7 @@ describe('KanbanComponent', () => {
             language: () => 'en',
             timeZone: () => 'UTC',
             timeFormat: () => '12h',
+            preferences: () => ({ contextSuggestionsEnabled: true }),
             userId: () => 'test-user',
           },
         },

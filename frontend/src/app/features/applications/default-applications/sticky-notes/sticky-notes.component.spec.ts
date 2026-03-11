@@ -12,6 +12,7 @@ import { UserPreferences } from '../../../../core/auth.service';
 import { STORAGE_ADAPTER } from '../../../../core/storage/storage-adapter';
 import { LocalStorageAdapter } from '../../../../core/storage/local-storage.adapter';
 import { StorageService } from '../../../../core/storage/storage.service';
+import { vi } from 'vitest';
 
 class MockPrefsService {
   preferences() {
@@ -21,7 +22,7 @@ class MockPrefsService {
     } as UserPreferences;
   }
   userId() {
-    return 'u_test';
+    return 'u_test:u1';
   }
 }
 
@@ -164,5 +165,28 @@ describe('StickyNotesComponent', () => {
 
     expect(component.state().content).toContain('Existing text');
     expect(component.state().content).toContain('Note body content');
+  });
+
+  it('throttles sticky context publishing during rapid input', () => {
+    vi.useFakeTimers();
+    try {
+      const component = fixture.componentInstance;
+      const contextStore = component as unknown as {
+        contextFields: { setSelection: (...args: unknown[]) => void };
+      };
+      const setSelectionSpy = vi.spyOn(contextStore.contextFields, 'setSelection');
+      setSelectionSpy.mockClear();
+
+      component.onRichInput({ target: { innerHTML: 'one' } } as unknown as Event);
+      component.onRichInput({ target: { innerHTML: 'two' } } as unknown as Event);
+      component.onRichInput({ target: { innerHTML: 'three' } } as unknown as Event);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(0);
+      vi.advanceTimersByTime(149);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(0);
+      vi.advanceTimersByTime(1);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

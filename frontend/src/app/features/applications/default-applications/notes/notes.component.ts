@@ -277,7 +277,7 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
   ],
   template: `
     <div class="notes-shell">
-      @if (!settingsOpen() && externalContextRef()) {
+      @if (!settingsOpen() && contextSuggestionsEnabled() && externalContextRef()) {
         <div
           style="position:absolute; top:8px; right:8px; z-index:4; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); padding:8px; display:flex; gap:8px; align-items:center;"
         >
@@ -988,6 +988,9 @@ export class NotesComponent implements OnInit, OnDestroy {
   markdownFocused = signal(false);
   richSnapshot = signal('');
   isPhoneMode = computed(() => this.prefs.preferences().phoneMode);
+  contextSuggestionsEnabled = computed(
+    () => this.prefs.preferences().contextSuggestionsEnabled ?? true,
+  );
   richHtml = computed(() =>
     this.richFocused() ? this.richSnapshot() : (this.selectedNode()?.content ?? ''),
   );

@@ -80,6 +80,7 @@ export interface UserPreferences {
   themeMode: 'system' | 'light' | 'dark' | 'timeZone';
   colorTheme: 'standard' | 'notepad' | 'ice' | 'lava' | 'green';
   accessibilityMode: boolean;
+  contextSuggestionsEnabled: boolean;
   phoneMode: boolean;
   credentials: SavedCredential[];
   maxPersistedApps: number;
@@ -1722,6 +1723,7 @@ export class AuthService {
       themeMode: 'system',
       colorTheme: 'standard',
       accessibilityMode: false,
+      contextSuggestionsEnabled: true,
       phoneMode: this.isPhoneDevice(),
       credentials: [],
       maxPersistedApps: 255,
