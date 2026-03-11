@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { AuthService, UniverseEditHolder } from '../auth.service';
 import { StorageService } from '../storage/storage.service';
 import { LlmContext } from './llm-types';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 const PENCIL_LEASE_KEY_PREFIX = 'op_llm_pencil_lease_v1';
 const DEFAULT_LEASE_TTL_MS = 5 * 60 * 1000;
@@ -65,14 +66,14 @@ export class LlmPencilLeaseService {
       expiresAt: now + ttl,
     };
 
-    await this.storage.setJson(this.key(context), lease);
+    await this.persistWithConflictRetry(this.key(context), lease);
     this.auth.setUniverseEditHolder(context.universeId, this.toEditHolder(lease));
     return { ok: true, lease };
   }
 
   async revokeLease(context: LlmContext, residentId?: string): Promise<void> {
     const current = await this.storage.getJson<LlmPencilLease | null>(this.key(context), null);
-    await this.storage.setJson(this.key(context), null);
+    await this.persistWithConflictRetry(this.key(context), null);
     const holder = this.auth.getUniverseEditHolder(context.universeId);
     const targetId = residentId?.trim() || current?.residentId || null;
     if (!holder || !targetId || holder.id !== targetId) return;
@@ -93,7 +94,25 @@ export class LlmPencilLeaseService {
     return {
       id: lease.residentId,
       username: lease.residentName,
-      role: 'invitee',
+      // Resident users participate like read-only observers in the shared presence/count
+      // model and should be visible in the shared bottom-bar participant list.
+      role: 'observer',
     };
+  }
+
+  private async persistWithConflictRetry(
+    key: string,
+    value: LlmPencilLease | null,
+  ): Promise<void> {
+    const serialized = JSON.stringify(value);
+    await writeWithConflictRetry({
+      key,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(key),
+      write: (payload) => this.storage.setItem(key, payload),
+      refresh: async () => {
+        await this.storage.getItem(key);
+      },
+    });
   }
 }

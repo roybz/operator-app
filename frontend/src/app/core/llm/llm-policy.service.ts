@@ -3,6 +3,7 @@ import { AuthService } from '../auth.service';
 import { StorageService } from '../storage/storage.service';
 import { DEFAULT_LLM_POLICY, LlmContext, LlmPolicy } from './llm-types';
 import { LlmModeGuardService } from './llm-mode-guard.service';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 const POLICY_KEY_PREFIX = 'op_llm_policy_v1';
 
@@ -23,7 +24,7 @@ export class LlmPolicyService {
     if (!this.auth.canInvite({ universeOwnerId: context.universeOwnerId })) {
       return { ok: false, message: 'llm.policy.unauthorized' };
     }
-    await this.storage.setJson(this.key(context), policy);
+    await this.persistWithConflictRetry(this.key(context), policy);
     return { ok: true };
   }
 
@@ -40,5 +41,18 @@ export class LlmPolicyService {
 
   private key(context: LlmContext): string {
     return `${POLICY_KEY_PREFIX}:${context.universeOwnerId}:${context.universeId}`;
+  }
+
+  private async persistWithConflictRetry(key: string, value: LlmPolicy): Promise<void> {
+    const serialized = JSON.stringify(value);
+    await writeWithConflictRetry({
+      key,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(key),
+      write: (payload) => this.storage.setItem(key, payload),
+      refresh: async () => {
+        await this.storage.getItem(key);
+      },
+    });
   }
 }

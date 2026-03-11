@@ -6,11 +6,19 @@ import { LlmEnvelopeGuardService } from './llm-envelope-guard.service';
 describe('LlmEnvelopeGuardService', () => {
   const store = new Map<string, unknown>();
   const storageStub = {
+    getItem: vi.fn(async (key: string) => {
+      const value = store.get(key);
+      return value === undefined ? null : JSON.stringify(value);
+    }),
+    getItemSync: vi.fn((key: string) => {
+      const value = store.get(key);
+      return value === undefined ? null : JSON.stringify(value);
+    }),
     getJson: vi.fn(async (key: string, fallback: unknown) =>
       store.has(key) ? store.get(key) : fallback,
     ),
-    setJson: vi.fn(async (key: string, value: unknown) => {
-      store.set(key, value);
+    setItem: vi.fn(async (key: string, value: string) => {
+      store.set(key, JSON.parse(value));
     }),
   };
 

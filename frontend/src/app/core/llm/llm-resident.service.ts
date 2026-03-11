@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { StorageService } from '../storage/storage.service';
 import { LlmContext, LlmResident, LlmResidentPermissions } from './llm-types';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 const RESIDENTS_KEY_PREFIX = 'op_llm_residents_v1';
 
@@ -30,14 +31,14 @@ export class LlmResidentService {
     const next = existing
       ? current.map((item) => (item.id === resident.id ? nextResident : item))
       : [...current, nextResident];
-    await this.storage.setJson(this.key(context), next);
+    await this.persistWithConflictRetry(this.key(context), next);
     return next;
   }
 
   async remove(context: LlmContext, residentId: string): Promise<LlmResident[]> {
     const current = await this.list(context);
     const next = current.filter((item) => item.id !== residentId);
-    await this.storage.setJson(this.key(context), next);
+    await this.persistWithConflictRetry(this.key(context), next);
     return next;
   }
 
@@ -52,5 +53,18 @@ export class LlmResidentService {
 
   private key(context: LlmContext): string {
     return `${RESIDENTS_KEY_PREFIX}:${context.universeOwnerId}:${context.universeId}`;
+  }
+
+  private async persistWithConflictRetry(key: string, value: LlmResident[]): Promise<void> {
+    const serialized = JSON.stringify(value);
+    await writeWithConflictRetry({
+      key,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(key),
+      write: (payload) => this.storage.setItem(key, payload),
+      refresh: async () => {
+        await this.storage.getItem(key);
+      },
+    });
   }
 }

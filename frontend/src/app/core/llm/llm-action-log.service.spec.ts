@@ -6,11 +6,21 @@ import { LlmActionLogService } from './llm-action-log.service';
 describe('LlmActionLogService', () => {
   const storageMap = new Map<string, unknown>();
   const storageStub = {
+    getItem: vi.fn(async (key: string) => {
+      const value = storageMap.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
+    getItemSync: vi.fn((key: string) => {
+      const value = storageMap.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
     getJson: vi.fn(async (key: string, fallback: unknown) =>
       storageMap.has(key) ? storageMap.get(key) : fallback,
     ),
-    setJson: vi.fn(async (key: string, value: unknown) => {
-      storageMap.set(key, value);
+    setItem: vi.fn(async (key: string, value: string) => {
+      storageMap.set(key, JSON.parse(value));
     }),
   };
 

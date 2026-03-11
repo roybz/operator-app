@@ -19,8 +19,21 @@ describe('LlmCredentialRefService', () => {
     getJson: vi.fn(async (key: string, fallback: unknown) =>
       store.has(key) ? store.get(key) : fallback,
     ),
+    getItem: vi.fn(async (key: string) => {
+      const value = store.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
+    getItemSync: vi.fn((key: string) => {
+      const value = store.get(key);
+      if (value === undefined) return null;
+      return JSON.stringify(value);
+    }),
     setJson: vi.fn(async (key: string, value: unknown) => {
       store.set(key, value);
+    }),
+    setItem: vi.fn(async (key: string, value: string) => {
+      store.set(key, JSON.parse(value));
     }),
   };
 

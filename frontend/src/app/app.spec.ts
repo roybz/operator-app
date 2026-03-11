@@ -265,4 +265,29 @@ describe('App', () => {
     expect(rescheduleSpy).toHaveBeenCalled();
     expect(app.remoteConflictPending()?.keys).toEqual(['busy-key']);
   });
+
+  it('counts active non-session observer holder as a user/presence participant', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance as unknown as {
+      universePresence: { set: (value: unknown[]) => void };
+      universeEditHolder: { set: (value: { id: string; username: string; role: string } | null) => void };
+      observerCount: () => number;
+      guestCount: () => number;
+      activeUsersOnline: () => { id: string; username: string; role: string }[];
+    };
+
+    fixture.detectChanges();
+    app.universePresence.set([
+      { id: 'u_human', username: 'Human', role: 'guest', ownerId: 'u_owner', lastSeen: Date.now() },
+    ]);
+    app.universeEditHolder.set({
+      id: 'r_llm',
+      username: 'Resident Bot',
+      role: 'observer',
+    });
+
+    expect(app.guestCount()).toBe(1);
+    expect(app.observerCount()).toBe(1);
+    expect(app.activeUsersOnline().map((entry) => entry.id)).toContain('r_llm');
+  });
 });

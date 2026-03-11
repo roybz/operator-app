@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { StorageService } from '../storage/storage.service';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 interface SeenEnvelopeEntry {
   requestId: string;
@@ -28,7 +29,17 @@ export class LlmEnvelopeGuardService {
       (entry) => now - entry.createdAt < DEFAULT_TTL_MS && entry.requestId !== requestId,
     );
     const next = [{ requestId, createdAt: now }, ...filtered].slice(0, 500);
-    await this.storage.setJson(this.key(universeOwnerId, universeId), next);
+    const key = this.key(universeOwnerId, universeId);
+    const serialized = JSON.stringify(next);
+    await writeWithConflictRetry({
+      key,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(key),
+      write: (payload) => this.storage.setItem(key, payload),
+      refresh: async () => {
+        await this.storage.getItem(key);
+      },
+    });
   }
 
   private async load(universeOwnerId: string, universeId: string): Promise<SeenEnvelopeEntry[]> {

@@ -3,6 +3,7 @@ import { AuthService } from '../auth.service';
 import { StorageService } from '../storage/storage.service';
 import { LlmCredentialMode, LlmCredentialRef, LlmCredentialStatus, LlmProvider } from './llm-types';
 import { LlmModeGuardService } from './llm-mode-guard.service';
+import { writeWithConflictRetry } from '../storage/remote-write-utils';
 
 const CREDENTIAL_REFS_KEY = 'op_llm_credential_refs_v1';
 const SECRET_SESSION_PREFIX = 'op_llm_secret_v1:';
@@ -66,7 +67,7 @@ export class LlmCredentialRefService {
     const next = existing
       ? current.map((entry) => (entry.id === merged.id ? merged : entry))
       : [...current, merged];
-    await this.storage.setJson(CREDENTIAL_REFS_KEY, { ...store, [userId]: next });
+    await this.persistRefsWithRetry({ ...store, [userId]: next });
 
     return { ok: true, ref: merged };
   }
@@ -77,7 +78,7 @@ export class LlmCredentialRefService {
     const store = await this.storage.getJson<CredentialRefsStore>(CREDENTIAL_REFS_KEY, {});
     const current = store[userId] ?? [];
     const next = current.filter((entry) => entry.id !== credentialRefId);
-    await this.storage.setJson(CREDENTIAL_REFS_KEY, { ...store, [userId]: next });
+    await this.persistRefsWithRetry({ ...store, [userId]: next });
     this.clearSecret(credentialRefId);
   }
 
@@ -126,5 +127,18 @@ export class LlmCredentialRefService {
     }
     const fallback = Date.now().toString(36);
     return fallback.padEnd(length, '0').slice(0, length);
+  }
+
+  private async persistRefsWithRetry(store: CredentialRefsStore): Promise<void> {
+    const serialized = JSON.stringify(store);
+    await writeWithConflictRetry({
+      key: CREDENTIAL_REFS_KEY,
+      serialized,
+      getCurrentSerialized: () => this.storage.getItemSync(CREDENTIAL_REFS_KEY),
+      write: (payload) => this.storage.setItem(CREDENTIAL_REFS_KEY, payload),
+      refresh: async () => {
+        await this.storage.getItem(CREDENTIAL_REFS_KEY);
+      },
+    });
   }
 }
