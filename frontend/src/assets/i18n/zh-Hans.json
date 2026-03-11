@@ -82,7 +82,8 @@
     "signIn": "登录",
     "tagline": "Get things done.",
     "title": "Operator App",
-    "username": "用户名"
+    "username": "用户名",
+    "signupInviteOnly": "Registration is currently invite-only."
   },
   "calculator": {
     "closeSettings": "Close settings",
@@ -208,7 +209,8 @@
     "trash": "删除",
     "unarchive": "Unarchive",
     "unlockDelete": "Unlock",
-    "unstash": "恢复"
+    "unstash": "恢复",
+    "deletePermanently": "Delete permanently"
   },
   "kanban": {
     "addBoard": "Add board",
@@ -240,7 +242,13 @@
     "removeBoard": "Remove",
     "removeColumn": "Remove column",
     "settingsTitle": "Kanban settings",
-    "wipeInstance": "Wipe instance data"
+    "wipeInstance": "Wipe instance data",
+    "confirmDeleteCard": "Delete this card?",
+    "convertCardToColumn": "Convert card to column",
+    "deleteCard": "Delete card",
+    "untitledCard": "Untitled",
+    "contextPrompt": "Create a card from the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "landing": {
     "welcome": "Welcome to Operator App."
@@ -263,7 +271,8 @@
     "license": "License & Privacy Policy",
     "logout": "退出",
     "settings": "设置",
-    "switchDesktopMode": "Switch to Desktop Mode"
+    "switchDesktopMode": "Switch to Desktop Mode",
+    "appsDrawer": "Apps Drawer"
   },
   "notes": {
     "addFolder": "Add folder",
@@ -347,7 +356,9 @@
     "cloudBetaAssetsLocalOnly": "Attachments remain local-only in beta ({{count}} files, {{kb}} KB on this device).",
     "cloudBetaAttachmentsToggle": "Sync attachments in cloud (paid beta)",
     "cloudBetaAttachmentsHelp": "Saved as a paid-beta preference only for now. Attachments still remain local on this device.",
-    "cloudBetaAttachmentsRequested": "Paid beta attachment sync requested for this vault. Attachments still remain local until the service is enabled."
+    "cloudBetaAttachmentsRequested": "Paid beta attachment sync requested for this vault. Attachments still remain local until the service is enabled.",
+    "contextPrompt": "Create a note from the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",
@@ -444,7 +455,8 @@
     "usersLink": "用户",
     "wipeApp": "Wipe data",
     "wipeConfirm": "Wipe all data for this application?",
-    "wipeConfirmButton": "Wipe"
+    "wipeConfirmButton": "Wipe",
+    "llmLink": "LLMs"
   },
   "sticky": {
     "backgroundColor": "Background color",
@@ -461,7 +473,9 @@
     "settingsTitle": "Sticky Note Settings",
     "textColor": "Text color",
     "unlocked": "Unlocked",
-    "visualMode": "Visual mode"
+    "visualMode": "Visual mode",
+    "contextPrompt": "Append the {{target}} to this sticky note?",
+    "contextCreateLabel": "From {{target}}"
   },
   "table": {
     "actions": "操作",
@@ -527,7 +541,12 @@
     "subtasks": "Subtasks",
     "title": "Todos",
     "wipeInstance": "Wipe instance data",
-    "wipeProject": "Wipe data"
+    "wipeProject": "Wipe data",
+    "confirmDeleteSubtask": "Delete this subtask?",
+    "confirmDeleteTodo": "Delete this todo?",
+    "showSubtaskDelete": "Show subtask delete (X) button",
+    "contextPrompt": "Add a todo for the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "topbar": {
     "collapse": "折叠顶部栏",
@@ -650,5 +669,14 @@
     "bookmarkOpenStreetMap": "OpenStreetMap (embed)",
     "bookmarkYouTubeEmbed": "YouTube (embed demo)",
     "bookmarkVimeoEmbed": "Vimeo (embed demo)"
+  },
+  "context": {
+    "target": {
+      "item": "selected item",
+      "todo": "selected todo",
+      "note": "selected note",
+      "sticky": "selected sticky note",
+      "kanbanCard": "selected kanban card"
+    }
   }
 }

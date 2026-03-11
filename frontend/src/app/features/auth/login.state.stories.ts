@@ -82,7 +82,7 @@ import type { Meta, StoryObj } from '@storybook/angular';
       </div>
 
       @if (showSignupDisabledMessage) {
-        <p class="login-note">Public sign-up is not enabled yet.</p>
+        <p class="login-note">Registration is currently invite-only.</p>
       }
     </section>
   `,

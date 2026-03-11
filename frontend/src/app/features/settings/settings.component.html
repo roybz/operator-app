@@ -47,6 +47,14 @@
     </button>
     <button
       type="button"
+      (click)="selectTab('llm')"
+      [disabled]="isGuestUser()"
+      [class.dimmed]="isGuestUser()"
+    >
+      {{ 'settings.llmLink' | translate }}
+    </button>
+    <button
+      type="button"
       (click)="selectTab('credentials')"
       [disabled]="isGuestUser()"
       [class.dimmed]="isGuestUser()"
@@ -82,7 +90,10 @@
     <app-applications-settings />
   }
   @if (tab() === 'multiUser' && !isGuestUser()) {
-    <app-multi-user-settings />
+    <app-multi-user-settings mode="collab" />
+  }
+  @if (tab() === 'llm' && !isGuestUser()) {
+    <app-multi-user-settings mode="llm" />
   }
   @if (tab() === 'users' && !auth.guestModeOnly() && !isGuestUser()) {
     <app-users-settings />

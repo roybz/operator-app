@@ -118,11 +118,16 @@ button:disabled {
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 16px;
+  font-weight: 700;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+:host-context(.phone-mode) .app-list__toggle {
+  font-size: 20px;
 }
 
 .app-list__instances {
@@ -178,6 +183,7 @@ button:disabled {
   flex-direction: column;
   gap: 4px;
   min-width: 160px;
+  max-width: 100%;
   z-index: 10;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
 }
@@ -228,6 +234,7 @@ button:disabled {
   padding: 4px 6px;
   border-radius: 6px;
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .app-instance__action:hover,

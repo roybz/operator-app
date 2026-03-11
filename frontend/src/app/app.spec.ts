@@ -12,6 +12,7 @@ import { LocalStorageAdapter } from './core/storage/local-storage.adapter';
 import { StorageService } from './core/storage/storage.service';
 import { RemoteConflictService } from './core/realtime/remote-conflict.service';
 import { AuthService } from './core/auth.service';
+import { MachineNowService } from './core/time/machine-now.service';
 import { vi } from 'vitest';
 
 type OpWindow = Window & {
@@ -270,7 +271,9 @@ describe('App', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance as unknown as {
       universePresence: { set: (value: unknown[]) => void };
-      universeEditHolder: { set: (value: { id: string; username: string; role: string } | null) => void };
+      universeEditHolder: {
+        set: (value: { id: string; username: string; role: string } | null) => void;
+      };
       observerCount: () => number;
       guestCount: () => number;
       activeUsersOnline: () => { id: string; username: string; role: string }[];
@@ -289,5 +292,26 @@ describe('App', () => {
     expect(app.guestCount()).toBe(1);
     expect(app.observerCount()).toBe(1);
     expect(app.activeUsersOnline().map((entry) => entry.id)).toContain('r_llm');
+  });
+
+  it('updates top-bar time label from shared machine time source', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const machineNow = TestBed.inject(MachineNowService);
+    const auth = TestBed.inject(AuthService);
+
+    auth.savePreferences({
+      ...auth.preferences(),
+      showTime: true,
+      timeZone: 'UTC',
+      timeFormat: '24h',
+    });
+
+    machineNow.now.set(new Date('2026-03-11T10:00:00.000Z'));
+    const first = app.timeLabel();
+    machineNow.now.set(new Date('2026-03-11T10:01:00.000Z'));
+    const second = app.timeLabel();
+
+    expect(first).not.toBe(second);
   });
 });

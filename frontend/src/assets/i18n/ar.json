@@ -80,6 +80,7 @@
     "roleInvitee": "invitee",
     "roleObserver": "observer",
     "signIn": "تسجيل الدخول",
+    "signupInviteOnly": "Registration is currently invite-only.",
     "tagline": "Get things done.",
     "title": "Operator App",
     "username": "اسم المستخدم"
@@ -208,7 +209,8 @@
     "trash": "حذف",
     "unarchive": "Unarchive",
     "unlockDelete": "Unlock",
-    "unstash": "استعادة"
+    "unstash": "استعادة",
+    "deletePermanently": "Delete permanently"
   },
   "kanban": {
     "addBoard": "Add board",
@@ -227,11 +229,14 @@
     "columnDone": "Done",
     "columnInProgress": "In Progress",
     "columnTodo": "Todo",
+    "confirmDeleteCard": "Delete this card?",
     "confirmRemoveColumn": "Remove this column?",
     "confirmWipeInstance": "Wipe all data for this instance?",
+    "convertCardToColumn": "Convert card to column",
     "defaultBoard": "Board 1",
     "defaultCardTitle": "New card",
     "defaultColumn": "New column",
+    "deleteCard": "Delete card",
     "deleteItems": "Items will be deleted",
     "due": "Due",
     "exportInstance": "Export instance data",
@@ -240,7 +245,10 @@
     "removeBoard": "Remove",
     "removeColumn": "Remove column",
     "settingsTitle": "Kanban settings",
-    "wipeInstance": "Wipe instance data"
+    "untitledCard": "Untitled",
+    "wipeInstance": "Wipe instance data",
+    "contextPrompt": "Create a card from the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "landing": {
     "welcome": "Welcome to Operator App."
@@ -260,6 +268,7 @@
     "about": "حول",
     "collapse": "طي",
     "expand": "توسيع",
+    "appsDrawer": "Apps Drawer",
     "license": "License & Privacy Policy",
     "logout": "تسجيل الخروج",
     "settings": "الإعدادات",
@@ -347,7 +356,9 @@
     "cloudBetaAssetsLocalOnly": "Attachments remain local-only in beta ({{count}} files, {{kb}} KB on this device).",
     "cloudBetaAttachmentsToggle": "Sync attachments in cloud (paid beta)",
     "cloudBetaAttachmentsHelp": "Saved as a paid-beta preference only for now. Attachments still remain local on this device.",
-    "cloudBetaAttachmentsRequested": "Paid beta attachment sync requested for this vault. Attachments still remain local until the service is enabled."
+    "cloudBetaAttachmentsRequested": "Paid beta attachment sync requested for this vault. Attachments still remain local until the service is enabled.",
+    "contextPrompt": "Create a note from the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "phone": {
     "modeConfirm": "Switching phone mode will reload the layout.\nContinue?",
@@ -427,6 +438,7 @@
     "importAppsJson": "Import all data (JSON)",
     "importAppsXml": "Import all data (XML)",
     "importFailed": "Import failed.",
+    "llmLink": "LLMs",
     "multiUserLink": "Multi-User",
     "navigatorBeta": "Navigator (Beta) (Broken, test at your own will)",
     "notesBeta": "Notes (Beta)",
@@ -461,7 +473,9 @@
     "settingsTitle": "Sticky Note Settings",
     "textColor": "Text color",
     "unlocked": "Unlocked",
-    "visualMode": "Visual mode"
+    "visualMode": "Visual mode",
+    "contextPrompt": "Append the {{target}} to this sticky note?",
+    "contextCreateLabel": "From {{target}}"
   },
   "table": {
     "actions": "الإجراءات",
@@ -499,6 +513,8 @@
     "clearCompleted": "Clear completed",
     "clearCompletedConfirm": "Clear all completed todos?",
     "closeSettings": "Close settings",
+    "confirmDeleteSubtask": "Delete this subtask?",
+    "confirmDeleteTodo": "Delete this todo?",
     "confirmDeleteProject": "Delete this project and its todos?",
     "confirmWipeInstance": "Wipe all data for this instance?",
     "confirmWipeProject": "Wipe all todos in this project?",
@@ -523,11 +539,14 @@
     "projectsTitle": "Projects",
     "reload": "إعادة تحميل",
     "settingsTitle": "Todo settings",
+    "showSubtaskDelete": "Show subtask delete (X) button",
     "subtaskPlaceholder": "Add a subtask",
     "subtasks": "Subtasks",
     "title": "Todos",
     "wipeInstance": "Wipe instance data",
-    "wipeProject": "Wipe data"
+    "wipeProject": "Wipe data",
+    "contextPrompt": "Add a todo for the {{target}}?",
+    "contextCreateLabel": "From {{target}}"
   },
   "topbar": {
     "collapse": "طي الشريط العلوي",
@@ -650,5 +669,14 @@
     "bookmarkOpenStreetMap": "OpenStreetMap (embed)",
     "bookmarkYouTubeEmbed": "YouTube (embed demo)",
     "bookmarkVimeoEmbed": "Vimeo (embed demo)"
+  },
+  "context": {
+    "target": {
+      "item": "selected item",
+      "todo": "selected todo",
+      "note": "selected note",
+      "sticky": "selected sticky note",
+      "kanbanCard": "selected kanban card"
+    }
   }
 }

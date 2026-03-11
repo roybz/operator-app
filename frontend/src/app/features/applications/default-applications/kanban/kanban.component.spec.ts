@@ -314,4 +314,27 @@ describe('KanbanComponent', () => {
     expect(c1?.cardIds).toContain('card_local');
     expect(c2?.cardIds).toContain('card_remote');
   });
+
+  it('creates card from external context using source title/content', async () => {
+    const fixture = await create();
+    const component = fixture.componentInstance;
+
+    component.externalContextRef.set({
+      universeId: 'u_ctx',
+      instanceId: 'other',
+      kind: 'note',
+      id: 'n1',
+      title: 'From note title',
+      content: 'From note content',
+    });
+
+    component.createCardFromExternalContext();
+
+    const board = component.activeBoard();
+    const selected = component.state().selectedCardId;
+    expect(selected).toBeTruthy();
+    const created = selected ? board.cards[selected] : null;
+    expect(created?.title).toBe('From note title');
+    expect(created?.description).toBe('From note content');
+  });
 });

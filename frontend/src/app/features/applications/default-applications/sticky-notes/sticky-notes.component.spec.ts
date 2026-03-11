@@ -1,4 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  TranslateFakeLoader,
+  TranslateLoader,
+  TranslateModule,
+  TranslateService,
+} from '@ngx-translate/core';
 import { mergeStickyStatesForSync, StickyNotesComponent } from './sticky-notes.component';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
@@ -33,7 +39,12 @@ describe('StickyNotesComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [StickyNotesComponent],
+      imports: [
+        StickyNotesComponent,
+        TranslateModule.forRoot({
+          loader: { provide: TranslateLoader, useClass: TranslateFakeLoader },
+        }),
+      ],
       providers: [
         { provide: AppPreferencesService, useClass: MockPrefsService },
         { provide: InstanceSettingsService, useClass: MockInstanceSettingsService },
@@ -42,6 +53,12 @@ describe('StickyNotesComponent', () => {
     }).compileComponents();
 
     await TestBed.inject(StorageService).hydrate();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      appNames: { stickyNotes: 'Sticky Note' },
+      sticky: { contextCreateLabel: 'From source' },
+    });
+    translate.use('en');
 
     fixture = TestBed.createComponent(StickyNotesComponent);
     fixture.componentInstance.instanceId = 'sticky-test';
@@ -129,5 +146,23 @@ describe('StickyNotesComponent', () => {
     );
 
     expect(merged.content).toBe('Keep me');
+  });
+
+  it('appends external context content instead of label-only fallback', () => {
+    const component = fixture.componentInstance;
+    component.state.set({ ...component.state(), content: 'Existing text' });
+    component.externalContextRef.set({
+      universeId: 'u_ctx',
+      instanceId: 'other',
+      kind: 'note',
+      id: 'n1',
+      title: 'Note title',
+      content: 'Note body content',
+    });
+
+    component.appendExternalContext();
+
+    expect(component.state().content).toContain('Existing text');
+    expect(component.state().content).toContain('Note body content');
   });
 });

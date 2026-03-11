@@ -10,16 +10,19 @@ import { ModalShellComponent } from '../modal-shell/modal-shell.component';
   styles: [
     `
       .confirm-dialog__panel {
-        width: min(420px, 92vw);
+        width: min(560px, 94vw);
         box-sizing: border-box;
         background: var(--color-surface);
         padding: var(--space-5);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
+        max-height: min(86vh, 760px);
+        overflow-y: auto;
+        overflow-x: hidden;
       }
 
       :host-context(.phone-mode) .confirm-dialog__panel {
-        width: min(420px, calc(96vw - 12px));
+        width: min(560px, calc(100vw - 12px));
       }
 
       .confirm-dialog__header {
@@ -57,6 +60,7 @@ import { ModalShellComponent } from '../modal-shell/modal-shell.component';
         gap: var(--space-2);
         justify-content: flex-end;
         margin-top: var(--space-4);
+        flex-wrap: wrap;
       }
     `,
   ],
@@ -64,7 +68,7 @@ import { ModalShellComponent } from '../modal-shell/modal-shell.component';
     <app-modal-shell
       [zIndex]="3500"
       [ariaLabel]="title || 'Confirmation dialog'"
-      maxWidth="min(420px, calc(100vw - 24px))"
+      maxWidth="min(560px, calc(100vw - 24px))"
       (closed)="canceled.emit()"
     >
       <div class="confirm-dialog__panel">

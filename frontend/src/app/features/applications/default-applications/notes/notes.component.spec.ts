@@ -384,4 +384,29 @@ describe('NotesComponent (vault mode)', () => {
       'Local paragraph\n\nShared paragraph\n\nRemote paragraph',
     );
   });
+
+  it('creates note from external context using source title/content', () => {
+    component.externalContextRef.set({
+      universeId: 'u_ctx',
+      instanceId: 'other',
+      kind: 'todo',
+      id: 't1',
+      title: 'Todo title',
+      content: 'Todo details',
+    });
+
+    component.createNoteFromExternalContext();
+
+    const selected = component.selectedNode();
+    expect(selected?.type).toBe('note');
+    expect(selected?.name).toBe('Todo title');
+    expect(selected?.content).toBe('Todo details');
+  });
+
+  it('extracts plain text from html content safely', () => {
+    const plain = (
+      component as unknown as { extractPlainText: (raw: string) => string }
+    ).extractPlainText('Hello<br>World<script>alert(1)</script><style>.x{}</style><b>!</b>&nbsp;');
+    expect(plain).toBe('Hello\nWorld!');
+  });
 });

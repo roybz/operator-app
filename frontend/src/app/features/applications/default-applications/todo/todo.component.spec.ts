@@ -110,4 +110,27 @@ describe('TodoPageComponent', () => {
 
     expect(component.todos()[0].text).toBe('New text');
   });
+
+  it('creates todo from external context using source content', async () => {
+    const fixture = TestBed.createComponent(TodoPageComponent);
+    fixture.componentInstance.instanceId = 'dlg_test';
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const component = fixture.componentInstance;
+
+    component.externalContextRef.set({
+      universeId: 'u_ctx',
+      instanceId: 'other',
+      kind: 'note',
+      id: 'n1',
+      title: 'Context title',
+      content: 'Context body text',
+    });
+
+    await component.createTodoFromExternalContext();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.todos()[0]?.text).toBe('Context body text');
+  });
 });

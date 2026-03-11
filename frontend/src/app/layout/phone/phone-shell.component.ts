@@ -37,6 +37,31 @@ import { AppId } from '../../features/dependencies/app-types';
             {{ 'nav.collapse' | translate }}
           </button>
           <div style="border-top:1px solid var(--color-border); margin:12px 0; opacity:0.6;"></div>
+          <button
+            (click)="toggleAppDrawer()"
+            style="margin-bottom: 8px; padding:10px 12px; font-size:16px; border-radius:5px;"
+          >
+            &#9638; {{ 'nav.appsDrawer' | translate }}
+          </button>
+          @if (appDrawerOpen) {
+            <div
+              style="display:grid; gap:6px; margin-bottom:10px; padding:6px; border:1px solid var(--color-border); border-radius:8px;"
+            >
+              @for (app of drawerApps(); track app.id) {
+                <button
+                  type="button"
+                  style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:6px;"
+                  (click)="openApp.emit(app.id)"
+                >
+                  <span style="display:inline-flex; align-items:center; gap:8px;">
+                    <span>{{ app.icon }}</span>
+                    <span>{{ app.labelKey | translate }}</span>
+                  </span>
+                  <span aria-hidden="true" style="opacity:0.75;">+</span>
+                </button>
+              }
+            </div>
+          }
           <div style="flex:1; min-height:0; overflow:hidden;">
             <app-app-list
               [apps]="apps"
@@ -45,11 +70,14 @@ import { AppId } from '../../features/dependencies/app-types';
               [actionsDisabled]="actionsDisabled"
               [phoneMode]="true"
               [activeInstanceId]="activeInstanceId"
+              [showArchivedSection]="false"
+              [showAppCreateButtons]="false"
               (openApp)="openApp.emit($event)"
               (restore)="restore.emit($event)"
               (duplicate)="duplicate.emit($event)"
               (toggleLock)="toggleLock.emit($event)"
               (archive)="archive.emit($event)"
+              (deletePermanently)="deletePermanently.emit($event)"
               (unarchive)="unarchive.emit($event)"
             />
           </div>
@@ -85,6 +113,8 @@ import { AppId } from '../../features/dependencies/app-types';
   `,
 })
 export class PhoneShellComponent {
+  appDrawerOpen = false;
+
   @Input() navOpen = false;
   @Input() apps: AppGroup[] = [];
   @Input() instancesByApp: Record<AppId, DialogInstance[]> = {} as Record<AppId, DialogInstance[]>;
@@ -98,9 +128,18 @@ export class PhoneShellComponent {
   @Output() duplicate = new EventEmitter<string>();
   @Output() toggleLock = new EventEmitter<string>();
   @Output() archive = new EventEmitter<string>();
+  @Output() deletePermanently = new EventEmitter<string>();
   @Output() unarchive = new EventEmitter<string>();
   @Output() switchToDesktopMode = new EventEmitter<void>();
   @Output() toggleSettings = new EventEmitter<void>();
   @Output() openLicense = new EventEmitter<void>();
   @Output() logout = new EventEmitter<void>();
+
+  toggleAppDrawer() {
+    this.appDrawerOpen = !this.appDrawerOpen;
+  }
+
+  drawerApps() {
+    return [...this.apps].sort((a, b) => a.labelKey.localeCompare(b.labelKey));
+  }
 }

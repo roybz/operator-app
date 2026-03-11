@@ -66,6 +66,14 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
             />
             {{ 'todo.projectsEnabled' | translate }}
           </label>
+          <label style="display:flex; align-items:center; gap:8px;">
+            <input
+              type="checkbox"
+              [checked]="state().showSubtaskDelete !== false"
+              (change)="toggleSubtaskDeleteVisibility($event)"
+            />
+            {{ 'todo.showSubtaskDelete' | translate }}
+          </label>
           @if (state().projectsEnabled) {
             <div style="display:flex; flex-direction:column; gap:12px;">
               <div style="display:flex; align-items:center; gap:8px;">
@@ -159,8 +167,8 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
           <div
             style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
           >
-            <span style="font-size:12px; opacity:0.8;">
-              Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+            <span style="font-size:12px; opacity:0.8; font-style:italic;">
+              {{ externalContextPrompt() }}
             </span>
             <button type="button" (click)="createTodoFromExternalContext()">
               {{ 'todo.add' | translate }}
@@ -255,7 +263,7 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                   <button (click)="onDuplicate(t)" [title]="'todo.duplicateTitle' | translate">
                     {{ 'todo.duplicate' | translate }}
                   </button>
-                  <button (click)="onDelete(t)" [title]="'todo.deleteTitle' | translate">
+                  <button (click)="requestDeleteTodo(t)" [title]="'todo.deleteTitle' | translate">
                     {{ 'todo.delete' | translate }}
                   </button>
                 </div>
@@ -316,19 +324,23 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
                             {{ sub.text }}
                           </button>
                         }
-                        <button
-                          type="button"
-                          style="margin-left:auto;"
-                          (click)="deleteSubtask(t.id, sub.id)"
-                        >
-                          ✕
-                        </button>
+                        @if (state().showSubtaskDelete !== false) {
+                          <button
+                            type="button"
+                            style="margin-left:auto;"
+                            (click)="requestDeleteSubtask(t.id, sub.id)"
+                            [title]="'todo.confirmDeleteSubtask' | translate"
+                          >
+                            ✕
+                          </button>
+                        }
                       </label>
                     }
                     <div style="display:flex; gap:8px; align-items:center;">
                       <input
                         [value]="subtaskDraft(t.id)"
                         (input)="updateSubtaskDraft(t.id, $any($event.target).value)"
+                        (keydown.enter)="addSubtask(t.id)"
                         style="flex:1; padding:6px;"
                         [placeholder]="'todo.subtaskPlaceholder' | translate"
                       />
@@ -382,6 +394,24 @@ const TODO_STATE_STORAGE_KEY = 'op_todo_state_v2';
         [cancelLabel]="'dialogs.cancel' | translate"
         (confirmed)="wipeInstance()"
         (canceled)="instanceWipeOpen.set(false)"
+      />
+    }
+    @if (todoDeleteTarget()) {
+      <app-confirm-dialog
+        [message]="'todo.confirmDeleteTodo' | translate"
+        [confirmLabel]="'todo.delete' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmDeleteTodo()"
+        (canceled)="todoDeleteTarget.set(null)"
+      />
+    }
+    @if (subtaskDeleteTarget()) {
+      <app-confirm-dialog
+        [message]="'todo.confirmDeleteSubtask' | translate"
+        [confirmLabel]="'todo.delete' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmDeleteSubtask()"
+        (canceled)="subtaskDeleteTarget.set(null)"
       />
     }
 
@@ -502,6 +532,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     projectsEnabled: false,
     projects: [],
     activeProjectId: '',
+    showSubtaskDelete: true,
     subtaskCollapsed: {},
   });
   todos = signal<Todo[]>([]);
@@ -512,6 +543,8 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   editingSubtaskId = signal<string | null>(null);
   editingSubtaskText = signal('');
   clearConfirmOpen = signal(false);
+  todoDeleteTarget = signal<Todo | null>(null);
+  subtaskDeleteTarget = signal<{ todoId: string; subtaskId: string } | null>(null);
   projectWipeTarget = signal<string | null>(null);
   projectDeleteTarget = signal<string | null>(null);
   instanceWipeOpen = signal(false);
@@ -542,6 +575,8 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
+  private contextPublishTimer: ReturnType<typeof setTimeout> | null = null;
+  private queuedContextTodo: Todo | null = null;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), serializeTodoState(this.state()));
@@ -589,6 +624,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.cancelQueuedContextPublish();
     this.persistQueue.destroy();
   }
 
@@ -649,7 +685,8 @@ export class TodoPageComponent implements OnInit, OnDestroy {
   async createTodoFromExternalContext() {
     const ref = this.externalContextRef();
     if (!ref) return;
-    await this.onAdd(`[${ref.kind}] ${ref.id}`);
+    const text = this.externalContextTodoText(ref);
+    await this.onAdd(text);
   }
 
   async onDelete(t: Todo) {
@@ -665,6 +702,17 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     } catch {
       this.err.set(this.translate.instant('todo.error.unknown'));
     }
+  }
+
+  requestDeleteTodo(todo: Todo) {
+    this.todoDeleteTarget.set(todo);
+  }
+
+  async confirmDeleteTodo() {
+    const target = this.todoDeleteTarget();
+    this.todoDeleteTarget.set(null);
+    if (!target) return;
+    await this.onDelete(target);
   }
 
   startEdit(t: Todo) {
@@ -796,6 +844,11 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.updateState(nextState);
   }
 
+  toggleSubtaskDeleteVisibility(event: Event) {
+    const enabled = (event.target as HTMLInputElement).checked;
+    this.updateState({ ...this.state(), showSubtaskDelete: enabled });
+  }
+
   addProject(title: string) {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -923,6 +976,17 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.updateState({ ...nextState, projects: nextProjects });
   }
 
+  requestDeleteSubtask(todoId: string, subtaskId: string) {
+    this.subtaskDeleteTarget.set({ todoId, subtaskId });
+  }
+
+  confirmDeleteSubtask() {
+    const target = this.subtaskDeleteTarget();
+    this.subtaskDeleteTarget.set(null);
+    if (!target) return;
+    this.deleteSubtask(target.todoId, target.subtaskId);
+  }
+
   deleteSubtask(todoId: string, subtaskId: string) {
     const nextState = this.state();
     const project = this.activeProject(nextState);
@@ -1023,6 +1087,7 @@ export class TodoPageComponent implements OnInit, OnDestroy {
       projectsEnabled: false,
       projects: [project],
       activeProjectId: project.id,
+      showSubtaskDelete: true,
       subtaskCollapsed: {},
     };
     this.instanceWipeOpen.set(false);
@@ -1072,9 +1137,43 @@ export class TodoPageComponent implements OnInit, OnDestroy {
     this.todos.set(this.activeProject(next)?.todos ?? []);
     this.subtaskCollapsed.set(collapsed);
     this.syncSubtaskCollapse(this.activeProject(next)?.todos ?? []);
+    this.refreshTodoContextIfActive();
     if (!options?.suppressPersist) {
       this.persistState();
     }
+  }
+
+  private refreshTodoContextIfActive() {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const selection = this.contextFields.selection(universeId);
+    const primary = selection?.primaryRef;
+    if (!primary || primary.instanceId !== this.instanceId || primary.kind !== 'todo') return;
+    const todo = this.state()
+      .projects.flatMap((project) => project.todos)
+      .find((item) => item.id === primary.id);
+    if (!todo) return;
+    this.scheduleTodoContextPublish(todo);
+  }
+
+  private scheduleTodoContextPublish(todo: Todo) {
+    this.queuedContextTodo = todo;
+    if (this.contextPublishTimer !== null) return;
+    this.contextPublishTimer = setTimeout(() => {
+      this.contextPublishTimer = null;
+      const nextTodo = this.queuedContextTodo;
+      this.queuedContextTodo = null;
+      if (!nextTodo) return;
+      this.selectTodoContext(nextTodo);
+    }, 150);
+  }
+
+  private cancelQueuedContextPublish() {
+    if (this.contextPublishTimer !== null) {
+      clearTimeout(this.contextPublishTimer);
+      this.contextPublishTimer = null;
+    }
+    this.queuedContextTodo = null;
   }
 
   private activeProject(state = this.state()) {
@@ -1335,11 +1434,44 @@ export class TodoPageComponent implements OnInit, OnDestroy {
       instanceId: this.instanceId,
       kind: 'todo',
       id: todo.id,
+      title: todo.text,
+      content: todo.text,
     };
     this.contextFields.setSelection(universeId, [ref], {
       primaryRef: ref,
       sourceInstanceId: this.instanceId,
       intent: 'inspect',
+    });
+  }
+
+  externalContextPrompt() {
+    const ref = this.externalContextRef();
+    if (!ref) return '';
+    return this.translate.instant('todo.contextPrompt', {
+      target: this.externalContextTargetLabel(ref),
+    });
+  }
+
+  private externalContextTargetLabel(ref: ObjectRef) {
+    return this.translate.instant(this.externalContextTargetKey(ref));
+  }
+
+  private externalContextTargetKey(ref: ObjectRef) {
+    const labels: Record<string, string> = {
+      note: 'context.target.note',
+      kanbanCard: 'context.target.kanbanCard',
+      sticky: 'context.target.sticky',
+    };
+    return labels[ref.kind] ?? 'context.target.item';
+  }
+
+  private externalContextTodoText(ref: ObjectRef) {
+    const fromTitle = (ref.title ?? '').trim();
+    const fromContent = (ref.content ?? '').trim();
+    const best = fromContent || fromTitle;
+    if (best) return best;
+    return this.translate.instant('todo.contextCreateLabel', {
+      target: this.externalContextTargetLabel(ref),
     });
   }
 

@@ -397,6 +397,13 @@ export function saveKanbanState(
                   (input)="renameBoard(board.id, $event)"
                   style="flex:1;"
                 />
+                <button (click)="moveBoard(board.id, -1)" [disabled]="$index === 0">↑</button>
+                <button
+                  (click)="moveBoard(board.id, 1)"
+                  [disabled]="$index === state().boards.length - 1"
+                >
+                  ↓
+                </button>
                 <button (click)="removeBoard(board.id)" [disabled]="state().boards.length <= 1">
                   {{ 'kanban.removeBoard' | translate }}
                 </button>
@@ -457,8 +464,8 @@ export function saveKanbanState(
           <div
             style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
           >
-            <span style="font-size:12px; opacity:0.8;">
-              Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+            <span style="font-size:12px; opacity:0.8; font-style:italic;">
+              {{ externalContextPrompt() }}
             </span>
             <button type="button" (click)="createCardFromExternalContext()">
               {{ 'kanban.addCard' | translate }}
@@ -589,7 +596,11 @@ export function saveKanbanState(
             <div style="display:grid; gap:8px; max-width:520px;">
               <label>
                 {{ 'kanban.cardTitle' | translate }}
-                <input [value]="selectedCard()?.title" (input)="updateCardTitle($event)" />
+                <input
+                  [value]="selectedCard()?.title"
+                  (change)="updateCardTitle($event)"
+                  (keydown.enter)="updateCardTitle($event)"
+                />
               </label>
               <label>
                 {{ 'kanban.cardDescription' | translate }}
@@ -639,6 +650,14 @@ export function saveKanbanState(
                 <button (click)="addChecklistItem()" style="margin-top:6px;">
                   {{ 'kanban.addChecklist' | translate }}
                 </button>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                  <button (click)="convertSelectedCardToColumn()">
+                    {{ 'kanban.convertCardToColumn' | translate }}
+                  </button>
+                  <button (click)="requestDeleteSelectedCard()">
+                    {{ 'kanban.deleteCard' | translate }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -675,6 +694,15 @@ export function saveKanbanState(
         [cancelLabel]="'dialogs.cancel' | translate"
         (confirmed)="wipeInstance()"
         (canceled)="confirmWipeOpen.set(false)"
+      />
+    }
+    @if (confirmDeleteCardId()) {
+      <app-confirm-dialog
+        [message]="'kanban.confirmDeleteCard' | translate"
+        [confirmLabel]="'kanban.deleteCard' | translate"
+        [cancelLabel]="'dialogs.cancel' | translate"
+        (confirmed)="confirmDeleteCard()"
+        (canceled)="confirmDeleteCardId.set(null)"
       />
     }
     @if (pendingImport()) {
@@ -743,6 +771,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   editingColumnId = signal<string | null>(null);
   editingColumnName = signal('');
   confirmColumnId = signal<string | null>(null);
+  confirmDeleteCardId = signal<string | null>(null);
   confirmMoveLeft = signal(false);
   confirmWipeOpen = signal(false);
   pendingImport = signal<{ file: File; input: HTMLInputElement } | null>(null);
@@ -760,6 +789,8 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   } | null = null;
   private lastRemoteStorageChangeSeq = 0;
   private editFocusCount = 0;
+  private contextPublishTimer: ReturnType<typeof setTimeout> | null = null;
+  private queuedContextCardId: string | null = null;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -853,6 +884,7 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.cancelQueuedContextPublish();
     this.persistQueue.destroy();
     this.cleanupTouchDrag();
   }
@@ -932,6 +964,18 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     this.persistState();
   }
 
+  moveBoard(boardId: string, direction: -1 | 1) {
+    const boards = [...this.state().boards];
+    const currentIndex = boards.findIndex((board) => board.id === boardId);
+    if (currentIndex < 0) return;
+    const nextIndex = currentIndex + direction;
+    if (nextIndex < 0 || nextIndex >= boards.length) return;
+    const [moved] = boards.splice(currentIndex, 1);
+    boards.splice(nextIndex, 0, moved);
+    this.state.set({ ...this.state(), boards });
+    this.persistState();
+  }
+
   removeBoard(boardId: string) {
     if (this.state().boards.length <= 1) return;
     const boards = this.state().boards.filter((b) => b.id !== boardId);
@@ -1000,6 +1044,8 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
       instanceId: this.instanceId,
       kind: 'kanbanCard',
       id: cardId,
+      title: this.card(cardId).title,
+      content: this.buildCardContextContent(this.card(cardId)),
     };
     this.contextFields.setSelection(universeId, [ref], {
       primaryRef: ref,
@@ -1017,8 +1063,8 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     const cardId = uid('card');
     const card: KanbanCard = {
       id: cardId,
-      title: `[${ref.kind}] ${ref.id}`,
-      description: '',
+      title: this.externalContextCardTitle(ref),
+      description: this.externalContextCardDescription(ref),
       dueDate: '',
       labels: [],
       checklist: [],
@@ -1033,8 +1079,56 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
   updateCardTitle(event: Event) {
     const card = this.selectedCard();
     if (!card) return;
-    const title = (event.target as HTMLInputElement).value;
+    const raw = (event.target as HTMLInputElement).value;
+    const title = raw.trim() || this.translate.instant('kanban.untitledCard');
     this.updateCard({ ...card, title });
+  }
+
+  requestDeleteSelectedCard() {
+    const card = this.selectedCard();
+    if (!card) return;
+    this.confirmDeleteCardId.set(card.id);
+  }
+
+  confirmDeleteCard() {
+    const cardId = this.confirmDeleteCardId();
+    this.confirmDeleteCardId.set(null);
+    if (!cardId) return;
+    this.deleteCard(cardId);
+  }
+
+  convertSelectedCardToColumn() {
+    const card = this.selectedCard();
+    if (!card) return;
+    const board = this.activeBoard();
+    const newColumnId = uid('col');
+    const nextCards = { ...board.cards };
+    const checklistCards: KanbanCard[] = (card.checklist ?? [])
+      .map((item) => item.text.trim())
+      .filter(Boolean)
+      .map((text) => ({
+        id: uid('card'),
+        title: text,
+        description: '',
+        dueDate: '',
+        labels: [],
+        checklist: [],
+      }));
+    checklistCards.forEach((nextCard) => {
+      nextCards[nextCard.id] = nextCard;
+    });
+    delete nextCards[card.id];
+    const columns = board.columns
+      .map((column) => ({
+        ...column,
+        cardIds: column.cardIds.filter((id) => id !== card.id),
+      }))
+      .concat({
+        id: newColumnId,
+        title: card.title.trim() || this.translate.instant('kanban.defaultColumn'),
+        cardIds: checklistCards.map((item) => item.id),
+      });
+    this.updateBoard({ ...board, columns, cards: nextCards }, null, newColumnId);
   }
 
   updateCardDescription(event: Event) {
@@ -1091,6 +1185,17 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!card) return;
     const checklist = card.checklist.filter((item) => item.id !== itemId);
     this.updateCard({ ...card, checklist });
+  }
+
+  private deleteCard(cardId: string) {
+    const board = this.activeBoard();
+    const nextCards = { ...board.cards };
+    delete nextCards[cardId];
+    const columns = board.columns.map((column) => ({
+      ...column,
+      cardIds: column.cardIds.filter((id) => id !== cardId),
+    }));
+    this.updateBoard({ ...board, columns, cards: nextCards }, null, null);
   }
 
   onDragStart(columnId: string, cardId: string, event: DragEvent) {
@@ -1395,7 +1500,58 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
       selectedColumnId:
         selectedColumnId === undefined ? this.state().selectedColumnId : selectedColumnId,
     });
+    this.refreshCardContextIfActive();
     this.persistState();
+  }
+
+  private refreshCardContextIfActive() {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const selection = this.contextFields.selection(universeId);
+    const primary = selection?.primaryRef;
+    if (!primary || primary.instanceId !== this.instanceId || primary.kind !== 'kanbanCard') return;
+    this.scheduleCardContextPublish(primary.id);
+  }
+
+  private scheduleCardContextPublish(cardId: string) {
+    this.queuedContextCardId = cardId;
+    if (this.contextPublishTimer !== null) return;
+    this.contextPublishTimer = setTimeout(() => {
+      this.contextPublishTimer = null;
+      const nextCardId = this.queuedContextCardId;
+      this.queuedContextCardId = null;
+      if (!nextCardId) return;
+      this.publishCardContext(nextCardId);
+    }, 150);
+  }
+
+  private publishCardContext(cardId: string) {
+    const universeId = this.currentUniverseId();
+    if (!universeId || !this.instanceId) return;
+    const board = this.state().boards.find((item) => Boolean(item.cards[cardId]));
+    if (!board) return;
+    const card = board.cards[cardId];
+    const ref: ObjectRef = {
+      universeId,
+      instanceId: this.instanceId,
+      kind: 'kanbanCard',
+      id: card.id,
+      title: card.title,
+      content: this.buildCardContextContent(card),
+    };
+    this.contextFields.setSelection(universeId, [ref], {
+      primaryRef: ref,
+      sourceInstanceId: this.instanceId,
+      intent: 'inspect',
+    });
+  }
+
+  private cancelQueuedContextPublish() {
+    if (this.contextPublishTimer !== null) {
+      clearTimeout(this.contextPublishTimer);
+      this.contextPublishTimer = null;
+    }
+    this.queuedContextCardId = null;
   }
 
   exportInstance() {
@@ -1566,6 +1722,46 @@ export class KanbanComponent implements OnInit, AfterViewInit, OnDestroy {
     const key = this.prefs.userId();
     const parts = key.split(':');
     return parts.length >= 2 ? parts[1] : null;
+  }
+
+  externalContextPrompt() {
+    const ref = this.externalContextRef();
+    if (!ref) return '';
+    return this.translate.instant('kanban.contextPrompt', {
+      target: this.contextSourceLabel(ref),
+    });
+  }
+
+  private contextSourceLabel(ref: ObjectRef) {
+    const labels: Record<string, string> = {
+      todo: 'context.target.todo',
+      note: 'context.target.note',
+      sticky: 'context.target.sticky',
+      kanbanCard: 'context.target.kanbanCard',
+    };
+    return this.translate.instant(labels[ref.kind] ?? 'context.target.item');
+  }
+
+  private buildCardContextContent(card: KanbanCard) {
+    const checklist = card.checklist
+      .map((item) => `${item.done ? '[x]' : '[ ]'} ${item.text}`.trim())
+      .filter(Boolean)
+      .join('\n');
+    return [card.description?.trim() ?? '', checklist].filter(Boolean).join('\n\n').trim();
+  }
+
+  private externalContextCardTitle(ref: ObjectRef) {
+    const title = (ref.title ?? '').trim();
+    if (title) return title;
+    const fallback = this.translate.instant('kanban.contextCreateLabel', {
+      target: this.contextSourceLabel(ref),
+    });
+    return fallback.trim() || this.translate.instant('kanban.untitledCard');
+  }
+
+  private externalContextCardDescription(ref: ObjectRef) {
+    const content = (ref.content ?? '').trim();
+    return content;
   }
 
   private isLocallyEditing() {

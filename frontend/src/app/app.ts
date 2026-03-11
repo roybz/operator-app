@@ -76,13 +76,12 @@ import { RemoteApplyPipeline } from './core/realtime/remote-apply-pipeline';
 import { EventOutboxService } from './core/events/event-outbox.service';
 import { ContextFieldStoreService } from './core/events/context-field-store.service';
 import { ClientObservabilityService } from './core/observability/client-observability.service';
+import { MachineNowService } from './core/time/machine-now.service';
 import { getOpCapabilities, getOpConfig } from './core/op-config';
 import {
   APP_GROUPS,
   PHONE_MODE_BOOT_KEY,
   RESERVED_SIDEBAR_WIDTH,
-  RESERVED_TOPBAR_HEIGHT,
-  RESERVED_WORKSPACE_HEIGHT,
   CanvasMode,
   createFallbackRect,
 } from './app-shell.constants';
@@ -387,11 +386,11 @@ export class AppComponent implements OnInit, OnDestroy {
   editingWorkspaceName = signal('');
   workspaceDragId = signal<string | null>(null);
   private readonly translate = inject(TranslateService);
-  private timeInterval?: number;
+  private themeInterval?: number;
   private universeInterval?: number;
   private loadingTimeout?: number;
   private loginLoadingTimeout?: number;
-  private now = signal(new Date());
+  private readonly machineNow = inject(MachineNowService);
   workspaceMenuOpen = signal(false);
   hoverWorkspaceId = signal<string | null>(null);
   hoverWorkspaceSide = signal<'left' | 'right' | null>(null);
@@ -572,7 +571,7 @@ export class AppComponent implements OnInit, OnDestroy {
       hour: '2-digit',
       minute: '2-digit',
       hour12,
-    }).format(this.now());
+    }).format(this.machineNow.now());
   });
 
   showTime = computed(() => this.auth.preferences().showTime);
@@ -676,10 +675,7 @@ export class AppComponent implements OnInit, OnDestroy {
     () => this.activePresence().filter((entry) => entry.role === 'observer').length,
   );
   hasUniverseParticipants = computed(
-    () =>
-      this.activeUsersOnline().length > 0 ||
-      this.guestCount() > 0 ||
-      this.observerCount() > 0,
+    () => this.activeUsersOnline().length > 0 || this.guestCount() > 0 || this.observerCount() > 0,
   );
   isMainGuest = computed(() => this.auth.actualUser()?.id === 'u_guest');
   showUniverseBar = computed(() => this.auth.isLoggedIn() && this.multiUserEnabled());
@@ -1093,8 +1089,7 @@ export class AppComponent implements OnInit, OnDestroy {
       setTimeout(this.updateCanvasBounds, 0);
     }
 
-    this.timeInterval = window.setInterval(() => {
-      this.now.set(new Date());
+    this.themeInterval = window.setInterval(() => {
       this.applyThemeClasses();
     }, 60_000);
     setTimeout(this.scheduleCanvasBoundsUpdate, 0);
@@ -1107,7 +1102,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.debugPerf.markDialogHostDestroy();
-    if (this.timeInterval) window.clearInterval(this.timeInterval);
+    if (this.themeInterval) window.clearInterval(this.themeInterval);
     if (this.universeInterval) window.clearInterval(this.universeInterval);
     if (this.loadingTimeout) window.clearTimeout(this.loadingTimeout);
     if (this.loginLoadingTimeout) window.clearTimeout(this.loginLoadingTimeout);
@@ -2184,6 +2179,9 @@ export class AppComponent implements OnInit, OnDestroy {
   restoreFromStash(instance: { id: string }) {
     if (!this.canEdit()) return;
     if (this.phoneMode()) {
+      this.phoneDialogs()
+        .filter((item) => item.id !== instance.id)
+        .forEach((item) => this.dialogService.setPhoneMinimized(item.id, true));
       this.dialogService.unstashPhoneInstance(instance.id);
       this.dialogService.setPhoneMinimized(instance.id, false);
       this.setPhoneActiveInstance(instance.id);
@@ -2225,11 +2223,7 @@ export class AppComponent implements OnInit, OnDestroy {
     if (!this.canEdit()) return;
     if (this.phoneMode()) {
       this.dialogService.setPhoneMinimized(instanceId, true);
-      const remaining = this.phoneDialogs().filter(
-        (instance) => instance.id !== instanceId && !this.isPhoneMinimized(instance),
-      );
-      const next = remaining[0] ?? null;
-      this.setPhoneActiveInstance(next ? next.id : null);
+      this.setPhoneActiveInstance(null);
       return;
     }
     this.dialogService.minimizeInstance(instanceId);
@@ -2727,19 +2721,14 @@ export class AppComponent implements OnInit, OnDestroy {
     if (typeof document === 'undefined') return;
     const target = viewport ?? (document.querySelector('#app-viewport') as HTMLElement | null);
     if (!target) return;
-    let rawWidth = target.clientWidth || target.offsetWidth;
-    let rawHeight = target.clientHeight || target.offsetHeight;
-    if (typeof window !== 'undefined') {
-      rawWidth = window.innerWidth - RESERVED_SIDEBAR_WIDTH;
-      rawHeight = window.innerHeight - RESERVED_TOPBAR_HEIGHT - RESERVED_WORKSPACE_HEIGHT;
-    }
+    if (this.isCanvasLocked()) return;
+    const rawWidth = target.clientWidth || target.offsetWidth;
+    const rawHeight = target.clientHeight || target.offsetHeight;
     const { width, height } = this.clampCanvasSize(rawWidth, rawHeight);
     this.canvasWidth.set(width);
     this.canvasHeight.set(height);
-    if (!this.isCanvasLocked()) {
-      this.canvasDraftWidth.set(width);
-      this.canvasDraftHeight.set(height);
-    }
+    this.canvasDraftWidth.set(width);
+    this.canvasDraftHeight.set(height);
   }
 
   applyAccessibilityPrompt() {

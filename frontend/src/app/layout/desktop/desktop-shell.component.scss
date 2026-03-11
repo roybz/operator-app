@@ -53,6 +53,36 @@
   overflow: auto;
 }
 
+.desktop-shell__drawer {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-border));
+}
+
+.desktop-shell__drawer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.desktop-shell__drawer-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-shell__drawer-plus {
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
 .desktop-shell__footer {
   margin-top: 12px;
   width: 100%;
@@ -94,6 +124,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.desktop-shell__canvas-size-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.desktop-shell__size-apply {
+  align-self: flex-start;
 }
 
 .desktop-shell__size-input {

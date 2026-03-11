@@ -19,6 +19,7 @@ type SettingsTab =
   | 'applications'
   | 'admin'
   | 'credentials'
+  | 'llm'
   | 'account'
   | 'universe'
   | 'multiUser';

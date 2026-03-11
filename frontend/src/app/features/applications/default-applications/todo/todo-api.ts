@@ -24,6 +24,7 @@ export interface TodoState {
   projects: TodoProject[];
   activeProjectId: string;
   subtaskCollapsed?: Record<string, boolean>;
+  showSubtaskDelete?: boolean;
 }
 
 interface StorageLike {
@@ -112,6 +113,7 @@ function normalizeState(state: Partial<TodoState> | null | undefined): TodoState
     projectsEnabled: Boolean(state?.projectsEnabled),
     projects: ensuredProjects,
     activeProjectId,
+    showSubtaskDelete: state?.showSubtaskDelete !== false,
     subtaskCollapsed:
       state?.subtaskCollapsed && typeof state.subtaskCollapsed === 'object'
         ? state.subtaskCollapsed
@@ -136,6 +138,7 @@ export function loadTodoState(storage: StorageLike, instanceId: string, userId: 
       projectsEnabled: false,
       projects: [project],
       activeProjectId: project.id,
+      showSubtaskDelete: true,
       subtaskCollapsed: {},
     };
     saveTodoState(storage, instanceId, userId, next);
@@ -147,6 +150,7 @@ export function loadTodoState(storage: StorageLike, instanceId: string, userId: 
     projectsEnabled: false,
     projects: [project],
     activeProjectId: project.id,
+    showSubtaskDelete: true,
     subtaskCollapsed: {},
   };
   return fallback;
@@ -254,6 +258,7 @@ export function mergeTodoStates(remoteState: TodoState, localState: TodoState): 
     projectsEnabled: remote.projectsEnabled || local.projectsEnabled,
     projects: ensuredProjects,
     activeProjectId,
+    showSubtaskDelete: remote.showSubtaskDelete !== false && local.showSubtaskDelete !== false,
     subtaskCollapsed: {
       ...(remote.subtaskCollapsed ?? {}),
       ...(local.subtaskCollapsed ?? {}),

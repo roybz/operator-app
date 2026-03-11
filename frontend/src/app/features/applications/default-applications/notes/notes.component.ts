@@ -281,8 +281,8 @@ const createNote = (name: string, parentId?: string, locked = false): NoteNode =
         <div
           style="position:absolute; top:8px; right:8px; z-index:4; border:1px solid var(--color-border); border-radius:8px; background:var(--color-surface); padding:8px; display:flex; gap:8px; align-items:center;"
         >
-          <span style="font-size:12px; opacity:0.8;">
-            Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+          <span style="font-size:12px; opacity:0.8; font-style:italic;">
+            {{ externalContextPrompt() }}
           </span>
           <button type="button" (click)="createNoteFromExternalContext()">
             {{ 'notes.addNote' | translate }}
@@ -1052,6 +1052,8 @@ export class NotesComponent implements OnInit, OnDestroy {
   vaultTreeViewportHeight = signal(320);
   readonly vaultTreeRowHeight = 26;
   private lastRemoteStorageChangeSeq = 0;
+  private contextPublishTimer: ReturnType<typeof setTimeout> | null = null;
+  private queuedContextPrimaryNodeId: string | null | undefined = undefined;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -1142,6 +1144,7 @@ export class NotesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.cancelQueuedContextPublish();
     this.persistQueue.destroy();
   }
 
@@ -1975,14 +1978,18 @@ export class NotesComponent implements OnInit, OnDestroy {
     const refs = Array.from(selectedIds)
       .map((id) => this.findNode(this.activeRoot(), id))
       .filter((node): node is NoteNode => Boolean(node))
-      .map(
-        (node): ObjectRef => ({
+      .map((node): ObjectRef => {
+        const content =
+          node.type === 'note' ? this.extractPlainText(node.content ?? '') : undefined;
+        return {
           universeId,
           instanceId: this.instanceId,
           kind: node.type === 'note' ? 'note' : 'noteFolder',
           id: node.id,
-        }),
-      );
+          title: node.name,
+          content,
+        };
+      });
     const primaryRef =
       refs.find((ref) => ref.id === primaryNodeId) ??
       refs.find((ref) => ref.id === state.selectedId) ??
@@ -2000,6 +2007,7 @@ export class NotesComponent implements OnInit, OnDestroy {
     if (!note || note.type !== 'note' || note.locked) return;
     const target = event.target as HTMLElement;
     note.content = target.innerHTML;
+    this.scheduleSelectionContextPublish(note.id);
   }
 
   onMarkdownInput(event: Event) {
@@ -2008,6 +2016,26 @@ export class NotesComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLTextAreaElement;
     note.content = target.value;
     this.commit({ ...this.state() });
+    this.scheduleSelectionContextPublish(note.id);
+  }
+
+  private scheduleSelectionContextPublish(primaryNodeId?: string | null) {
+    this.queuedContextPrimaryNodeId = primaryNodeId;
+    if (this.contextPublishTimer !== null) return;
+    this.contextPublishTimer = setTimeout(() => {
+      this.contextPublishTimer = null;
+      const nextPrimary = this.queuedContextPrimaryNodeId;
+      this.queuedContextPrimaryNodeId = undefined;
+      this.publishSelectionContext(nextPrimary);
+    }, 150);
+  }
+
+  private cancelQueuedContextPublish() {
+    if (this.contextPublishTimer !== null) {
+      clearTimeout(this.contextPublishTimer);
+      this.contextPublishTimer = null;
+    }
+    this.queuedContextPrimaryNodeId = undefined;
   }
 
   private async handlePersistError(error: unknown) {
@@ -2106,10 +2134,53 @@ export class NotesComponent implements OnInit, OnDestroy {
     const ref = this.externalContextRef();
     if (!ref) return;
     const parent = this.selectedFolder() ?? this.state().root;
-    const note = createNote(`[${ref.kind}] ${ref.id}`, parent.id);
+    const note = createNote(this.externalContextNoteTitle(ref), parent.id);
+    note.content = this.externalContextNoteContent(ref);
     parent.children?.push(note);
     this.commit({ ...this.state(), selectedId: note.id });
     this.publishSelectionContext(note.id);
+  }
+
+  externalContextPrompt() {
+    const ref = this.externalContextRef();
+    if (!ref) return '';
+    return this.translate.instant('notes.contextPrompt', {
+      target: this.contextSourceLabel(ref),
+    });
+  }
+
+  private contextSourceLabel(ref: ObjectRef) {
+    const labels: Record<string, string> = {
+      todo: 'context.target.todo',
+      sticky: 'context.target.sticky',
+      kanbanCard: 'context.target.kanbanCard',
+      note: 'context.target.note',
+    };
+    return this.translate.instant(labels[ref.kind] ?? 'context.target.item');
+  }
+
+  private externalContextNoteTitle(ref: ObjectRef) {
+    const title = (ref.title ?? '').trim();
+    if (title) return title;
+    return this.translate.instant('notes.contextCreateLabel', {
+      target: this.contextSourceLabel(ref),
+    });
+  }
+
+  private externalContextNoteContent(ref: ObjectRef) {
+    return (ref.content ?? '').trim();
+  }
+
+  private extractPlainText(raw: string) {
+    if (!raw) return '';
+    if (typeof document === 'undefined') {
+      return raw.replace(/<br\s*\/?>/gi, '\n').trim();
+    }
+    const container = document.createElement('div');
+    container.innerHTML = raw.replace(/<br\s*\/?>/gi, '\n');
+    container.querySelectorAll('script,style').forEach((el) => el.remove());
+    const text = container.textContent ?? '';
+    return text.replace(/\u00a0/g, ' ').trim();
   }
 
   duplicateSelected() {
