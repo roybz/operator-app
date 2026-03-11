@@ -160,6 +160,15 @@ const LANGUAGE_OPTIONS = [
         <label style="display:flex; gap:8px; align-items:center;">
           <input
             type="checkbox"
+            [checked]="prefs().contextSuggestionsEnabled"
+            (change)="onContextSuggestionsToggle($event)"
+          />
+          {{ 'preferences.contextSuggestionsEnabled' | translate }}
+        </label>
+
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input
+            type="checkbox"
             [checked]="prefs().hideViewportSizingControls"
             (change)="onViewportSizingToggle($event)"
           />
@@ -291,6 +300,11 @@ export class PreferencesSettingsComponent {
   onAccessibilityToggle(event: Event) {
     const accessibilityMode = (event.target as HTMLInputElement).checked;
     this.save({ ...this.prefs(), accessibilityMode });
+  }
+
+  onContextSuggestionsToggle(event: Event) {
+    const contextSuggestionsEnabled = (event.target as HTMLInputElement).checked;
+    this.save({ ...this.prefs(), contextSuggestionsEnabled });
   }
 
   onViewportSizingToggle(event: Event) {

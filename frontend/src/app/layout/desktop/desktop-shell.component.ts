@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { StorageService } from '../../core/storage/storage.service';
 import { AppId } from '../../features/dependencies/app-types';
 import { DialogInstance } from '../../core/dialog.service';
@@ -44,6 +44,7 @@ export class DesktopShellComponent implements OnInit {
   @Output() duplicate = new EventEmitter<string>();
   @Output() toggleLock = new EventEmitter<string>();
   @Output() archive = new EventEmitter<string>();
+  @Output() deletePermanently = new EventEmitter<string>();
   @Output() unarchive = new EventEmitter<string>();
   @Output() phoneModeToggle = new EventEmitter<Event>();
   @Output() canvasModeChange = new EventEmitter<Event>();
@@ -59,8 +60,10 @@ export class DesktopShellComponent implements OnInit {
 
   displayOptionsOpen = false;
   displayOptionsHovered = false;
+  appDrawerOpen = false;
 
   private storage = inject(StorageService);
+  private translate = inject(TranslateService);
 
   ngOnInit() {
     this.displayOptionsOpen = this.readDisplayOptions();
@@ -69,6 +72,16 @@ export class DesktopShellComponent implements OnInit {
   toggleDisplayOptions() {
     this.displayOptionsOpen = !this.displayOptionsOpen;
     void this.storage.setItem('op_display_options_open', this.displayOptionsOpen ? '1' : '0');
+  }
+
+  toggleAppDrawer() {
+    this.appDrawerOpen = !this.appDrawerOpen;
+  }
+
+  drawerApps() {
+    return [...this.apps].sort((a, b) =>
+      this.translate.instant(a.labelKey).localeCompare(this.translate.instant(b.labelKey)),
+    );
   }
 
   private readDisplayOptions() {

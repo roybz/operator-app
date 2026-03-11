@@ -55,6 +55,27 @@
 
       <div class="desktop-shell__divider"></div>
 
+      <button
+        type="button"
+        class="desktop-shell__btn desktop-shell__btn--full"
+        (click)="toggleAppDrawer()"
+      >
+        &#9638; {{ 'nav.appsDrawer' | translate }}
+      </button>
+      @if (appDrawerOpen) {
+        <div class="desktop-shell__drawer">
+          @for (app of drawerApps(); track app.id) {
+            <button type="button" class="desktop-shell__drawer-item" (click)="openApp.emit(app.id)">
+              <span class="desktop-shell__drawer-main">
+                <span class="app-list__app-icon">{{ app.icon }}</span>
+                <span>{{ app.labelKey | translate }}</span>
+              </span>
+              <span class="desktop-shell__drawer-plus" aria-hidden="true">+</span>
+            </button>
+          }
+        </div>
+      }
+
       <div class="desktop-shell__apps">
         <app-app-list
           [apps]="apps"
@@ -62,11 +83,13 @@
           [deleteTargetActive]="deleteTargetActive"
           [actionsDisabled]="settingsOpen || !canEdit"
           [phoneMode]="false"
+          [showAppCreateButtons]="false"
           (openApp)="openApp.emit($event)"
           (restore)="restore.emit($event)"
           (duplicate)="duplicate.emit($event)"
           (toggleLock)="toggleLock.emit($event)"
           (archive)="archive.emit($event)"
+          (deletePermanently)="deletePermanently.emit($event)"
           (unarchive)="unarchive.emit($event)"
         />
       </div>
@@ -102,26 +125,29 @@
             </label>
 
             @if (isCanvasLocked) {
-              <div class="desktop-shell__canvas-size-row">
-                <input
-                  type="number"
-                  [value]="canvasDraftWidth"
-                  (input)="canvasDraftWidthChange.emit($any($event.target).valueAsNumber)"
-                  min="1024"
-                  max="20000"
-                  class="desktop-shell__size-input"
-                />
-                <span>�</span>
-                <input
-                  type="number"
-                  [value]="canvasDraftHeight"
-                  (input)="canvasDraftHeightChange.emit($any($event.target).valueAsNumber)"
-                  min="768"
-                  max="20000"
-                  class="desktop-shell__size-input"
-                />
+              <div class="desktop-shell__canvas-size-panel">
+                <div class="desktop-shell__canvas-size-row">
+                  <input
+                    type="number"
+                    [value]="canvasDraftWidth"
+                    (input)="canvasDraftWidthChange.emit($any($event.target).valueAsNumber)"
+                    min="1024"
+                    max="20000"
+                    class="desktop-shell__size-input"
+                  />
+                  <span>&times;</span>
+                  <input
+                    type="number"
+                    [value]="canvasDraftHeight"
+                    (input)="canvasDraftHeightChange.emit($any($event.target).valueAsNumber)"
+                    min="768"
+                    max="20000"
+                    class="desktop-shell__size-input"
+                  />
+                </div>
                 <button
                   type="button"
+                  class="desktop-shell__size-apply"
                   (click)="applyCanvasSize.emit()"
                   [disabled]="!canvasDraftDirty"
                 >

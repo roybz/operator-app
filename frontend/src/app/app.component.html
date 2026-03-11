@@ -77,7 +77,7 @@
           justify-content: space-between;
         "
       >
-        <button class="square-btn" (click)="toggleNav()" style="font-size: 22px">☰</button>
+        <button class="square-btn" (click)="toggleNav()" style="font-size: 22px">&#9776;</button>
         <button class="square-btn" (click)="toggleTopBar()">
           {{ 'topbar.expand' | translate }}
         </button>
@@ -178,7 +178,7 @@
                 "
                 title="Close workspace"
               >
-                ✕
+                &#10005;
               </button>
             </div>
           }
@@ -230,6 +230,7 @@
         (duplicate)="duplicateInstance($event)"
         (toggleLock)="toggleDeleteLock($event)"
         (archive)="confirmArchive($event)"
+        (deletePermanently)="confirmDelete($event)"
         (unarchive)="unarchiveInstance($event)"
         (switchToDesktopMode)="requestSwitchToDesktopMode()"
         (toggleSettings)="toggleSettings()"
@@ -266,6 +267,7 @@
         (duplicate)="duplicateInstance($event)"
         (toggleLock)="toggleDeleteLock($event)"
         (archive)="confirmArchive($event)"
+        (deletePermanently)="confirmDelete($event)"
         (unarchive)="unarchiveInstance($event)"
         (phoneModeToggle)="requestPhoneModeToggle($event)"
         (canvasModeChange)="setCanvasMode($event)"
@@ -414,7 +416,7 @@
                 (click)="restoreFromStash(instance)"
                 title="{{ 'dialogs.unstash' | translate }}"
               >
-                📤
+                &#128228;
               </button>
             </div>
           }

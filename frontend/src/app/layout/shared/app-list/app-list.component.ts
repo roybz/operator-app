@@ -45,12 +45,16 @@ export class AppListComponent implements AfterViewInit {
   @Input() actionsDisabled = false;
   @Input() phoneMode = false;
   @Input() activeInstanceId: string | null = null;
+  @Input() showArchivedSection = true;
+  @Input() showAppCreateButtons = true;
+  @Input() showArchivedHeader = true;
 
   @Output() openApp = new EventEmitter<AppId>();
   @Output() restore = new EventEmitter<string>();
   @Output() duplicate = new EventEmitter<string>();
   @Output() toggleLock = new EventEmitter<string>();
   @Output() archive = new EventEmitter<string>();
+  @Output() deletePermanently = new EventEmitter<string>();
   @Output() unarchive = new EventEmitter<string>();
 
   private host = inject(ElementRef<HTMLElement>);
@@ -122,6 +126,11 @@ export class AppListComponent implements AfterViewInit {
     return [...active, ...archived];
   }
 
+  displayedApps() {
+    if (this.showAppCreateButtons) return this.apps;
+    return this.apps.filter((app) => (this.instancesByApp[app.id] ?? []).length > 0);
+  }
+
   isInstanceActive(instance: DialogInstance) {
     if (this.phoneMode) {
       if (this.activeInstanceId !== instance.id) return false;
@@ -185,6 +194,11 @@ export class AppListComponent implements AfterViewInit {
 
   onArchive(instanceId: string) {
     this.archive.emit(instanceId);
+    this.closeActions();
+  }
+
+  onDeletePermanently(instanceId: string) {
+    this.deletePermanently.emit(instanceId);
     this.closeActions();
   }
 

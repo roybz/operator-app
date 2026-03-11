@@ -11,6 +11,8 @@ export interface ObjectRef {
   instanceId?: string;
   kind: string;
   id: string;
+  title?: string;
+  content?: string;
 }
 
 export interface FocusField {

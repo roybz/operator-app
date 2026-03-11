@@ -1,4 +1,4 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, Input, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, InviteeRecord, UserPreferences } from '../../../core/auth.service';
@@ -29,152 +29,158 @@ import {
   imports: [CommonModule, TranslateModule, SharedTableComponent, ConfirmDialogComponent],
   template: `
     <section>
-      <h3>{{ 'settings.multiUserLink' | translate }}</h3>
+      <h3>
+        {{
+          mode === 'llm' ? ('settings.llmLink' | translate) : ('settings.multiUserLink' | translate)
+        }}
+      </h3>
 
-      <div style="display:grid; gap:12px; max-width: 560px;">
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().multiUserEnabled"
-            (change)="onMultiUserToggle($event)"
-          />
-          {{ 'universe.multiUser' | translate }}
-        </label>
-
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <span>{{ 'universe.linkLabel' | translate }}</span>
-          <code>{{ universeLink() }}</code>
-          <button
-            (click)="openLinkConfirm()"
-            [disabled]="!prefs().multiUserEnabled || !canManageInvites()"
-          >
-            {{ 'universe.changeLink' | translate }}
-          </button>
-        </div>
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseGuests"
-            (change)="onGuestToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowGuests' | translate }}
-        </label>
-
-        @if (prefs().allowUniverseGuests) {
-          <label>
-            {{ 'universe.guestPassword' | translate }}
+      @if (showCollaborationSection()) {
+        <div style="display:grid; gap:12px; max-width: 560px;">
+          <label style="display:flex; gap:8px; align-items:center;">
             <input
-              type="password"
-              [value]="guestPassword()"
-              (input)="guestPassword.set($any($event.target).value)"
+              type="checkbox"
+              [checked]="prefs().multiUserEnabled"
+              (change)="onMultiUserToggle($event)"
             />
-            <button style="margin-left:8px;" (click)="applyGuestPassword()">
-              {{ 'universe.savePassword' | translate }}
-            </button>
+            {{ 'universe.multiUser' | translate }}
           </label>
-        }
 
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseObservers"
-            (change)="onObserverToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowObservers' | translate }}
-        </label>
-
-        @if (prefs().allowUniverseObservers) {
-          <label>
-            {{ 'universe.observerPassword' | translate }}
-            <input
-              type="password"
-              [value]="observerPassword()"
-              (input)="observerPassword.set($any($event.target).value)"
-            />
-            <button style="margin-left:8px;" (click)="applyObserverPassword()">
-              {{ 'universe.savePassword' | translate }}
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <span>{{ 'universe.linkLabel' | translate }}</span>
+            <code>{{ universeLink() }}</code>
+            <button
+              (click)="openLinkConfirm()"
+              [disabled]="!prefs().multiUserEnabled || !canManageInvites()"
+            >
+              {{ 'universe.changeLink' | translate }}
             </button>
-          </label>
-        }
-
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input
-            type="checkbox"
-            [checked]="prefs().allowUniverseChat"
-            (change)="onChatToggle($event)"
-            [disabled]="!prefs().multiUserEnabled"
-          />
-          {{ 'universe.allowChat' | translate }}
-        </label>
-      </div>
-
-      <section style="margin-top: 24px;">
-        <h4>{{ 'universe.inviteesTitle' | translate }}</h4>
-
-        <div style="display:flex; gap:16px; flex-wrap:wrap;">
-          <div style="flex:1; min-width: 320px;">
-            <app-shared-table
-              [columns]="columns"
-              [rows]="invitees()"
-              [actionsTemplate]="actionsTpl"
-              [searchPlaceholder]="'users.search' | translate"
-              [emptyMessage]="'users.empty'"
-            />
-            <ng-template #actionsTpl let-row>
-              <button [disabled]="!canManageInvites()" (click)="startEdit(row)">
-                {{ 'users.edit' | translate }}
-              </button>
-              <button [disabled]="!canManageInvites()" (click)="remove(row)">
-                {{ 'users.delete' | translate }}
-              </button>
-            </ng-template>
           </div>
 
-          <div style="flex:1; min-width: 280px;">
-            <h4 style="margin-top:0;">{{ formTitle() }}</h4>
-
-            <label for="invitee-username" style="display:block; margin: 8px 0 4px;">
-              {{ 'users.username' | translate }}
-            </label>
+          <label style="display:flex; gap:8px; align-items:center;">
             <input
-              id="invitee-username"
-              #inviteeUsernameInput
-              type="text"
-              [value]="username()"
-              (input)="username.set(inviteeUsernameInput.value)"
-              style="width:100%; padding:8px;"
+              type="checkbox"
+              [checked]="prefs().allowUniverseGuests"
+              (change)="onGuestToggle($event)"
+              [disabled]="!prefs().multiUserEnabled"
             />
+            {{ 'universe.allowGuests' | translate }}
+          </label>
 
-            <label for="invitee-password" style="display:block; margin: 8px 0 4px;">
-              {{ 'users.password' | translate }}
-            </label>
-            <input
-              id="invitee-password"
-              #inviteePasswordInput
-              type="password"
-              [value]="password()"
-              (input)="password.set(inviteePasswordInput.value)"
-              style="width:100%; padding:8px;"
-            />
-
-            @if (error()) {
-              <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
-            }
-
-            <div style="display:flex; gap:8px; margin-top: 12px;">
-              <button [disabled]="!canManageInvites()" (click)="save()">{{ saveLabel() }}</button>
-              <button [disabled]="!canManageInvites()" (click)="reset()">
-                {{ 'users.reset' | translate }}
+          @if (prefs().allowUniverseGuests) {
+            <label>
+              {{ 'universe.guestPassword' | translate }}
+              <input
+                type="password"
+                [value]="guestPassword()"
+                (input)="guestPassword.set($any($event.target).value)"
+              />
+              <button style="margin-left:8px;" (click)="applyGuestPassword()">
+                {{ 'universe.savePassword' | translate }}
               </button>
+            </label>
+          }
+
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input
+              type="checkbox"
+              [checked]="prefs().allowUniverseObservers"
+              (change)="onObserverToggle($event)"
+              [disabled]="!prefs().multiUserEnabled"
+            />
+            {{ 'universe.allowObservers' | translate }}
+          </label>
+
+          @if (prefs().allowUniverseObservers) {
+            <label>
+              {{ 'universe.observerPassword' | translate }}
+              <input
+                type="password"
+                [value]="observerPassword()"
+                (input)="observerPassword.set($any($event.target).value)"
+              />
+              <button style="margin-left:8px;" (click)="applyObserverPassword()">
+                {{ 'universe.savePassword' | translate }}
+              </button>
+            </label>
+          }
+
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input
+              type="checkbox"
+              [checked]="prefs().allowUniverseChat"
+              (change)="onChatToggle($event)"
+              [disabled]="!prefs().multiUserEnabled"
+            />
+            {{ 'universe.allowChat' | translate }}
+          </label>
+        </div>
+
+        <section style="margin-top: 24px;">
+          <h4>{{ 'universe.inviteesTitle' | translate }}</h4>
+
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div style="flex:1; min-width: 320px;">
+              <app-shared-table
+                [columns]="columns"
+                [rows]="invitees()"
+                [actionsTemplate]="actionsTpl"
+                [searchPlaceholder]="'users.search' | translate"
+                [emptyMessage]="'users.empty'"
+              />
+              <ng-template #actionsTpl let-row>
+                <button [disabled]="!canManageInvites()" (click)="startEdit(row)">
+                  {{ 'users.edit' | translate }}
+                </button>
+                <button [disabled]="!canManageInvites()" (click)="remove(row)">
+                  {{ 'users.delete' | translate }}
+                </button>
+              </ng-template>
+            </div>
+
+            <div style="flex:1; min-width: 280px;">
+              <h4 style="margin-top:0;">{{ formTitle() }}</h4>
+
+              <label for="invitee-username" style="display:block; margin: 8px 0 4px;">
+                {{ 'users.username' | translate }}
+              </label>
+              <input
+                id="invitee-username"
+                #inviteeUsernameInput
+                type="text"
+                [value]="username()"
+                (input)="username.set(inviteeUsernameInput.value)"
+                style="width:100%; padding:8px;"
+              />
+
+              <label for="invitee-password" style="display:block; margin: 8px 0 4px;">
+                {{ 'users.password' | translate }}
+              </label>
+              <input
+                id="invitee-password"
+                #inviteePasswordInput
+                type="password"
+                [value]="password()"
+                (input)="password.set(inviteePasswordInput.value)"
+                style="width:100%; padding:8px;"
+              />
+
+              @if (error()) {
+                <p style="color:#b00020; margin-top: 8px;">{{ error() }}</p>
+              }
+
+              <div style="display:flex; gap:8px; margin-top: 12px;">
+                <button [disabled]="!canManageInvites()" (click)="save()">{{ saveLabel() }}</button>
+                <button [disabled]="!canManageInvites()" (click)="reset()">
+                  {{ 'users.reset' | translate }}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      }
 
-      @if (canManageInvites()) {
+      @if (showLlmSection() && canManageInvites()) {
         <section style="margin-top: 24px;">
           <h4 style="margin:0 0 8px;">LLM residents (beta)</h4>
           <p style="margin:0 0 12px; opacity:0.8;">
@@ -571,6 +577,8 @@ import {
   `,
 })
 export class MultiUserSettingsComponent {
+  @Input() mode: 'collab' | 'llm' = 'collab';
+
   private readonly auth = inject(AuthService);
   private readonly draft = inject(SettingsDraftService);
   private readonly translate = inject(TranslateService);
@@ -1064,5 +1072,13 @@ export class MultiUserSettingsComponent {
       return null;
     }
     return { universeOwnerId, universeId };
+  }
+
+  showCollaborationSection() {
+    return this.mode !== 'llm';
+  }
+
+  showLlmSection() {
+    return this.mode !== 'collab';
   }
 }

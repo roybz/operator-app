@@ -1,6 +1,6 @@
 <div class="app-list" (pointerdown)="closeActions()">
   <div class="app-list__scroll">
-    @for (app of apps; track app.id) {
+    @for (app of displayedApps(); track app.id) {
       @let instances = visibleInstances(app.id);
       <div class="app-row" [attr.data-app-id]="app.id">
         <button
@@ -20,21 +20,27 @@
               : ('dialogs.collapseList' | translate)
           "
         >
-          {{ isCollapsed(app.id) ? '▸' : '▾' }}
+          @if (isCollapsed(app.id)) {
+            <span aria-hidden="true">&#9656;</span>
+          } @else {
+            <span aria-hidden="true">&#9662;</span>
+          }
         </button>
         <span class="app-list__app-icon">{{ app.icon }}</span>
         <span class="app-list__name">{{ app.labelKey | translate }}</span>
-        <button
-          type="button"
-          class="app-list__icon app-list__icon--add"
-          [class.app-list__control--phone]="phoneMode"
-          (click)="openApp.emit(app.id); $event.stopPropagation()"
-          [disabled]="actionsDisabled"
-          title="{{ 'dialogs.add' | translate }}"
-          [attr.aria-label]="'dialogs.add' | translate"
-        >
-          +
-        </button>
+        @if (showAppCreateButtons) {
+          <button
+            type="button"
+            class="app-list__icon app-list__icon--add"
+            [class.app-list__control--phone]="phoneMode"
+            (click)="openApp.emit(app.id); $event.stopPropagation()"
+            [disabled]="actionsDisabled"
+            title="{{ 'dialogs.add' | translate }}"
+            [attr.aria-label]="'dialogs.add' | translate"
+          >
+            +
+          </button>
+        }
       </div>
       @if (!isCollapsed(app.id) && instances.length) {
         <div class="app-list__instances">
@@ -75,7 +81,7 @@
                   title="{{ 'dialogs.actions' | translate }}"
                   [attr.aria-label]="'dialogs.actions' | translate"
                 >
-                  &#8942;
+                  &#8943;
                 </button>
                 @if (openActionsId() === instance.id) {
                   <div
@@ -98,9 +104,11 @@
                       (click)="onToggleLock(instance.id)"
                       [disabled]="deleteTargetActive || actionsDisabled"
                     >
-                      <span class="app-list__action-icon">
-                        {{ instance.deleteLocked ? '🔓' : '🔒' }}
-                      </span>
+                      @if (instance.deleteLocked) {
+                        <span class="app-list__action-icon">&#128275;</span>
+                      } @else {
+                        <span class="app-list__action-icon">&#128274;</span>
+                      }
                       <span>
                         {{
                           instance.deleteLocked
@@ -118,6 +126,15 @@
                       <span class="app-list__action-icon">&#128230;</span>
                       <span>{{ 'dialogs.archive' | translate }}</span>
                     </button>
+                    <button
+                      type="button"
+                      class="app-instance__action app-instance__action--danger"
+                      (click)="onDeletePermanently(instance.id)"
+                      [disabled]="actionsDisabled"
+                    >
+                      <span class="app-list__action-icon">&#128465;</span>
+                      <span>{{ 'dialogs.deletePermanently' | translate }}</span>
+                    </button>
                   </div>
                 }
               }
@@ -127,12 +144,18 @@
       }
     }
   </div>
-  <div class="app-list__footer">
-    <button type="button" class="app-list__archived-toggle" (click)="toggleArchivedList()">
-      {{ showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate) }}
-    </button>
-    @if (showArchived() && !hasArchivedInstances()) {
-      <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
-    }
-  </div>
+  @if (showArchivedSection) {
+    <div class="app-list__footer">
+      @if (showArchivedHeader) {
+        <button type="button" class="app-list__archived-toggle" (click)="toggleArchivedList()">
+          {{
+            showArchived() ? ('apps.hideArchived' | translate) : ('apps.viewArchived' | translate)
+          }}
+        </button>
+        @if (showArchived() && !hasArchivedInstances()) {
+          <div class="app-list__archived-empty">{{ 'apps.noArchived' | translate }}</div>
+        }
+      }
+    </div>
+  }
 </div>

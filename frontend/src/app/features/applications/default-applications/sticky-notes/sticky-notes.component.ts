@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppPreferencesService } from '../../../dependencies/app-preferences.service';
 import {
   buildInstanceStorageKey,
@@ -250,12 +250,12 @@ export const mergeStickyStatesForSync = (
           [style.color]="state().colorEnabled ? state().textColor : 'inherit'"
           style="flex:1; display:flex; flex-direction:column; gap:8px;"
         >
-          @if (externalContextRef()) {
+          @if (contextSuggestionsEnabled() && externalContextRef()) {
             <div
               style="border:1px solid var(--color-border); border-radius:8px; padding:8px; display:flex; justify-content:space-between; gap:8px; align-items:center;"
             >
-              <span style="font-size:12px; opacity:0.8;">
-                Context: {{ externalContextRef()?.kind }} / {{ externalContextRef()?.id }}
+              <span style="font-size:12px; opacity:0.8; font-style:italic;">
+                {{ externalContextPrompt() }}
               </span>
               <button type="button" (click)="appendExternalContext()">+</button>
             </div>
@@ -300,6 +300,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   @Input({ required: true }) instanceId!: string;
 
   private prefs = inject(AppPreferencesService);
+  private translate = inject(TranslateService);
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
@@ -308,11 +309,15 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   state = signal<StickyNoteState>(defaultState('rich'));
   settingsOpen = computed(() => this.instanceSettings.isOpen(this.instanceId));
   accessibilityMode = computed(() => this.prefs.preferences().accessibilityMode);
+  contextSuggestionsEnabled = computed(
+    () => this.prefs.preferences().contextSuggestionsEnabled ?? true,
+  );
   richFocused = signal(false);
   markdownFocused = signal(false);
   richSnapshot = signal('');
   richHtml = computed(() => (this.richFocused() ? this.richSnapshot() : this.state().content));
   externalContextRef = signal<ObjectRef | null>(null);
+  private contextPublishTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly persistQueue = new InstancePersistQueue({
     flush: async () => {
       await this.storage.setItem(this.instanceStorageKey(), JSON.stringify(this.state()));
@@ -385,6 +390,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.cancelQueuedContextPublish();
     this.persistQueue.destroy();
   }
 
@@ -481,6 +487,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLElement;
     const next = { ...this.state(), content: target.innerHTML };
     this.state.set(next);
+    this.scheduleStickySelectionContextPublish();
   }
 
   onMarkdownInput(event: Event) {
@@ -489,6 +496,7 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
     this.state.set(next);
     stateStore.set(this.instanceId, next);
     this.persistState();
+    this.scheduleStickySelectionContextPublish();
   }
 
   startMarkdownEdit() {
@@ -500,8 +508,30 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
   appendExternalContext() {
     const ref = this.externalContextRef();
     if (!ref) return;
-    const next = `${this.state().content}\n[${ref.kind}] ${ref.id}`.trim();
+    const incoming = (ref.content ?? ref.title ?? '').trim();
+    const fallback = this.translate.instant('sticky.contextCreateLabel', {
+      target: this.contextSourceLabel(ref),
+    });
+    const next = `${this.state().content}\n${incoming || fallback}`.trim();
     this.commit({ ...this.state(), content: next });
+  }
+
+  externalContextPrompt() {
+    const ref = this.externalContextRef();
+    if (!ref) return '';
+    return this.translate.instant('sticky.contextPrompt', {
+      target: this.contextSourceLabel(ref),
+    });
+  }
+
+  private contextSourceLabel(ref: ObjectRef) {
+    const labels: Record<string, string> = {
+      note: 'context.target.note',
+      todo: 'context.target.todo',
+      kanbanCard: 'context.target.kanbanCard',
+      sticky: 'context.target.sticky',
+    };
+    return this.translate.instant(labels[ref.kind] ?? 'context.target.item');
   }
 
   finishMarkdownEdit() {
@@ -546,12 +576,29 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
       instanceId: this.instanceId,
       kind: 'sticky',
       id: this.instanceId,
+      title: this.stickyContextTitle(),
+      content: this.richToPlainText(this.state().content ?? ''),
     };
     this.contextFields.setSelection(universeId, [ref], {
       primaryRef: ref,
       sourceInstanceId: this.instanceId,
       intent: 'inspect',
     });
+  }
+
+  private scheduleStickySelectionContextPublish() {
+    if (this.contextPublishTimer !== null) return;
+    this.contextPublishTimer = setTimeout(() => {
+      this.contextPublishTimer = null;
+      this.publishStickySelectionContext();
+    }, 150);
+  }
+
+  private cancelQueuedContextPublish() {
+    if (this.contextPublishTimer !== null) {
+      clearTimeout(this.contextPublishTimer);
+      this.contextPublishTimer = null;
+    }
   }
 
   private reloadFromStorage() {
@@ -654,5 +701,13 @@ export class StickyNotesComponent implements OnInit, OnDestroy {
       .replace(/&amp;nbsp;/g, ' ')
       .replace(/\n{3,}/g, '\n\n')
       .trimEnd();
+  }
+
+  private stickyContextTitle() {
+    const firstLine = this.richToPlainText(this.state().content ?? '')
+      .split('\n')
+      .map((line) => line.trim())
+      .find(Boolean);
+    return firstLine || this.translate.instant('appNames.stickyNotes');
   }
 }

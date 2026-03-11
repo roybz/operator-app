@@ -80,6 +80,7 @@ export interface UserPreferences {
   themeMode: 'system' | 'light' | 'dark' | 'timeZone';
   colorTheme: 'standard' | 'notepad' | 'ice' | 'lava' | 'green';
   accessibilityMode: boolean;
+  contextSuggestionsEnabled: boolean;
   phoneMode: boolean;
   credentials: SavedCredential[];
   maxPersistedApps: number;
@@ -295,6 +296,7 @@ export class AuthService {
   private readonly orgSettingsSignal = signal<OrgSettings>(this.defaultOrgSettings());
   private readonly readySignal = signal(false);
   private loginSecurity: Record<string, { count: number; lockedUntil: number }> = {};
+  private loginPhoneModePreferenceCache: boolean | null = null;
   private readonly universeContextSignal = signal<{ ownerId: string; universeId: string } | null>(
     null,
   );
@@ -780,15 +782,21 @@ export class AuthService {
   }
 
   setLoginPhoneModePreference(enabled: boolean) {
-    void this.storage.setItem(LOGIN_PHONE_MODE_KEY, JSON.stringify(Boolean(enabled)));
+    this.loginPhoneModePreferenceCache = Boolean(enabled);
+    void this.storage.setItem(
+      LOGIN_PHONE_MODE_KEY,
+      JSON.stringify(this.loginPhoneModePreferenceCache),
+    );
   }
 
   getLoginPhoneModePreference() {
     const raw = this.storage.getItemSync(LOGIN_PHONE_MODE_KEY);
-    if (!raw) return null;
+    if (!raw) return this.loginPhoneModePreferenceCache;
     try {
-      return Boolean(JSON.parse(raw));
+      this.loginPhoneModePreferenceCache = Boolean(JSON.parse(raw));
+      return this.loginPhoneModePreferenceCache;
     } catch {
+      this.loginPhoneModePreferenceCache = null;
       return null;
     }
   }
@@ -1715,6 +1723,7 @@ export class AuthService {
       themeMode: 'system',
       colorTheme: 'standard',
       accessibilityMode: false,
+      contextSuggestionsEnabled: true,
       phoneMode: this.isPhoneDevice(),
       credentials: [],
       maxPersistedApps: 255,

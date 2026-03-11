@@ -22,7 +22,7 @@ class MockPrefsService {
     return { phoneMode: false } as UserPreferences;
   }
   userId() {
-    return 'u_test';
+    return 'u_test:u1';
   }
 }
 
@@ -383,5 +383,51 @@ describe('NotesComponent (vault mode)', () => {
     expect((merged.root.children ?? []).find((node) => node.id === 'n1')?.content).toBe(
       'Local paragraph\n\nShared paragraph\n\nRemote paragraph',
     );
+  });
+
+  it('creates note from external context using source title/content', () => {
+    component.externalContextRef.set({
+      universeId: 'u_ctx',
+      instanceId: 'other',
+      kind: 'todo',
+      id: 't1',
+      title: 'Todo title',
+      content: 'Todo details',
+    });
+
+    component.createNoteFromExternalContext();
+
+    const selected = component.selectedNode();
+    expect(selected?.type).toBe('note');
+    expect(selected?.name).toBe('Todo title');
+    expect(selected?.content).toBe('Todo details');
+  });
+
+  it('extracts plain text from html content safely', () => {
+    const plain = (
+      component as unknown as { extractPlainText: (raw: string) => string }
+    ).extractPlainText('Hello<br>World<script>alert(1)</script><style>.x{}</style><b>!</b>&nbsp;');
+    expect(plain).toBe('Hello\nWorld!');
+  });
+
+  it('throttles context selection publish during rapid rich input', () => {
+    vi.useFakeTimers();
+    try {
+      const contextStore = (
+        component as unknown as { contextFields: { setSelection: (...args: unknown[]) => void } }
+      ).contextFields;
+      const setSelectionSpy = vi.spyOn(contextStore, 'setSelection');
+      setSelectionSpy.mockClear();
+      component.onRichInput({ target: { innerHTML: 'A' } } as unknown as Event);
+      component.onRichInput({ target: { innerHTML: 'B' } } as unknown as Event);
+      component.onRichInput({ target: { innerHTML: 'C' } } as unknown as Event);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(0);
+      vi.advanceTimersByTime(149);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(0);
+      vi.advanceTimersByTime(1);
+      expect(setSelectionSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

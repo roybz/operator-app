@@ -19,6 +19,7 @@ import {
 import { InstanceSettingsService } from '../../../../core/instance-settings.service';
 import { StorageService } from '../../../../core/storage/storage.service';
 import { RemoteConflictService } from '../../../../core/realtime/remote-conflict.service';
+import { MachineNowService } from '../../../../core/time/machine-now.service';
 import {
   InstancePersistQueue,
   isRemoteStorageTooManyRequests,
@@ -219,8 +220,7 @@ export class ClockComponent implements OnInit, OnDestroy {
   private instanceSettings = inject(InstanceSettingsService);
   private storage = inject(StorageService);
   private remoteConflict = inject(RemoteConflictService);
-  private interval?: number;
-  private now = signal(new Date());
+  private machineNow = inject(MachineNowService);
   state = signal<ClockState>({
     clocks: [{ id: uid('clock'), timeZone: 'UTC' }],
     format: '12h',
@@ -259,7 +259,6 @@ export class ClockComponent implements OnInit, OnDestroy {
         this.state.set(normalized);
         stateStore.set(this.instanceId, normalized);
         this.initializeOptions(normalized.clocks[0]?.timeZone || this.prefs.timeZone());
-        this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
         return;
       } catch {
         // ignore malformed stored data
@@ -283,12 +282,9 @@ export class ClockComponent implements OnInit, OnDestroy {
       this.initializeOptions(tz);
       this.persistState({ immediate: true });
     }
-
-    this.interval = window.setInterval(() => this.now.set(new Date()), 1000);
   }
 
   ngOnDestroy() {
-    if (this.interval) window.clearInterval(this.interval);
     this.persistQueue.destroy();
   }
 
@@ -348,7 +344,7 @@ export class ClockComponent implements OnInit, OnDestroy {
       minute: '2-digit',
       second: '2-digit',
       hour12,
-    }).format(this.now());
+    }).format(this.machineNow.now());
   }
 
   timeZoneLabel(zone: string) {
@@ -367,7 +363,7 @@ export class ClockComponent implements OnInit, OnDestroy {
   isDstActive(zone: string) {
     const { janOffset, julOffset } = this.offsetsFor(zone);
     const standard = Math.min(janOffset, julOffset);
-    const nowOffset = this.offsetFor(this.now(), zone);
+    const nowOffset = this.offsetFor(this.machineNow.now(), zone);
     return nowOffset !== standard;
   }
 
