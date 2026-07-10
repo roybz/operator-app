@@ -33,6 +33,22 @@
   margin: 9px 3px 13px;
 }
 
+.login-freeze-notice {
+  display: grid;
+  gap: 5px;
+  margin: 16px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--color-accent));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-accent) 12%);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.login-freeze-notice strong {
+  font-size: 13px;
+}
+
 @media (max-width: 1024px) {
   :host {
     display: block;

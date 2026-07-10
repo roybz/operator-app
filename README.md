@@ -2,6 +2,14 @@
 
 ![Spatial workspace overview](screenshots/workspace-overview.jpeg)
 
+## Frozen public demo
+
+The open-source Operator App is frozen as an archival demo as of July 10, 2026.
+It remains available for demo and portfolio purposes at `plannerdemo.roy.bz`,
+with `roy.bz` intended to redirect there. No further open-source updates are
+promised for this public edition; future Operator work belongs in Roy's private
+`roybz-operator-app` line.
+
 Operator App is an OS-like, browser-first experiment for running multiple lightweight apps
 (todos, notes, kanban, timers, etc.) inside movable dialogs with workspaces.
 

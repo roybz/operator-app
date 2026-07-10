@@ -83,7 +83,9 @@
     "tagline": "Get things done.",
     "title": "Operator App",
     "username": "用户名",
-    "signupInviteOnly": "Registration is currently invite-only."
+    "signupInviteOnly": "Registration is currently invite-only.",
+    "frozenNoticeTitle": "Frozen public demo",
+    "frozenNoticeBody": "The open-source Operator app is frozen as an archival demo as of July 10, 2026. It remains available for demo use, but no further open-source updates are promised."
   },
   "calculator": {
     "closeSettings": "Close settings",

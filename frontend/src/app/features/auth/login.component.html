@@ -2,6 +2,10 @@
   <h1>{{ universeLogin() ? ('universe.loginTitle' | translate) : ('auth.title' | translate) }}</h1>
   <div style="font-size: 14px; margin-top: -14px">{{ 'auth.tagline' | translate }}</div>
   <div style="font-size: 12px; opacity: 0.7; margin-top: 10px">v{{ appVersion }}</div>
+  <section class="login-freeze-notice" aria-label="Operator App frozen demo notice">
+    <strong>{{ 'auth.frozenNoticeTitle' | translate }}</strong>
+    <span>{{ 'auth.frozenNoticeBody' | translate }}</span>
+  </section>
 
   @if (universeLogin()) {
     <p style="margin: 8px 0; opacity: 0.8">
