@@ -124,7 +124,7 @@ describe('MultiUserSettingsComponent', () => {
 
     component.residentId.set('');
     component.residentName.set('Agent');
-    component.residentModel.set('gpt-4.1-mini');
+    component.residentModel.set('gpt-5.4');
     await component.saveResident();
     expect(component.llmError()).toBe('Resident ID, name, and model are required.');
     expect(llmAdminStub.upsertResident).not.toHaveBeenCalled();
@@ -146,7 +146,7 @@ describe('MultiUserSettingsComponent', () => {
 
     component.residentId.set('res_1');
     component.residentName.set('Agent One');
-    component.residentModel.set('gpt-4.1-mini');
+    component.residentModel.set('gpt-5.4');
     await component.saveResident();
     expect(llmAdminStub.upsertResident).toHaveBeenCalledTimes(1);
   });

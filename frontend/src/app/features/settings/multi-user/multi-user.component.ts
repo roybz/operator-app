@@ -614,7 +614,7 @@ export class MultiUserSettingsComponent {
   readonly residentId = signal('');
   readonly residentName = signal('');
   readonly residentProvider = signal<LlmProvider>('openai');
-  readonly residentModel = signal('gpt-4.1-mini');
+  readonly residentModel = signal('gpt-5.4');
   readonly residentRole = signal<LlmResidentRole>('observer');
   readonly residentActive = signal(true);
   readonly residentPermissions = signal<LlmResidentPermissions>({
@@ -626,7 +626,7 @@ export class MultiUserSettingsComponent {
   readonly workflowResidentId = signal('');
   readonly workflowCredentialRefId = signal('');
   readonly workflowActionType = signal<LlmAllowedActionType>('chat.post');
-  readonly workflowModel = signal('gpt-4.1-mini');
+  readonly workflowModel = signal('gpt-5.4');
   readonly workflowPrompt = signal('');
   readonly workflowPayloadJson = signal('');
 
@@ -862,7 +862,7 @@ export class MultiUserSettingsComponent {
     this.residentId.set('');
     this.residentName.set('');
     this.residentProvider.set('openai');
-    this.residentModel.set('gpt-4.1-mini');
+    this.residentModel.set('gpt-5.4');
     this.residentRole.set('observer');
     this.residentActive.set(true);
     this.residentPermissions.set({
